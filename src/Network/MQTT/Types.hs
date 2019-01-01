@@ -3,7 +3,8 @@
 
 module Network.MQTT.Types where
 
-import           Control.Applicative             ((<|>))
+import           Control.Applicative             (liftA2, (<|>))
+import           Control.Monad                   (replicateM)
 import qualified Data.Attoparsec.ByteString.Lazy as A
 import           Data.Bits                       (Bits (..), shiftL, testBit,
                                                   (.&.), (.|.))
@@ -26,10 +27,10 @@ class ByteMe a where
 data ControlPktType = Connect
                     | ConnACK
                     | Publish Bool Word8 Bool -- Dup, QoS, Retain
-                    | PubACK
-                    | PubRec
-                    | PubRel
-                    | PubComp
+                    | PubACK -- TODO - for QoS 1
+                    | PubRec -- TODO - for QoS 2
+                    | PubRel -- TODO - for QoS 2
+                    | PubComp -- TODO - for QoS 2
                     | Subscribe
                     | SubACK
                     | Unsubscribe
@@ -126,6 +127,13 @@ encodeWord16 :: Word16 -> BL.ByteString
 encodeWord16 a = let (h,l) = a `quotRem` 256 in BL.pack [w h, w l]
     where w = toEnum.fromEnum
 
+
+blLength :: BL.ByteString -> BL.ByteString
+blLength = BL.pack . encodeLength . fromEnum . BL.length
+
+withLength :: BL.ByteString -> BL.ByteString
+withLength a = blLength a <> a
+
 instance ByteMe BL.ByteString where
   toByteString a = (encodeWord16 . toEnum . fromEnum . BL.length) a <> a
 
@@ -140,7 +148,7 @@ data LastWill = LastWill {
   , _willMsg   :: BL.ByteString
   } deriving(Eq, Show)
 
-data ConnectFlags = ConnectFlags {
+data ConnectRequest = ConnectRequest {
   _username       :: Maybe BL.ByteString
   , _password     :: Maybe BL.ByteString
   , _lastWill     :: Maybe LastWill
@@ -149,56 +157,63 @@ data ConnectFlags = ConnectFlags {
   , _connID       :: BL.ByteString
   } deriving (Eq, Show)
 
-instance ByteMe ConnectFlags where
-  toByteString ConnectFlags{..} = BL.singleton connBits
-                                  <> encodeWord16 _keepAlive
-                                  <> toByteString _connID
-                                  <> lwt _lastWill
-                                  <> perhaps _username
-                                  <> perhaps _password
-    where connBits = hasu .|. hasp .|. willBits .|. clean
-            where
-              hasu = (boolBit $ isJust _username) ≪ 7
-              hasp = (boolBit $ isJust _password) ≪ 6
-              clean = boolBit _cleanSession ≪ 1
-              willBits = case _lastWill of
-                           Nothing -> 0
-                           Just LastWill{..} -> 4 .|. ((_willQoS .&. 0x3) ≪ 4) .|. (boolBit _willRetain ≪ 5)
+instance ByteMe ConnectRequest where
+  toByteString ConnectRequest{..} = toByteString Connect
+                                    <> withLength val
+    where
+      val :: BL.ByteString
+      val =  "\NUL\EOTMQTT\EOT" -- MQTT + Protocol311
+             <> BL.singleton connBits
+             <> encodeWord16 _keepAlive
+             <> toByteString _connID
+             <> lwt _lastWill
+             <> perhaps _username
+             <> perhaps _password
+      connBits = hasu .|. hasp .|. willBits .|. clean
+        where
+          hasu = (boolBit $ isJust _username) ≪ 7
+          hasp = (boolBit $ isJust _password) ≪ 6
+          clean = boolBit _cleanSession ≪ 1
+          willBits = case _lastWill of
+                       Nothing -> 0
+                       Just LastWill{..} -> 4 .|. ((_willQoS .&. 0x3) ≪ 4) .|. (boolBit _willRetain ≪ 5)
 
-          lwt :: Maybe LastWill -> BL.ByteString
-          lwt Nothing = mempty
-          lwt (Just LastWill{..}) = toByteString _willTopic <> toByteString _willMsg
+      lwt :: Maybe LastWill -> BL.ByteString
+      lwt Nothing = mempty
+      lwt (Just LastWill{..}) = toByteString _willTopic <> toByteString _willMsg
 
-          perhaps :: Maybe BL.ByteString -> BL.ByteString
-          perhaps Nothing  = ""
-          perhaps (Just s) = toByteString s
+      perhaps :: Maybe BL.ByteString -> BL.ByteString
+      perhaps Nothing  = ""
+      perhaps (Just s) = toByteString s
 
-data MQTTFragment = StringPkt BL.ByteString
-                  | PLevelPkt ProtocolLevel
-                  | ConnFlagsPkt ConnectFlags
-                  | ConnACKFlagsPkt ConnACKFlags
-                  | Int16Pkt Word16
-                  | Word8Pkt Word8
-                  deriving (Eq, Show)
-
-instance ByteMe MQTTFragment where
-  toByteString (StringPkt x)       = toByteString x
-  toByteString (ConnFlagsPkt x)    = toByteString x
-  toByteString (ConnACKFlagsPkt x) = toByteString x
-  toByteString (Int16Pkt x)        = encodeWord16 x
-  toByteString (Word8Pkt x)        = BL.singleton x
-  toByteString (PLevelPkt x)       = toByteString x
-
-data MQTTPkt = MQTTPkt ControlPktType [MQTTFragment] deriving (Eq, Show)
+data MQTTPkt = ConnPkt ConnectRequest
+             | ConnACKPkt ConnACKFlags
+             | PublishPkt PublishRequest
+             | SubscribePkt SubscribeRequest
+             | SubACKPkt SubscribeResponse
+             | UnsubscribePkt UnsubscribeRequest
+             | UnsubACKPkt UnsubscribeResponse
+             | PingPkt
+             | PongPkt
+  deriving (Eq, Show)
 
 instance ByteMe MQTTPkt where
-  toByteString (MQTTPkt cp x) = toByteString cp <> ln <> rest
-    where rest = mconcat $ toByteString <$> x
-          ln = BL.pack $ encodeLength (fromEnum $ BL.length rest)
-
+  toByteString (ConnPkt x)        = toByteString x
+  toByteString (ConnACKPkt x)     = toByteString x
+  toByteString (PublishPkt x)     = toByteString x
+  toByteString (SubscribePkt x)   = toByteString x
+  toByteString (SubACKPkt x)      = toByteString x
+  toByteString (UnsubscribePkt x) = toByteString x
+  toByteString (UnsubACKPkt x)    = toByteString x
+  toByteString PingPkt            = "\192\NUL"
+  toByteString PongPkt            = "\208\NUL"
 
 parsePacket :: A.Parser MQTTPkt
 parsePacket = parseConnect <|> parseConnectACK
+              <|> parsePublish
+              <|> parseSubscribe <|> parseSubACK
+              <|> parseUnsubscribe <|> parseUnsubACK
+              <|> PingPkt <$ A.string "\192\NUL" <|> PongPkt <$ A.string "\208\NUL"
 
 aWord16 :: A.Parser Word16
 aWord16 = A.anyWord8 >>= \h -> A.anyWord8 >>= \l -> pure $ (c h ≪ 8) .|. c l
@@ -221,10 +236,9 @@ parseConnect = do
   lwt <- parseLwt connFlagBits
   u <- mstr (testBit connFlagBits 7)
   p <- mstr (testBit connFlagBits 6)
-  pure $ MQTTPkt Connect [StringPkt "MQTT", PLevelPkt Protocol311,
-                          ConnFlagsPkt ConnectFlags{_connID=cid, _username=u, _password=p,
-                                                    _lastWill=lwt, _keepAlive=keepAlive,
-                                                    _cleanSession=testBit connFlagBits 1}]
+  pure $ ConnPkt ConnectRequest{_connID=cid, _username=u, _password=p,
+                                _lastWill=lwt, _keepAlive=keepAlive,
+                                _cleanSession=testBit connFlagBits 1}
 
   where
     mstr :: Bool -> A.Parser (Maybe BL.ByteString)
@@ -243,7 +257,7 @@ parseConnect = do
 data ConnACKFlags = ConnACKFlags Bool Word8 deriving (Eq, Show)
 
 instance ByteMe ConnACKFlags where
-  toBytes (ConnACKFlags sp rc) = [boolBit sp, rc]
+  toBytes (ConnACKFlags sp rc) = [0x20, 2, boolBit sp, rc]
 
 parseConnectACK :: A.Parser MQTTPkt
 parseConnectACK = do
@@ -251,5 +265,103 @@ parseConnectACK = do
   _ <- A.word8 2 -- two bytes left
   ackFlags <- A.anyWord8
   rc <- A.anyWord8
-  pure $ MQTTPkt ConnACK [ConnACKFlagsPkt $ ConnACKFlags (testBit ackFlags 0) rc]
+  pure $ ConnACKPkt $ ConnACKFlags (testBit ackFlags 0) rc
 
+data PublishRequest = PublishRequest{
+  _pubDup      :: Bool
+  , _pubQoS    :: Word8
+  , _pubRetain :: Bool
+  , _pubTopic  :: BL.ByteString
+  , _pubPktID  :: Word8
+  , _pubBody   :: BL.ByteString
+  } deriving(Eq, Show)
+
+instance ByteMe PublishRequest where
+  toByteString PublishRequest{..} = BL.singleton (0x30 .|. f)
+                                    <> withLength val
+    where f = (db ≪ 3) .|. (qb ≪ 1) .|. rb
+          db = boolBit _pubDup
+          qb = _pubQoS .&. 0x3
+          rb = boolBit _pubRetain
+          pktid
+            | _pubQoS == 0 = mempty
+            | otherwise = BL.singleton _pubPktID
+          val = toByteString _pubTopic <> pktid <> toByteString _pubBody
+
+parsePublish :: A.Parser MQTTPkt
+parsePublish = do
+  w <- A.satisfy (\x -> x .&. 0xf0 == 0x30)
+  _ <- parseHdrLen
+  let _pubDup = w .&. 0x8 == 0x8
+      _pubQoS = (w ≫ 1) .&. 3
+      _pubRetain = w .&. 1 == 1
+  _pubTopic <- aString
+  _pubPktID <- if _pubQoS == 0 then pure 0 else A.anyWord8
+  _pubBody <- aString
+  pure $ PublishPkt PublishRequest{..}
+
+data SubscribeRequest = SubscribeRequest Word16 [(BL.ByteString, Word8)]
+                      deriving(Eq, Show)
+
+instance ByteMe SubscribeRequest where
+  toByteString (SubscribeRequest pid sreq) =
+    BL.singleton 0x82
+    <> withLength (encodeWord16 pid <> reqs)
+    where reqs = (BL.concat . map (\(bs,q) -> toByteString bs <> BL.singleton q)) sreq
+
+parseSubscribe :: A.Parser MQTTPkt
+parseSubscribe = do
+  _ <- A.word8 0x82
+  hl <- parseHdrLen
+  pid <- aWord16
+  content <- A.take (fromEnum hl - 2)
+  SubscribePkt . SubscribeRequest pid <$> parseSubs content
+    where
+      parseSubs l = case A.parseOnly (A.many1 parseSub) l of
+                      Left x  -> fail x
+                      Right x -> pure x
+      parseSub = liftA2 (,) aString A.anyWord8
+
+data SubscribeResponse = SubscribeResponse Word16 [Word8] deriving (Eq, Show)
+
+instance ByteMe SubscribeResponse where
+  toByteString (SubscribeResponse pid sres) =
+    BL.singleton 0x90 <> withLength (encodeWord16 pid <> BL.pack sres)
+
+parseSubACK :: A.Parser MQTTPkt
+parseSubACK = do
+  _ <- A.word8 0x90
+  hl <- parseHdrLen
+  pid <- aWord16
+  SubACKPkt . SubscribeResponse pid <$> replicateM (hl-2) A.anyWord8
+
+data UnsubscribeRequest = UnsubscribeRequest Word16 [BL.ByteString]
+                        deriving(Eq, Show)
+
+instance ByteMe UnsubscribeRequest where
+  toByteString (UnsubscribeRequest pid sreq) =
+    BL.singleton 0xa2
+    <> withLength (encodeWord16 pid <> mconcat (toByteString <$> sreq))
+
+parseUnsubscribe :: A.Parser MQTTPkt
+parseUnsubscribe = do
+  _ <- A.word8 0xa2
+  hl <- parseHdrLen
+  pid <- aWord16
+  content <- A.take (fromEnum hl - 2)
+  UnsubscribePkt . UnsubscribeRequest pid <$> parseSubs content
+    where
+      parseSubs l = case A.parseOnly (A.many1 aString) l of
+                      Left x  -> fail x
+                      Right x -> pure x
+
+newtype UnsubscribeResponse = UnsubscribeResponse Word16 deriving(Eq, Show)
+
+instance ByteMe UnsubscribeResponse where
+  toByteString (UnsubscribeResponse pid) = BL.singleton 0xb0 <> withLength (encodeWord16 pid)
+
+parseUnsubACK :: A.Parser MQTTPkt
+parseUnsubACK = do
+  _ <- A.word8 0xb0
+  _ <- parseHdrLen
+  UnsubACKPkt . UnsubscribeResponse <$> aWord16
