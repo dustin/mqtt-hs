@@ -97,8 +97,8 @@ instance ByteMe ConnectRequest where
              <> perhaps _password
       connBits = hasu .|. hasp .|. willBits .|. clean
         where
-          hasu = (boolBit $ isJust _username) ≪ 7
-          hasp = (boolBit $ isJust _password) ≪ 6
+          hasu = boolBit (isJust _username) ≪ 7
+          hasp = boolBit (isJust _password) ≪ 6
           clean = boolBit _cleanSession ≪ 1
           willBits = case _lastWill of
                        Nothing -> 0
