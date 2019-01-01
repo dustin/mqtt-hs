@@ -24,70 +24,9 @@ class ByteMe a where
   toByteString :: a -> BL.ByteString
   toByteString = BL.pack . toBytes
 
-data ControlPktType = Connect
-                    | ConnACK
-                    | Publish Bool Word8 Bool -- Dup, QoS, Retain
-                    | PubACK -- TODO - for QoS 1
-                    | PubRec -- TODO - for QoS 2
-                    | PubRel -- TODO - for QoS 2
-                    | PubComp -- TODO - for QoS 2
-                    | Subscribe
-                    | SubACK
-                    | Unsubscribe
-                    | UnsubACK
-                    | PingReq
-                    | PingRes
-                    | Disconnect deriving(Show, Eq)
-
 boolBit :: Bool -> Word8
 boolBit False = 0
 boolBit True  = 1
-
-instance ByteMe ControlPktType where
-  toByteString = BL.singleton . b
-
-    where
-      b Connect = 0x10
-      b ConnACK = 0x20
-      b (Publish d q r) = 0x30 .|. f
-        where f = (db ≪ 3) .|. (qb ≪ 1) .|. rb
-              db = boolBit d
-              qb = q .&. 0x3
-              rb = boolBit r
-      b PubACK = 0x40
-      b PubRec = 0x50
-      b PubRel = 0x62
-      b PubComp = 0x70
-      b Subscribe = 0x82
-      b SubACK = 0x90
-      b Unsubscribe = 0xa2
-      b UnsubACK = 0xb0
-      b PingReq = 0xc0
-      b PingRes = 0xd0
-      b Disconnect = 0xe0
-
-parseControlPktType :: A.Parser ControlPktType
-parseControlPktType = Connect <$ A.word8 0x10
-                      <|> ConnACK <$ A.word8 0x20
-                      <|> parsePublish
-                      <|> PubACK <$ A.word8 0x40
-                      <|> PubRec <$ A.word8 0x50
-                      <|> PubRel <$ A.word8 0x62
-                      <|> PubComp <$ A.word8 0x70
-                      <|> Subscribe <$ A.word8 0x82
-                      <|> SubACK <$ A.word8 0x90
-                      <|> Unsubscribe <$ A.word8 0xa2
-                      <|> UnsubACK <$ A.word8 0xb0
-                      <|> PingReq <$ A.word8 0xc0
-                      <|> PingRes <$ A.word8 0xd0
-                      <|> Disconnect <$ A.word8 0xe0
-  where
-    parsePublish = do
-      w <- A.satisfy (\x -> x .&. 0xf0 == 0x30)
-      let d = w .&. 0x8 == 0x8
-          q = (w ≫ 1) .&. 3
-          r = w .&. 1 == 1
-      pure $ Publish d q r
 
 parseHdrLen :: A.Parser Int
 parseHdrLen = go 0 1
@@ -109,19 +48,6 @@ encodeLength n = go (n `quotRem` 128)
 
     en :: Int -> Word8
     en = toEnum
-
-decodeLength :: [Word8] -> Int
-decodeLength = go 0 1
-  where
-    go v _ [] = v
-    go v m (x:xs)
-      | x .&. 128 /= 0 = go a (m*128) xs
-      | otherwise = a
-
-      where a = d (x .&. 127) * m + v
-
-    d :: Word8 -> Int
-    d = fromEnum
 
 encodeWord16 :: Word16 -> BL.ByteString
 encodeWord16 a = let (h,l) = a `quotRem` 256 in BL.pack [w h, w l]
@@ -158,7 +84,7 @@ data ConnectRequest = ConnectRequest {
   } deriving (Eq, Show)
 
 instance ByteMe ConnectRequest where
-  toByteString ConnectRequest{..} = toByteString Connect
+  toByteString ConnectRequest{..} = BL.singleton 0x10
                                     <> withLength val
     where
       val :: BL.ByteString
