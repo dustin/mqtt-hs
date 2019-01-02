@@ -24,13 +24,15 @@ dependencies:
 - network
 - attoparsec
 - binary
+- stm
+- async
 
 library:
   source-dirs: src
   ghc-options: -Wall
 
 executables:
-  mqtt-exe:
+  mqtt:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
