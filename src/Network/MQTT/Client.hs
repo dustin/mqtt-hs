@@ -140,3 +140,11 @@ publish c t m r = sendPacket c (PublishPkt $ PublishRequest {
                                    _pubRetain = r,
                                    _pubTopic = textToBL t,
                                    _pubBody = m})
+
+mkLWT :: Text -> BL.ByteString -> Bool -> T.LastWill
+mkLWT t m r = T.LastWill{
+  T._willRetain=r,
+  T._willQoS=0,
+  T._willTopic = textToBL t,
+  T._willMsg=m
+  }
