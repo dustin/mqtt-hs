@@ -1,6 +1,6 @@
-* Massive bugs [0/4]
+* Massive bugs [1/4]
 - [ ] Close connection when done
-- [ ] Generate packet IDs
+- [X] Generate packet IDs
 - [ ] handle subscription acknowledgments
 - [ ] Handle connection drops
 

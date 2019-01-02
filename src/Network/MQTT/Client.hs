@@ -4,8 +4,10 @@
 module Network.MQTT.Client where
 
 import           Control.Concurrent              (forkIO, threadDelay)
-import           Control.Concurrent.STM          (TChan, atomically, newTChanIO,
-                                                  readTChan, writeTChan)
+import           Control.Concurrent.STM          (TChan, TVar, atomically,
+                                                  modifyTVar', newTChanIO,
+                                                  newTVarIO, readTChan,
+                                                  readTVar, writeTChan)
 import           Control.Monad                   (forever)
 import qualified Data.Attoparsec.ByteString.Lazy as A
 import qualified Data.ByteString.Lazy            as BL
@@ -13,6 +15,7 @@ import qualified Data.ByteString.Lazy.Char8      as BC
 import           Data.Default                    (Default (..))
 import           Data.Text                       (Text)
 import qualified Data.Text.Encoding              as TE
+import           Data.Word                       (Word16)
 import           Network.Socket                  (Socket, SocketType (..),
                                                   addrAddress, addrFamily,
                                                   addrProtocol, addrSocketType,
@@ -25,10 +28,11 @@ import           Network.MQTT.Types              as T
 
 
 data MQTTClient = MQTTClient {
-  _out  :: BL.ByteString -> IO ()
-  , _in :: BL.ByteString
-  , _ch :: TChan MQTTPkt
-  , _cb :: Maybe (Text -> BL.ByteString -> IO ())
+  _out     :: BL.ByteString -> IO ()
+  , _in    :: BL.ByteString
+  , _ch    :: TChan MQTTPkt
+  , _cb    :: Maybe (Text -> BL.ByteString -> IO ())
+  , _pktID :: TVar Word16
   }
 
 data MQTTClientConfig = MQTTClientConfig {
@@ -70,6 +74,7 @@ fromSocket s = do
   let _out = sendAll s
   _in <- getContents s
   _ch <- newTChanIO
+  _pktID <- newTVarIO 0
   let _cb = Nothing
   pure MQTTClient{..}
 
@@ -116,9 +121,12 @@ blToText :: BL.ByteString -> Text
 blToText = TE.decodeUtf8 . BL.toStrict
 
 subscribe :: MQTTClient -> [(Text, Int)] -> IO ()
-subscribe c ls = do
-  let ls' = map (\(s, i) -> (textToBL s, toEnum i)) ls
-  sendPacket c (SubscribePkt $ SubscribeRequest 14 ls')
+subscribe MQTTClient{..} ls = atomically $ do
+  pid <- readTVar _pktID
+  modifyTVar' _pktID succ
+  writeTChan _ch (SubscribePkt $ SubscribeRequest pid ls')
+
+    where ls' = map (\(s, i) -> (textToBL s, toEnum i)) ls
 
 publish :: MQTTClient -> Text -> BL.ByteString -> Bool -> IO ()
 publish c t m r = sendPacket c (PublishPkt $ PublishRequest {
