@@ -57,7 +57,11 @@ connectTo MQTTClientConfig{..} = do
   addr <- resolve _hostname _service
   -- TODO:  Figure out good bracketing for this
   sock <- open addr
-  fromSocket sock >>= \c -> startClient c{_cb=_msgCB} def{T._connID=BC.pack _connID}
+  fromSocket sock >>= \c -> startClient c{_cb=_msgCB} def{T._connID=BC.pack _connID,
+                                                          T._lastWill=_lwt,
+                                                          T._username=BC.pack <$> _username,
+                                                          T._password=BC.pack <$> _password,
+                                                          T._cleanSession=_cleanSession}
 
   where
     resolve host port = do
