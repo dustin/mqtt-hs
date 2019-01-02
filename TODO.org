@@ -1,0 +1,13 @@
+* Massive bugs [0/4]
+- [ ] Close connection when done
+- [ ] Generate packet IDs
+- [ ] handle subscription acknowledgments
+- [ ] Handle connection drops
+
+* Regular sized bugs [0/3]
+- [ ] TLS Support
+- [ ] QoS > 0
+- [ ] convenient unsubscribe
+
+* Would be nice [0/1]
+- [ ] A server
