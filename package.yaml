@@ -26,6 +26,8 @@ dependencies:
 - binary
 - stm
 - async
+- data-default
+- text
 
 library:
   source-dirs: src
@@ -36,6 +38,7 @@ executables:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
+    - -Wall
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N

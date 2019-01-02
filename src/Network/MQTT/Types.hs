@@ -9,6 +9,7 @@ import qualified Data.Attoparsec.ByteString.Lazy as A
 import           Data.Bits                       (Bits (..), shiftL, testBit,
                                                   (.&.), (.|.))
 import qualified Data.ByteString.Lazy            as BL
+import           Data.Default                    (Default (..))
 import           Data.Maybe                      (isJust)
 import           Data.Word                       (Word16, Word8)
 
@@ -82,6 +83,10 @@ data ConnectRequest = ConnectRequest {
   , _keepAlive    :: Word16
   , _connID       :: BL.ByteString
   } deriving (Eq, Show)
+
+instance Default ConnectRequest where
+  def = ConnectRequest{_username=Nothing, _password=Nothing, _lastWill=Nothing,
+                       _cleanSession=True, _keepAlive=300, _connID=""}
 
 instance ByteMe ConnectRequest where
   toByteString ConnectRequest{..} = BL.singleton 0x10
