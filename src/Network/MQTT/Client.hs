@@ -12,7 +12,6 @@ import           Control.Monad                   (forever)
 import qualified Data.Attoparsec.ByteString.Lazy as A
 import qualified Data.ByteString.Lazy            as BL
 import qualified Data.ByteString.Lazy.Char8      as BC
-import           Data.Default                    (Default (..))
 import           Data.Text                       (Text)
 import qualified Data.Text.Encoding              as TE
 import           Data.Word                       (Word16)
@@ -46,22 +45,22 @@ data MQTTClientConfig = MQTTClientConfig {
   , _msgCB        :: Maybe (Text -> BL.ByteString -> IO ())
   }
 
-instance Default MQTTClientConfig where
-  def = MQTTClientConfig{_hostname="", _service="", _connID="",
-                         _username=Nothing, _password=Nothing,
-                         _cleanSession=True, _lwt=Nothing,
-                         _msgCB=Nothing}
+defaultConfig :: MQTTClientConfig
+defaultConfig = MQTTClientConfig{_hostname="", _service="", _connID="",
+                                 _username=Nothing, _password=Nothing,
+                                 _cleanSession=True, _lwt=Nothing,
+                                 _msgCB=Nothing}
 
 connectTo :: MQTTClientConfig -> IO MQTTClient
 connectTo MQTTClientConfig{..} = do
   addr <- resolve _hostname _service
   -- TODO:  Figure out good bracketing for this
   sock <- open addr
-  fromSocket sock >>= \c -> startClient c{_cb=_msgCB} def{T._connID=BC.pack _connID,
-                                                          T._lastWill=_lwt,
-                                                          T._username=BC.pack <$> _username,
-                                                          T._password=BC.pack <$> _password,
-                                                          T._cleanSession=_cleanSession}
+  fromSocket sock >>= \c -> startClient c{_cb=_msgCB} connectRequest{T._connID=BC.pack _connID,
+                                                                     T._lastWill=_lwt,
+                                                                     T._username=BC.pack <$> _username,
+                                                                     T._password=BC.pack <$> _password,
+                                                                     T._cleanSession=_cleanSession}
 
   where
     resolve host port = do
