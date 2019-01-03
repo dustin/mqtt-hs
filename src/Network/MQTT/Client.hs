@@ -4,7 +4,8 @@
 module Network.MQTT.Client where
 
 import           Control.Concurrent              (threadDelay)
-import           Control.Concurrent.Async        (async, cancel)
+import           Control.Concurrent.Async        (Async, async, cancel,
+                                                  waitAnyCancel)
 import           Control.Concurrent.STM          (TChan, TVar, atomically,
                                                   modifyTVar', newTChanIO,
                                                   newTVarIO, readTChan,
@@ -27,15 +28,16 @@ import           Prelude                         hiding (getContents)
 
 import           Network.MQTT.Types              as T
 
-
-data MQTTClientInternal = MQTTClientInternal {
+data MQTTClient = MQTTClient {
   _out     :: BL.ByteString -> IO ()
   , _in    :: BL.ByteString
   , _ch    :: TChan MQTTPkt
   , _pktID :: TVar Word16
+  , _cb    :: Maybe (Text -> BL.ByteString -> IO ())
+  , _ts    :: TVar [Async ()]
   }
 
-data MQTTClient = MQTTClient {
+data MQTTConfig = MQTTConfig{
   _hostname       :: String
   , _service      :: String
   , _connID       :: String
@@ -44,29 +46,35 @@ data MQTTClient = MQTTClient {
   , _cleanSession :: Bool
   , _lwt          :: Maybe LastWill
   , _msgCB        :: Maybe (Text -> BL.ByteString -> IO ())
-  , _internal     :: MQTTClientInternal
   }
 
-newClient :: IO MQTTClient
-newClient = do
+mqttConfig :: MQTTConfig
+mqttConfig = MQTTConfig{_hostname="", _service="", _connID="",
+                        _username=Nothing, _password=Nothing,
+                        _cleanSession=True, _lwt=Nothing,
+                        _msgCB=Nothing}
+
+runClient :: MQTTConfig -> IO MQTTClient
+runClient MQTTConfig{..} = do
   ch <- newTChanIO
   pid <- newTVarIO 0
-  pure MQTTClient{_hostname="", _service="", _connID="",
-                  _username=Nothing, _password=Nothing,
-                  _cleanSession=True, _lwt=Nothing,
-                  _msgCB=Nothing,
-                  _internal=MQTTClientInternal{
-                     _out=undefined,
-                     _in=mempty,
-                     _ch=ch,
-                     _pktID=pid}}
+  thr <- newTVarIO []
+  let cli = MQTTClient{_out=undefined,
+                       _in=mempty,
+                       _ch=ch,
+                       _cb=_msgCB,
+                       _pktID=pid,
+                       _ts=thr}
 
-runClient :: MQTTClient -> IO ()
-runClient c@MQTTClient{..} = do
-  addr <- resolve _hostname _service
-  E.bracket (open addr) close $ \s -> E.bracket (start s) cancelAll work
+  t <- async $ clientThread cli
+  atomically $ modifyTVar' (_ts cli) (t:)
+  pure cli
 
   where
+    clientThread cli = do
+      addr <- resolve _hostname _service
+      E.bracket (open addr) close $ \s -> E.bracket (start cli s) cancelAll work
+
     resolve host port = do
       let hints = defaultHints { addrSocketType = Stream }
       addr:_ <- getAddrInfo (Just hints) (Just host) (Just port)
@@ -75,7 +83,7 @@ runClient c@MQTTClient{..} = do
       sock <- socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)
       connect sock $ addrAddress addr
       pure sock
-    start s = do
+    start c@MQTTClient{..} s = do
       _in <- getContents s
       let out = sendAll s
           r = connectRequest{T._connID=BC.pack _connID,
@@ -94,28 +102,35 @@ runClient c@MQTTClient{..} = do
         4 -> fail "bad username or password"
         5 -> fail "not authorized"
 
-      let c' = c{_internal=_internal{_out=out, _in=in'}}
-      w <- async $ forever $ (atomically . readTChan) (_ch _internal) >>= out . toByteString
+      let c' = c{_out=out, _in=in'}
+      w <- async $ forever $ (atomically . readTChan) _ch >>= out . toByteString
       p <- async $ forever $ sendPacket c' PingPkt >> threadDelay 30000000
 
-      pure (c', [w,p])
+      atomically $ modifyTVar' _ts (\l -> w:p:l)
 
-    cancelAll = mapM_ cancel . snd
+      pure c'
 
-    work = capture . fst
+    cancelAll MQTTClient{..} = mapM_ cancel =<< atomically (readTVar _ts)
+
+    work = capture
+
+waitForClient :: MQTTClient -> IO ()
+waitForClient MQTTClient{..} = do
+  _ <- waitAnyCancel =<< atomically (readTVar _ts)
+  pure ()
 
 capture :: MQTTClient -> IO ()
 capture c@MQTTClient{..} = do
-  let (A.Done s' res) = A.parse parsePacket (_in _internal)
+  let (A.Done s' res) = A.parse parsePacket _in
   case res of
-    (PublishPkt PublishRequest{..}) -> case _msgCB of
+    (PublishPkt PublishRequest{..}) -> case _cb of
                                          Nothing -> pure ()
                                          Just x -> x (blToText _pubTopic) _pubBody
     x -> print x
-  capture c{_internal=_internal{_in=s'}}
+  capture c{_in=s'}
 
 sendPacket :: MQTTClient -> MQTTPkt -> IO ()
-sendPacket MQTTClient{..} = atomically . writeTChan (_ch _internal)
+sendPacket MQTTClient{..} = atomically . writeTChan _ch
 
 textToBL :: Text -> BL.ByteString
 textToBL = BL.fromStrict . TE.encodeUtf8
@@ -125,9 +140,9 @@ blToText = TE.decodeUtf8 . BL.toStrict
 
 subscribe :: MQTTClient -> [(Text, Int)] -> IO ()
 subscribe MQTTClient{..} ls = atomically $ do
-  pid <- readTVar (_pktID _internal)
-  modifyTVar' (_pktID _internal) succ
-  writeTChan (_ch _internal) (SubscribePkt $ SubscribeRequest pid ls')
+  pid <- readTVar _pktID
+  modifyTVar' _pktID succ
+  writeTChan _ch (SubscribePkt $ SubscribeRequest pid ls')
 
     where ls' = map (\(s, i) -> (textToBL s, toEnum i)) ls
 
