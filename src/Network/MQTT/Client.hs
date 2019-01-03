@@ -5,7 +5,7 @@ module Network.MQTT.Client where
 
 import           Control.Concurrent              (threadDelay)
 import           Control.Concurrent.Async        (Async, async, cancel,
-                                                  waitAnyCancel)
+                                                  waitAnyCatchCancel)
 import           Control.Concurrent.STM          (TChan, TVar, atomically,
                                                   modifyTVar', newTChanIO,
                                                   newTVarIO, readTChan,
@@ -114,10 +114,10 @@ runClient MQTTConfig{..} = do
 
     work = capture
 
-waitForClient :: MQTTClient -> IO ()
+waitForClient :: MQTTClient -> IO (Either E.SomeException ())
 waitForClient MQTTClient{..} = do
-  _ <- waitAnyCancel =<< atomically (readTVar _ts)
-  pure ()
+  (_,r) <- waitAnyCatchCancel =<< atomically (readTVar _ts)
+  pure r
 
 capture :: MQTTClient -> IO ()
 capture c@MQTTClient{..} = do
