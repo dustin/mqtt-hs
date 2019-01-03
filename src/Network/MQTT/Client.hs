@@ -5,10 +5,12 @@ module Network.MQTT.Client (
   MQTTConfig(..), MQTTClient,
   mqttConfig,  mkLWT, runClient, waitForClient,
   subscribe, unsubscribe, publish,
+  disconnect
   ) where
 
 import           Control.Concurrent              (threadDelay)
-import           Control.Concurrent.Async        (Async, async, cancel, race,
+import           Control.Concurrent.Async        (Async, async, cancel,
+                                                  cancelWith, race, race_,
                                                   waitCatch)
 import           Control.Concurrent.STM          (TChan, TVar, atomically,
                                                   modifyTVar', newTChanIO,
@@ -228,6 +230,12 @@ publish c t m r = sendPacket c (PublishPkt $ PublishRequest {
                                    _pubRetain = r,
                                    _pubTopic = textToBL t,
                                    _pubBody = m})
+
+disconnect :: MQTTClient -> IO ()
+disconnect c@MQTTClient{..} = race_ getDisconnected orDieTrying
+  where
+    getDisconnected = sendPacket c DisconnectPkt >> waitForClient c
+    orDieTrying = threadDelay 10000000 >> readTVarIO _ct >>= \t -> cancelWith t Timeout
 
 mkLWT :: Text -> BL.ByteString -> Bool -> T.LastWill
 mkLWT t m r = T.LastWill{

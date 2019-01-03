@@ -5,12 +5,13 @@
 - [X] Handle connection drops
 - [X] Don't leak threads
 
-* Regular sized bugs [2/5]
+* Regular sized bugs [3/6]
 - [ ] TLS Support
 - [ ] QoS > 0
 - [X] convenient unsubscribe
 - [ ] conduit
 - [X] give better disconnection reasons
+- [X] explicit disconnect
 
 * Would be nice [0/1]
 - [ ] A server
