@@ -4,17 +4,18 @@
 module Network.MQTT.Client where
 
 import           Control.Concurrent              (threadDelay)
-import           Control.Concurrent.Async        (Async, async, cancel,
+import           Control.Concurrent.Async        (Async, async, cancel, race,
                                                   waitAnyCatchCancel)
 import           Control.Concurrent.STM          (TChan, TVar, atomically,
                                                   modifyTVar', newTChanIO,
                                                   newTVarIO, readTChan,
                                                   readTVar, retry, writeTChan)
 import qualified Control.Exception               as E
-import           Control.Monad                   (forever)
+import           Control.Monad                   (forever, when)
 import qualified Data.Attoparsec.ByteString.Lazy as A
 import qualified Data.ByteString.Lazy            as BL
 import qualified Data.ByteString.Lazy.Char8      as BC
+import           Data.Either                     (isLeft)
 import           Data.IntMap                     (IntMap)
 import qualified Data.IntMap                     as IntMap
 import           Data.Text                       (Text)
@@ -124,13 +125,17 @@ waitForClient MQTTClient{..} = do
 
 capture :: MQTTClient -> IO ()
 capture c@MQTTClient{..} = do
-  let (A.Done s' res) = A.parse parsePacket _in
+  epkt <- race (threadDelay 60000000) (pure $! A.parse parsePacket _in)
+  when (isLeft epkt) $ fail "timed out"
+
+  let (Right (A.Done s' res)) = epkt
   case res of
     (PublishPkt PublishRequest{..}) -> case _cb of
                                          Nothing -> pure ()
                                          Just x -> x (blToText _pubTopic) _pubBody
     (SubACKPkt (SubscribeResponse i _)) -> remember res i
     (UnsubACKPkt (UnsubscribeResponse i)) -> remember res i
+    PongPkt -> pure ()
     x -> print x
   capture c{_in=s'}
 
