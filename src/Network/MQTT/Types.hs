@@ -125,6 +125,7 @@ data MQTTPkt = ConnPkt ConnectRequest
              | UnsubACKPkt UnsubscribeResponse
              | PingPkt
              | PongPkt
+             | DisconnectPkt
   deriving (Eq, Show)
 
 instance ByteMe MQTTPkt where
@@ -137,6 +138,7 @@ instance ByteMe MQTTPkt where
   toByteString (UnsubACKPkt x)    = toByteString x
   toByteString PingPkt            = "\192\NUL"
   toByteString PongPkt            = "\208\NUL"
+  toByteString DisconnectPkt      = "\224\NUL"
 
 parsePacket :: A.Parser MQTTPkt
 parsePacket = parseConnect <|> parseConnectACK
@@ -144,6 +146,7 @@ parsePacket = parseConnect <|> parseConnectACK
               <|> parseSubscribe <|> parseSubACK
               <|> parseUnsubscribe <|> parseUnsubACK
               <|> PingPkt <$ A.string "\192\NUL" <|> PongPkt <$ A.string "\208\NUL"
+              <|> DisconnectPkt <$ A.string "\224\NUL"
 
 aWord16 :: A.Parser Word16
 aWord16 = A.anyWord8 >>= \h -> A.anyWord8 >>= \l -> pure $ (c h ≪ 8) .|. c l

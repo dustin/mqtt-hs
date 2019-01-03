@@ -99,7 +99,7 @@ instance Arbitrary MQTTPkt where
     SubACKPkt <$> arbitrary,
     UnsubscribePkt <$> arbitrary,
     UnsubACKPkt <$> arbitrary,
-    pure PingPkt, pure PongPkt
+    pure PingPkt, pure PongPkt, pure DisconnectPkt
     ]
   shrink (SubACKPkt x)      = SubACKPkt <$> shrink x
   shrink (UnsubscribePkt x) = UnsubscribePkt <$> shrink x
