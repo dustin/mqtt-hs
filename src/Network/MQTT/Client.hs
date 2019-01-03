@@ -12,7 +12,7 @@ import           Control.Concurrent              (threadDelay)
 import           Control.Concurrent.Async        (Async, async, cancel,
                                                   cancelWith, race, race_, wait,
                                                   waitCatch)
-import           Control.Concurrent.STM          (TChan, TVar, atomically,
+import           Control.Concurrent.STM          (STM, TChan, TVar, atomically,
                                                   modifyTVar', newTChanIO,
                                                   newTVarIO, readTChan,
                                                   readTVar, readTVarIO, retry,
@@ -132,7 +132,7 @@ runClient MQTTConfig{..} = do
 
       let c' = c{_out=out, _in=in'}
       w <- async $ forever $ (atomically . readTChan) _ch >>= out . toByteString
-      p <- async $ forever $ sendPacket c' PingPkt >> threadDelay 30000000
+      p <- async $ forever $ sendPacketIO c' PingPkt >> threadDelay 30000000
 
       atomically $ do
         modifyTVar' _ts (\l -> w:p:l)
@@ -172,8 +172,11 @@ capture c@MQTTClient{..} = do
 
   where remember pkt pid = atomically $ modifyTVar' _acks (IntMap.insert (fromEnum pid) pkt)
 
-sendPacket :: MQTTClient -> MQTTPkt -> IO ()
-sendPacket MQTTClient{..} = atomically . writeTChan _ch
+sendPacket :: MQTTClient -> MQTTPkt -> STM ()
+sendPacket MQTTClient{..} = writeTChan _ch
+
+sendPacketIO :: MQTTClient -> MQTTPkt -> IO ()
+sendPacketIO c = atomically . sendPacket c
 
 textToBL :: Text -> BL.ByteString
 textToBL = BL.fromStrict . TE.encodeUtf8
@@ -182,11 +185,11 @@ blToText :: BL.ByteString -> Text
 blToText = TE.decodeUtf8 . BL.toStrict
 
 subscribe :: MQTTClient -> [(Text, Int)] -> IO [Int]
-subscribe MQTTClient{..} ls = do
+subscribe c@MQTTClient{..} ls = do
   p <- atomically $ do
     pid <- readTVar _pktID
     modifyTVar' _pktID succ
-    writeTChan _ch (SubscribePkt $ SubscribeRequest pid ls')
+    sendPacket c (SubscribePkt $ SubscribeRequest pid ls')
     pure pid
 
   let pint = fromEnum p
@@ -202,11 +205,11 @@ subscribe MQTTClient{..} ls = do
     where ls' = map (\(s, i) -> (textToBL s, toEnum i)) ls
 
 unsubscribe :: MQTTClient -> [Text] -> IO ()
-unsubscribe MQTTClient{..} ls = do
+unsubscribe c@MQTTClient{..} ls = do
   p <- atomically $ do
     pid <- readTVar _pktID
     modifyTVar' _pktID succ
-    writeTChan _ch (UnsubscribePkt $ UnsubscribeRequest pid ls')
+    sendPacket c (UnsubscribePkt $ UnsubscribeRequest pid ls')
     pure pid
 
   let pint = fromEnum p
@@ -221,18 +224,18 @@ unsubscribe MQTTClient{..} ls = do
     where ls' = map textToBL ls
 
 publish :: MQTTClient -> Text -> BL.ByteString -> Bool -> IO ()
-publish c t m r = sendPacket c (PublishPkt $ PublishRequest {
-                                   _pubDup = False,
-                                   _pubQoS = 0,
-                                   _pubPktID = 0,
-                                   _pubRetain = r,
-                                   _pubTopic = textToBL t,
-                                   _pubBody = m})
+publish c t m r = sendPacketIO c (PublishPkt $ PublishRequest {
+                                     _pubDup = False,
+                                     _pubQoS = 0,
+                                     _pubPktID = 0,
+                                     _pubRetain = r,
+                                     _pubTopic = textToBL t,
+                                     _pubBody = m})
 
 disconnect :: MQTTClient -> IO ()
 disconnect c@MQTTClient{..} = race_ getDisconnected orDieTrying
   where
-    getDisconnected = sendPacket c DisconnectPkt >> waitForClient c
+    getDisconnected = sendPacketIO c DisconnectPkt >> waitForClient c
     orDieTrying = threadDelay 10000000 >> readTVarIO _ct >>= \t -> cancelWith t Timeout
 
 mkLWT :: Text -> BL.ByteString -> Bool -> T.LastWill
