@@ -1,8 +1,9 @@
-* Massive bugs [1/4]
-- [ ] Close connection when done
+* Massive bugs [4/5]
+- [X] Close connection when done
 - [X] Generate packet IDs
 - [ ] handle subscription acknowledgments
-- [ ] Handle connection drops
+- [X] Handle connection drops
+- [X] Don't leak threads
 
 * Regular sized bugs [0/3]
 - [ ] TLS Support
