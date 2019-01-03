@@ -1,14 +1,14 @@
-* Massive bugs [4/5]
+* Massive bugs [5/5]
 - [X] Close connection when done
 - [X] Generate packet IDs
-- [ ] handle subscription acknowledgments
+- [X] handle subscription acknowledgments
 - [X] Handle connection drops
 - [X] Don't leak threads
 
-* Regular sized bugs [0/5]
+* Regular sized bugs [1/5]
 - [ ] TLS Support
 - [ ] QoS > 0
-- [ ] convenient unsubscribe
+- [X] convenient unsubscribe
 - [ ] conduit
 - [ ] give better disconnection reasons
 

@@ -27,6 +27,7 @@ dependencies:
 - stm
 - async
 - text
+- containers
 
 library:
   source-dirs: src
