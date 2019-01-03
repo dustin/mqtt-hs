@@ -164,7 +164,7 @@ capture c@MQTTClient{..} = do
     x -> print x
   capture c{_in=s'}
 
-  where remember pkt pid = atomically $ modifyTVar' _acks (\m -> IntMap.insert (fromEnum pid) pkt m)
+  where remember pkt pid = atomically $ modifyTVar' _acks (IntMap.insert (fromEnum pid) pkt)
 
 sendPacket :: MQTTClient -> MQTTPkt -> IO ()
 sendPacket MQTTClient{..} = atomically . writeTChan _ch
