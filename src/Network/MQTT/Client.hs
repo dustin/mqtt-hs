@@ -1,7 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-module Network.MQTT.Client where
+module Network.MQTT.Client (
+  MQTTConfig(..), MQTTClient,
+  mqttConfig,  mkLWT, runClient, waitForClient,
+  subscribe, unsubscribe, publish,
+  ) where
 
 import           Control.Concurrent              (threadDelay)
 import           Control.Concurrent.Async        (Async, async, cancel, race,
