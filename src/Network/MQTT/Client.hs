@@ -5,7 +5,7 @@ module Network.MQTT.Client where
 
 import           Control.Concurrent              (threadDelay)
 import           Control.Concurrent.Async        (Async, async, cancel, race,
-                                                  waitAnyCatchCancel)
+                                                  waitAnyCatchCancel, waitCatch)
 import           Control.Concurrent.STM          (TChan, TVar, atomically,
                                                   modifyTVar', newTChanIO,
                                                   newTVarIO, readTChan,
@@ -31,6 +31,8 @@ import           Prelude                         hiding (getContents)
 
 import           Network.MQTT.Types              as T
 
+data ConnState = Starting | Connected | Disconnected deriving (Eq, Show)
+
 data MQTTClient = MQTTClient {
   _out     :: BL.ByteString -> IO ()
   , _in    :: BL.ByteString
@@ -39,6 +41,7 @@ data MQTTClient = MQTTClient {
   , _cb    :: Maybe (Text -> BL.ByteString -> IO ())
   , _ts    :: TVar [Async ()]
   , _acks  :: TVar (IntMap MQTTPkt)
+  , _st    :: TVar ConnState
   }
 
 data MQTTConfig = MQTTConfig{
@@ -58,28 +61,38 @@ mqttConfig = MQTTConfig{_hostname="", _service="", _connID="",
                         _cleanSession=True, _lwt=Nothing,
                         _msgCB=Nothing}
 
-runClient :: MQTTConfig -> IO MQTTClient
+runClient :: MQTTConfig -> IO (Either String MQTTClient)
 runClient MQTTConfig{..} = do
   ch <- newTChanIO
   pid <- newTVarIO 0
   thr <- newTVarIO []
   acks <- newTVarIO mempty
+  st <- newTVarIO Starting
+
   let cli = MQTTClient{_out=undefined,
                        _in=mempty,
                        _ch=ch,
                        _cb=_msgCB,
                        _pktID=pid,
                        _ts=thr,
-                       _acks=acks}
+                       _acks=acks,
+                       _st=st}
 
   t <- async $ clientThread cli
-  atomically $ modifyTVar' (_ts cli) (t:)
-  pure cli
+  s <- atomically $ do
+    modifyTVar' (_ts cli) (t:)
+    s' <- readTVar st
+    if s' == Starting then retry else pure s'
+
+  if s == Connected then pure (Right cli)
+  else waitCatch t >>= \c -> case c of
+                               Left e  -> pure $ Left (show e)
+                               Right _ -> pure $ Left "unknown error establishing connection"
 
   where
     clientThread cli = do
       addr <- resolve _hostname _service
-      E.bracket (open addr) close $ \s -> E.bracket (start cli s) cancelAll capture
+      E.finally (E.bracket (open addr) close $ \s -> E.bracket (start cli s) cancelAll capture) $ markDisco cli
 
     resolve host port = do
       let hints = defaultHints { addrSocketType = Stream }
@@ -89,6 +102,7 @@ runClient MQTTConfig{..} = do
       sock <- socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)
       connect sock $ addrAddress addr
       pure sock
+    markDisco MQTTClient{..} = atomically $ modifyTVar' _st (const Disconnected)
     start c@MQTTClient{..} s = do
       _in <- getContents s
       let out = sendAll s
@@ -112,7 +126,9 @@ runClient MQTTConfig{..} = do
       w <- async $ forever $ (atomically . readTChan) _ch >>= out . toByteString
       p <- async $ forever $ sendPacket c' PingPkt >> threadDelay 30000000
 
-      atomically $ modifyTVar' _ts (\l -> w:p:l)
+      atomically $ do
+        modifyTVar' _ts (\l -> w:p:l)
+        modifyTVar' _st (const Connected)
 
       pure c'
 
