@@ -61,7 +61,7 @@ mqttConfig = MQTTConfig{_hostname="", _service="", _connID="",
                         _cleanSession=True, _lwt=Nothing,
                         _msgCB=Nothing}
 
-runClient :: MQTTConfig -> IO (Either String MQTTClient)
+runClient :: MQTTConfig -> IO MQTTClient
 runClient MQTTConfig{..} = do
   ch <- newTChanIO
   pid <- newTVarIO 0
@@ -84,15 +84,18 @@ runClient MQTTConfig{..} = do
     s' <- readTVar st
     if s' == Starting then retry else pure s'
 
-  if s == Connected then pure (Right cli)
-  else waitCatch t >>= \c -> case c of
-                               Left e  -> pure $ Left (show e)
-                               Right _ -> pure $ Left "unknown error establishing connection"
+  when (s /= Connected) $ waitCatch t >>= \c -> case c of
+                               Left e  -> E.throwIO e
+                               Right _ -> E.throwIO (E.AssertionFailed "unknown error establishing connection")
+
+  pure cli
 
   where
-    clientThread cli = do
-      addr <- resolve _hostname _service
-      E.finally (E.bracket (open addr) close $ \s -> E.bracket (start cli s) cancelAll capture) $ markDisco cli
+    clientThread cli = E.finally resolveConnRun markDisco
+      where
+        resolveConnRun = resolve _hostname _service >>= \addr ->
+                           E.bracket (open addr) close $ \s -> E.bracket (start cli s) cancelAll capture
+        markDisco = atomically $ modifyTVar' (_st cli) (const Disconnected)
 
     resolve host port = do
       let hints = defaultHints { addrSocketType = Stream }
@@ -102,7 +105,6 @@ runClient MQTTConfig{..} = do
       sock <- socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)
       connect sock $ addrAddress addr
       pure sock
-    markDisco MQTTClient{..} = atomically $ modifyTVar' _st (const Disconnected)
     start c@MQTTClient{..} s = do
       _in <- getContents s
       let out = sendAll s
