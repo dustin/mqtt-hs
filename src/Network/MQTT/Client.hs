@@ -9,11 +9,12 @@ module Network.MQTT.Client (
 
 import           Control.Concurrent              (threadDelay)
 import           Control.Concurrent.Async        (Async, async, cancel, race,
-                                                  waitAnyCatchCancel, waitCatch)
+                                                  waitCatch)
 import           Control.Concurrent.STM          (TChan, TVar, atomically,
                                                   modifyTVar', newTChanIO,
                                                   newTVarIO, readTChan,
-                                                  readTVar, retry, writeTChan)
+                                                  readTVar, readTVarIO, retry,
+                                                  writeTChan, writeTVar)
 import qualified Control.Exception               as E
 import           Control.Monad                   (forever, when)
 import qualified Data.Attoparsec.ByteString.Lazy as A
@@ -46,6 +47,7 @@ data MQTTClient = MQTTClient {
   , _ts    :: TVar [Async ()]
   , _acks  :: TVar (IntMap MQTTPkt)
   , _st    :: TVar ConnState
+  , _ct    :: TVar (Async ())
   }
 
 data MQTTConfig = MQTTConfig{
@@ -72,6 +74,7 @@ runClient MQTTConfig{..} = do
   thr <- newTVarIO []
   acks <- newTVarIO mempty
   st <- newTVarIO Starting
+  ct <- newTVarIO undefined
 
   let cli = MQTTClient{_out=undefined,
                        _in=mempty,
@@ -80,7 +83,8 @@ runClient MQTTConfig{..} = do
                        _pktID=pid,
                        _ts=thr,
                        _acks=acks,
-                       _st=st}
+                       _st=st,
+                       _ct=ct}
 
   t <- async $ clientThread cli
   s <- atomically (waitForLaunch cli t)
@@ -96,7 +100,7 @@ runClient MQTTConfig{..} = do
       where
         resolveConnRun = resolve _hostname _service >>= \addr ->
                            E.bracket (open addr) close $ \s -> E.bracket (start cli s) cancelAll capture
-        markDisco = atomically $ modifyTVar' (_st cli) (const Disconnected)
+        markDisco = atomically $ writeTVar (_st cli) Disconnected
 
     resolve host port = do
       let hints = defaultHints { addrSocketType = Stream }
@@ -132,26 +136,28 @@ runClient MQTTConfig{..} = do
 
       atomically $ do
         modifyTVar' _ts (\l -> w:p:l)
-        modifyTVar' _st (const Connected)
+        writeTVar _st Connected
 
       pure c'
 
     waitForLaunch MQTTClient{..} t = do
-      modifyTVar' _ts(t:)
+      writeTVar _ct t
       c <- readTVar _st
       if c == Starting then retry else pure c
 
-    cancelAll MQTTClient{..} = mapM_ cancel =<< atomically (readTVar _ts)
+    cancelAll MQTTClient{..} = mapM_ cancel =<< readTVarIO _ts
 
 waitForClient :: MQTTClient -> IO (Either E.SomeException ())
-waitForClient MQTTClient{..} = do
-  (_,r) <- waitAnyCatchCancel =<< atomically (readTVar _ts)
-  pure r
+waitForClient MQTTClient{..} = waitCatch =<< readTVarIO _ct
+
+data MQTTException = Timeout deriving(Eq, Show)
+
+instance E.Exception MQTTException
 
 capture :: MQTTClient -> IO ()
 capture c@MQTTClient{..} = do
   epkt <- race (threadDelay 60000000) (pure $! A.parse parsePacket _in)
-  when (isLeft epkt) $ fail "timed out"
+  when (isLeft epkt) $ E.throwIO Timeout
 
   let (Right (A.Done s' res)) = epkt
   case res of
