@@ -79,10 +79,7 @@ runClient MQTTConfig{..} = do
                        _st=st}
 
   t <- async $ clientThread cli
-  s <- atomically $ do
-    modifyTVar' (_ts cli) (t:)
-    s' <- readTVar st
-    if s' == Starting then retry else pure s'
+  s <- atomically (waitForLaunch cli t)
 
   when (s /= Connected) $ waitCatch t >>= \c -> case c of
                                Left e  -> E.throwIO e
@@ -123,6 +120,7 @@ runClient MQTTConfig{..} = do
         3 -> fail "server unavailable"
         4 -> fail "bad username or password"
         5 -> fail "not authorized"
+        x -> fail ("unknown conn ack response: " <> show x)
 
       let c' = c{_out=out, _in=in'}
       w <- async $ forever $ (atomically . readTChan) _ch >>= out . toByteString
@@ -133,6 +131,11 @@ runClient MQTTConfig{..} = do
         modifyTVar' _st (const Connected)
 
       pure c'
+
+    waitForLaunch MQTTClient{..} t = do
+      modifyTVar' _ts(t:)
+      c <- readTVar _st
+      if c == Starting then retry else pure c
 
     cancelAll MQTTClient{..} = mapM_ cancel =<< atomically (readTVar _ts)
 
