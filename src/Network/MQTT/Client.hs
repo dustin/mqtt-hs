@@ -78,7 +78,7 @@ runClient MQTTConfig{..} = do
   where
     clientThread cli = do
       addr <- resolve _hostname _service
-      E.bracket (open addr) close $ \s -> E.bracket (start cli s) cancelAll work
+      E.bracket (open addr) close $ \s -> E.bracket (start cli s) cancelAll capture
 
     resolve host port = do
       let hints = defaultHints { addrSocketType = Stream }
@@ -116,8 +116,6 @@ runClient MQTTConfig{..} = do
       pure c'
 
     cancelAll MQTTClient{..} = mapM_ cancel =<< atomically (readTVar _ts)
-
-    work = capture
 
 waitForClient :: MQTTClient -> IO (Either E.SomeException ())
 waitForClient MQTTClient{..} = do
