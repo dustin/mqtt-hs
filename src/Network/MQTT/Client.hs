@@ -10,7 +10,7 @@ module Network.MQTT.Client (
 
 import           Control.Concurrent              (threadDelay)
 import           Control.Concurrent.Async        (Async, async, cancel,
-                                                  cancelWith, race, race_,
+                                                  cancelWith, race, race_, wait,
                                                   waitCatch)
 import           Control.Concurrent.STM          (TChan, TVar, atomically,
                                                   modifyTVar', newTChanIO,
@@ -91,9 +91,7 @@ runClient MQTTConfig{..} = do
   t <- async $ clientThread cli
   s <- atomically (waitForLaunch cli t)
 
-  when (s /= Connected) $ waitCatch t >>= \c -> case c of
-                               Left e  -> E.throwIO e
-                               Right _ -> E.throwIO (E.AssertionFailed "unknown error establishing connection")
+  when (s /= Connected) $ wait t
 
   pure cli
 
