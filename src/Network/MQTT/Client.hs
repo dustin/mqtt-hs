@@ -198,7 +198,10 @@ dispatch c@MQTTClient{..} = do
             Just ch -> writeTChan ch pkt
 
 sendPacket :: MQTTClient -> MQTTPkt -> STM ()
-sendPacket MQTTClient{..} = writeTChan _ch
+sendPacket MQTTClient{..} p = do
+  st <- readTVar _st
+  when (st /= Connected) $ fail "not connected"
+  writeTChan _ch p
 
 sendPacketIO :: MQTTClient -> MQTTPkt -> IO ()
 sendPacketIO c = atomically . sendPacket c
