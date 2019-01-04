@@ -70,6 +70,9 @@ instance Arbitrary PublishRequest where
     _pubBody <- astr
     pure PublishRequest{..}
 
+instance Arbitrary PubACK where
+  arbitrary = PubACK <$> arbitrary
+
 instance Arbitrary SubscribeRequest where
   arbitrary = arbitrary >>= \pid -> choose (1,11) >>= \n -> SubscribeRequest pid <$> vectorOf n sub
     where sub = liftA2 (,) astr (choose (0,2))
@@ -95,6 +98,7 @@ instance Arbitrary MQTTPkt where
     ConnPkt <$> arbitrary,
     ConnACKPkt <$> arbitrary,
     PublishPkt <$> arbitrary,
+    PubACKPkt <$> arbitrary,
     SubscribePkt <$> arbitrary,
     SubACKPkt <$> arbitrary,
     UnsubscribePkt <$> arbitrary,

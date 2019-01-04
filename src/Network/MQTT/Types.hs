@@ -119,6 +119,7 @@ instance ByteMe ConnectRequest where
 data MQTTPkt = ConnPkt ConnectRequest
              | ConnACKPkt ConnACKFlags
              | PublishPkt PublishRequest
+             | PubACKPkt PubACK
              | SubscribePkt SubscribeRequest
              | SubACKPkt SubscribeResponse
              | UnsubscribePkt UnsubscribeRequest
@@ -132,6 +133,7 @@ instance ByteMe MQTTPkt where
   toByteString (ConnPkt x)        = toByteString x
   toByteString (ConnACKPkt x)     = toByteString x
   toByteString (PublishPkt x)     = toByteString x
+  toByteString (PubACKPkt x)      = toByteString x
   toByteString (SubscribePkt x)   = toByteString x
   toByteString (SubACKPkt x)      = toByteString x
   toByteString (UnsubscribePkt x) = toByteString x
@@ -142,7 +144,7 @@ instance ByteMe MQTTPkt where
 
 parsePacket :: A.Parser MQTTPkt
 parsePacket = parseConnect <|> parseConnectACK
-              <|> parsePublish
+              <|> parsePublish <|> parsePubACK
               <|> parseSubscribe <|> parseSubACK
               <|> parseUnsubscribe <|> parseUnsubACK
               <|> PingPkt <$ A.string "\192\NUL" <|> PongPkt <$ A.string "\208\NUL"
@@ -245,6 +247,17 @@ instance ByteMe SubscribeRequest where
     BL.singleton 0x82
     <> withLength (encodeWord16 pid <> reqs)
     where reqs = (BL.concat . map (\(bs,q) -> toByteString bs <> BL.singleton q)) sreq
+
+newtype PubACK = PubACK Word16 deriving(Eq, Show)
+
+instance ByteMe PubACK where
+  toByteString (PubACK pid) = BL.singleton 0x40 <> withLength (encodeWord16 pid)
+
+parsePubACK :: A.Parser MQTTPkt
+parsePubACK = do
+  _ <- A.word8 0x40
+  _ <- parseHdrLen
+  PubACKPkt . PubACK <$> aWord16
 
 parseSubscribe :: A.Parser MQTTPkt
 parseSubscribe = do
