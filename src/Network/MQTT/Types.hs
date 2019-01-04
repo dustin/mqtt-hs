@@ -216,10 +216,33 @@ parseConnect = do
                                _willQoS=wQos $ (bits ≫ 3) .&. 0x3}
       | otherwise = pure Nothing
 
-data ConnACKFlags = ConnACKFlags Bool Word8 deriving (Eq, Show)
+data ConnACKRC = ConnAccepted | UnacceptableProtocol
+               | IdentifierRejected | ServerUnavailable
+               | BadCredentials | NotAuthorized
+               | InvalidConnACKRC Word8 deriving(Eq, Show)
+
+connACKRC :: Word8 -> ConnACKRC
+connACKRC 0 = ConnAccepted
+connACKRC 1 = UnacceptableProtocol
+connACKRC 2 = IdentifierRejected
+connACKRC 3 = ServerUnavailable
+connACKRC 4 = BadCredentials
+connACKRC 5 = NotAuthorized
+connACKRC x = InvalidConnACKRC x
+
+connACKVal :: ConnACKRC -> Word8
+connACKVal ConnAccepted         = 0
+connACKVal UnacceptableProtocol = 1
+connACKVal IdentifierRejected   = 2
+connACKVal ServerUnavailable    = 3
+connACKVal BadCredentials       = 4
+connACKVal NotAuthorized        = 5
+connACKVal (InvalidConnACKRC x) = x
+
+data ConnACKFlags = ConnACKFlags Bool ConnACKRC deriving (Eq, Show)
 
 instance ByteMe ConnACKFlags where
-  toBytes (ConnACKFlags sp rc) = [0x20, 2, boolBit sp, rc]
+  toBytes (ConnACKFlags sp rc) = [0x20, 2, boolBit sp, connACKVal rc]
 
 parseConnectACK :: A.Parser MQTTPkt
 parseConnectACK = do
@@ -227,7 +250,7 @@ parseConnectACK = do
   _ <- A.word8 2 -- two bytes left
   ackFlags <- A.anyWord8
   rc <- A.anyWord8
-  pure $ ConnACKPkt $ ConnACKFlags (testBit ackFlags 0) rc
+  pure $ ConnACKPkt $ ConnACKFlags (testBit ackFlags 0) (connACKRC rc)
 
 data PublishRequest = PublishRequest{
   _pubDup      :: Bool

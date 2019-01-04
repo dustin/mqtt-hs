@@ -61,7 +61,7 @@ astr = L.fromStrict . BC.pack . getUnicodeString <$> arbitrary
 instance Arbitrary QoS where
   arbitrary = arbitraryBoundedEnum
 
-instance Arbitrary ConnACKFlags where arbitrary = ConnACKFlags <$> arbitrary <*> choose (0,5)
+instance Arbitrary ConnACKFlags where arbitrary = ConnACKFlags <$> arbitrary <*> (connACKRC <$> choose (0,5))
 
 instance Arbitrary PublishRequest where
   arbitrary = do

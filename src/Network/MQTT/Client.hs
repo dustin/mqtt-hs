@@ -142,13 +142,8 @@ runClient MQTTConfig{..} = do
       let (A.Done in' res) = A.parse parsePacket _in
       let (ConnACKPkt (ConnACKFlags _ val)) = res
       case val of
-        0 -> pure ()
-        1 -> fail "unacceptable protocol version"
-        2 -> fail "identifier rejected"
-        3 -> fail "server unavailable"
-        4 -> fail "bad username or password"
-        5 -> fail "not authorized"
-        x -> fail ("unknown conn ack response: " <> show x)
+        ConnAccepted -> pure ()
+        x            -> fail (show x)
 
       let c' = c{_out=out, _in=in'}
       w <- async $ forever $ (atomically . readTChan) _ch >>= out . toByteString
