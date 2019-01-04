@@ -7,6 +7,7 @@
 - [X] give better disconnection reasons
 - [X] explicit disconnect
 - [ ] determine best resolved address
+- [ ] outbound message IDs can collide with QoS 2 subscriber inbound messages
 
 * Wants [0/1]
 - [ ] A server
