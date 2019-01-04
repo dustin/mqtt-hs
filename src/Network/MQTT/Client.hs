@@ -14,7 +14,7 @@ An MQTT client.
 
 module Network.MQTT.Client (
   -- * Configuring the client.
-  MQTTConfig(..), MQTTClient, QoS(..), mqttConfig,  mkLWT,
+  MQTTConfig(..), MQTTClient, QoS(..), mqttConfig,  mkLWT, LastWill(..),
   -- * Running and waiting for the client.
   runClient, waitForClient,
   disconnect,

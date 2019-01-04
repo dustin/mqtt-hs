@@ -12,7 +12,16 @@ MQTT Types.
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-module Network.MQTT.Types where
+module Network.MQTT.Types (
+  LastWill(..), MQTTPkt(..), QoS(..),
+  ConnectRequest(..), connectRequest, ConnACKFlags(..), ConnACKRC(..),
+  PublishRequest(..), PubACK(..), PubREC(..), PubREL(..), PubCOMP(..),
+  SubscribeRequest(..), SubscribeResponse(..),
+  UnsubscribeRequest(..), UnsubscribeResponse(..),
+  parsePacket, ByteMe(toByteString),
+  -- for testing
+  encodeLength, parseHdrLen, connACKRC
+  ) where
 
 import           Control.Applicative             (liftA2, (<|>))
 import           Control.Monad                   (replicateM)
@@ -87,6 +96,7 @@ data ProtocolLevel = Protocol311 deriving(Eq, Show)
 
 instance ByteMe ProtocolLevel where toByteString _ = BL.singleton 4
 
+-- | An MQTT Will message.
 data LastWill = LastWill {
   _willRetain  :: Bool
   , _willQoS   :: QoS
