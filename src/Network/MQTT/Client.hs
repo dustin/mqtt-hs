@@ -25,7 +25,7 @@ module Network.MQTT.Client (
 import           Control.Concurrent              (threadDelay)
 import           Control.Concurrent.Async        (Async, async, cancel,
                                                   cancelWith, race, race_, wait,
-                                                  waitCatch)
+                                                  waitCatch, withAsync)
 import           Control.Concurrent.STM          (STM, TChan, TVar, atomically,
                                                   modifyTVar', newTChan,
                                                   newTChanIO, newTVarIO,
@@ -262,9 +262,7 @@ publishq c t m r q = do
   E.finally (publishAndWait ch pid) (atomically $ releasePktID c pid)
 
     where
-      publishAndWait ch pid = do
-        p <- async (pub False pid)
-        E.finally (satisfyQoS p ch pid) (cancel p)
+      publishAndWait ch pid = withAsync (pub False pid) (\p -> satisfyQoS p ch pid)
 
       pub dup pid = do
         sendPacketIO c (PublishPkt $ PublishRequest {
