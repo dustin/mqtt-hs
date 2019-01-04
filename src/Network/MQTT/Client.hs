@@ -183,17 +183,15 @@ dispatch c@MQTTClient{..} = do
 
   let (Right (A.Done s' res)) = epkt
   case res of
-    (PublishPkt PublishRequest{..}) -> case _cb of
-                                         Nothing -> pure ()
-                                         Just x -> x (blToText _pubTopic) _pubBody
-    (SubACKPkt (SubscribeResponse i _)) -> delegate res i
+    (PublishPkt p)                        -> pubMachine p
+    (SubACKPkt (SubscribeResponse i _))   -> delegate res i
     (UnsubACKPkt (UnsubscribeResponse i)) -> delegate res i
-    (PubACKPkt (PubACK i)) -> delegate res i
-    (PubRECPkt (PubREC i)) -> delegate res i
-    (PubRELPkt (PubREL i)) -> delegate res i
-    (PubCOMPPkt (PubCOMP i)) -> delegate res i
-    PongPkt -> pure ()
-    x -> print x
+    (PubACKPkt (PubACK i))                -> delegate res i
+    (PubRECPkt (PubREC i))                -> delegate res i
+    (PubRELPkt (PubREL i))                -> delegate res i
+    (PubCOMPPkt (PubCOMP i))              -> delegate res i
+    PongPkt                               -> pure ()
+    x                                     -> print x
   dispatch c{_in=s'}
 
   where delegate pkt pid = atomically $ do
@@ -201,6 +199,27 @@ dispatch c@MQTTClient{..} = do
           case IntMap.lookup (fromEnum pid) m of
             Nothing -> pure ()
             Just ch -> writeTChan ch pkt
+
+        pubMachine PublishRequest{..}
+          | _pubQoS == QoS2 = void $ async manageQoS2
+          | _pubQoS == QoS1 = notify >> sendPacketIO c (PubACKPkt (PubACK _pubPktID))
+          | otherwise = notify
+
+          where
+            notify = case _cb of
+                       Nothing -> pure ()
+                       Just x  -> x (blToText _pubTopic) _pubBody
+
+            manageQoS2 = do
+              ch <- newTChanIO
+              atomically $ modifyTVar' _acks (IntMap.insert (fromEnum _pubPktID) ch)
+              E.finally (manageQoS2' ch) (atomically $ releasePktID c _pubPktID)
+                where
+                  manageQoS2' ch = do
+                    sendPacketIO c (PubRECPkt (PubREC _pubPktID))
+                    (PubRELPkt _) <- atomically $ readTChan ch
+                    notify
+                    sendPacketIO c (PubCOMPPkt (PubCOMP _pubPktID))
 
 sendPacket :: MQTTClient -> MQTTPkt -> STM ()
 sendPacket MQTTClient{..} p = do

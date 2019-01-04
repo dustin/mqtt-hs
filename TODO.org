@@ -1,7 +1,7 @@
-* Needs [4/6]
+* Needs [5/8]
 - [ ] TLS Support
 - [X] QoS pub > 0
-- [ ] QoS sub > 0
+- [X] QoS sub > 0
 - [X] convenient unsubscribe
 - [ ] conduit
 - [X] give better disconnection reasons
