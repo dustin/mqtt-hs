@@ -23,6 +23,15 @@ import qualified Data.ByteString.Lazy            as BL
 import           Data.Maybe                      (isJust)
 import           Data.Word                       (Word16, Word8)
 
+-- | QoS values for publishing and subscribing.
+data QoS = QoS0 | QoS1 | QoS2 deriving (Bounded, Enum, Eq, Show)
+
+qosW :: QoS -> Word8
+qosW = toEnum.fromEnum
+
+wQos :: Word8 -> QoS
+wQos = toEnum.fromEnum
+
 (≫) :: Bits a => a -> Int -> a
 (≫) = shiftR
 
@@ -80,7 +89,7 @@ instance ByteMe ProtocolLevel where toByteString _ = BL.singleton 4
 
 data LastWill = LastWill {
   _willRetain  :: Bool
-  , _willQoS   :: Word8
+  , _willQoS   :: QoS
   , _willTopic :: BL.ByteString
   , _willMsg   :: BL.ByteString
   } deriving(Eq, Show)
@@ -117,7 +126,7 @@ instance ByteMe ConnectRequest where
           clean = boolBit _cleanSession ≪ 1
           willBits = case _lastWill of
                        Nothing -> 0
-                       Just LastWill{..} -> 4 .|. ((_willQoS .&. 0x3) ≪ 4) .|. (boolBit _willRetain ≪ 5)
+                       Just LastWill{..} -> 4 .|. ((qosW _willQoS .&. 0x3) ≪ 4) .|. (boolBit _willRetain ≪ 5)
 
       lwt :: Maybe LastWill -> BL.ByteString
       lwt Nothing = mempty
@@ -204,7 +213,7 @@ parseConnect = do
           msg <- aString
           pure $ Just LastWill{_willTopic=top, _willMsg=msg,
                                _willRetain=testBit bits 5,
-                               _willQoS=(bits ≫ 3) .&. 0x3}
+                               _willQoS=wQos $ (bits ≫ 3) .&. 0x3}
       | otherwise = pure Nothing
 
 data ConnACKFlags = ConnACKFlags Bool Word8 deriving (Eq, Show)
@@ -222,7 +231,7 @@ parseConnectACK = do
 
 data PublishRequest = PublishRequest{
   _pubDup      :: Bool
-  , _pubQoS    :: Word8
+  , _pubQoS    :: QoS
   , _pubRetain :: Bool
   , _pubTopic  :: BL.ByteString
   , _pubPktID  :: Word16
@@ -234,10 +243,10 @@ instance ByteMe PublishRequest where
                                     <> withLength val
     where f = (db ≪ 3) .|. (qb ≪ 1) .|. rb
           db = boolBit _pubDup
-          qb = _pubQoS .&. 0x3
+          qb = qosW _pubQoS .&. 0x3
           rb = boolBit _pubRetain
           pktid
-            | _pubQoS == 0 = mempty
+            | _pubQoS == QoS0 = mempty
             | otherwise = encodeWord16 _pubPktID
           val = toByteString _pubTopic <> pktid <> _pubBody
 
@@ -246,25 +255,24 @@ parsePublish = do
   w <- A.satisfy (\x -> x .&. 0xf0 == 0x30)
   plen <- parseHdrLen
   let _pubDup = w .&. 0x8 == 0x8
-      _pubQoS = (w ≫ 1) .&. 3
+      _pubQoS = wQos $ (w ≫ 1) .&. 3
       _pubRetain = w .&. 1 == 1
   _pubTopic <- aString
-  _pubPktID <- if _pubQoS == 0 then pure 0 else aWord16
+  _pubPktID <- if _pubQoS == QoS0 then pure 0 else aWord16
   _pubBody <- BL.fromStrict <$> A.take (plen - (fromEnum $ BL.length _pubTopic) - 2 - qlen _pubQoS)
   pure $ PublishPkt PublishRequest{..}
 
-  where qlen qos
-          | qos == 0 = 0
-          | otherwise = 2
+  where qlen QoS0 = 0
+        qlen _    = 2
 
-data SubscribeRequest = SubscribeRequest Word16 [(BL.ByteString, Word8)]
+data SubscribeRequest = SubscribeRequest Word16 [(BL.ByteString, QoS)]
                       deriving(Eq, Show)
 
 instance ByteMe SubscribeRequest where
   toByteString (SubscribeRequest pid sreq) =
     BL.singleton 0x82
     <> withLength (encodeWord16 pid <> reqs)
-    where reqs = (BL.concat . map (\(bs,q) -> toByteString bs <> BL.singleton q)) sreq
+    where reqs = (BL.concat . map (\(bs,q) -> toByteString bs <> BL.singleton (qosW q))) sreq
 
 newtype PubACK = PubACK Word16 deriving(Eq, Show)
 
@@ -321,20 +329,28 @@ parseSubscribe = do
       parseSubs l = case A.parseOnly (A.many1 parseSub) l of
                       Left x  -> fail x
                       Right x -> pure x
-      parseSub = liftA2 (,) aString A.anyWord8
+      parseSub = liftA2 (,) aString (wQos <$> A.anyWord8)
 
-data SubscribeResponse = SubscribeResponse Word16 [Word8] deriving (Eq, Show)
+data SubscribeResponse = SubscribeResponse Word16 [Maybe QoS] deriving (Eq, Show)
 
 instance ByteMe SubscribeResponse where
   toByteString (SubscribeResponse pid sres) =
-    BL.singleton 0x90 <> withLength (encodeWord16 pid <> BL.pack sres)
+    BL.singleton 0x90 <> withLength (encodeWord16 pid <> BL.pack (b <$> sres))
+
+    where
+      b Nothing  = 0x80
+      b (Just q) = qosW q
 
 parseSubACK :: A.Parser MQTTPkt
 parseSubACK = do
   _ <- A.word8 0x90
   hl <- parseHdrLen
   pid <- aWord16
-  SubACKPkt . SubscribeResponse pid <$> replicateM (hl-2) A.anyWord8
+  SubACKPkt . SubscribeResponse pid <$> replicateM (hl-2) (p <$> A.anyWord8)
+
+  where
+    p 0x80 = Nothing
+    p x    = Just (wQos x)
 
 data UnsubscribeRequest = UnsubscribeRequest Word16 [BL.ByteString]
                         deriving(Eq, Show)

@@ -58,15 +58,18 @@ mastr = fmap (L.fromStrict . BC.pack . getUnicodeString) <$> arbitrary
 astr :: Gen L.ByteString
 astr = L.fromStrict . BC.pack . getUnicodeString <$> arbitrary
 
+instance Arbitrary QoS where
+  arbitrary = arbitraryBoundedEnum
+
 instance Arbitrary ConnACKFlags where arbitrary = ConnACKFlags <$> arbitrary <*> choose (0,5)
 
 instance Arbitrary PublishRequest where
   arbitrary = do
     _pubDup <- arbitrary
-    _pubQoS <- choose (0,2)
+    _pubQoS <- arbitrary
     _pubRetain <- arbitrary
     _pubTopic <- astr
-    _pubPktID <- if _pubQoS == 0 then pure 0 else arbitrary
+    _pubPktID <- if _pubQoS == QoS0 then pure 0 else arbitrary
     _pubBody <- astr
     pure PublishRequest{..}
 
@@ -84,11 +87,11 @@ instance Arbitrary PubCOMP where
 
 instance Arbitrary SubscribeRequest where
   arbitrary = arbitrary >>= \pid -> choose (1,11) >>= \n -> SubscribeRequest pid <$> vectorOf n sub
-    where sub = liftA2 (,) astr (choose (0,2))
+    where sub = liftA2 (,) astr arbitrary
 
 instance Arbitrary SubscribeResponse where
   arbitrary = arbitrary >>= \pid -> choose (1,11) >>= \n -> SubscribeResponse pid <$> vectorOf n sub
-    where sub = oneof (pure <$> [0, 1, 2, 0x80])
+    where sub = oneof (pure <$> [Just QoS0, Just QoS1, Just QoS2, Nothing])
   shrink (SubscribeResponse pid l)
     | length l == 1 = []
     | otherwise = [SubscribeResponse pid sl | sl <- shrinkList (:[]) l, length sl > 0]

@@ -14,7 +14,7 @@ An MQTT client.
 
 module Network.MQTT.Client (
   -- * Configuring the client.
-  MQTTConfig(..), MQTTClient, mqttConfig,  mkLWT,
+  MQTTConfig(..), MQTTClient, QoS(..), mqttConfig,  mkLWT,
   -- * Running and waiting for the client.
   runClient, waitForClient,
   disconnect,
@@ -239,13 +239,13 @@ sendAndWait c@MQTTClient{..} f = do
 
 -- | Subscribe to a list of topics with their respective QoSes.  The
 -- accepted QoSes are returned in the same order.
-subscribe :: MQTTClient -> [(Text, Int)] -> IO [Int]
+subscribe :: MQTTClient -> [(Text, QoS)] -> IO [Maybe QoS]
 subscribe c@MQTTClient{..} ls = do
   r <- sendAndWait c (\pid -> SubscribePkt $ SubscribeRequest pid ls')
   let (SubACKPkt (SubscribeResponse _ rs)) = r
-  pure $ map fromEnum rs
+  pure rs
 
-    where ls' = map (\(s, i) -> (textToBL s, toEnum i)) ls
+    where ls' = map (\(s, i) -> (textToBL s, i)) ls
 
 -- | Unsubscribe from a list of topics.
 unsubscribe :: MQTTClient -> [Text] -> IO ()
@@ -258,14 +258,14 @@ publish :: MQTTClient
         -> BL.ByteString -- ^ Message body
         -> Bool          -- ^ Retain flag
         -> IO ()
-publish c t m r = void $ publishq c t m r 0
+publish c t m r = void $ publishq c t m r QoS0
 
 -- | Publish a message with the specified QoS.
 publishq :: MQTTClient
          -> Text          -- ^ Topic
          -> BL.ByteString -- ^ Message body
          -> Bool          -- ^ Retain flag
-         -> Int           -- ^ QoS
+         -> QoS           -- ^ QoS
          -> IO ()
 publishq c t m r q = do
   (ch,pid) <- atomically $ reservePktID c
@@ -277,7 +277,7 @@ publishq c t m r q = do
       pub dup pid = do
         sendPacketIO c (PublishPkt $ PublishRequest {
                            _pubDup = dup,
-                           _pubQoS = toEnum q,
+                           _pubQoS = q,
                            _pubPktID = pid,
                            _pubRetain = r,
                            _pubTopic = textToBL t,
@@ -286,9 +286,9 @@ publishq c t m r q = do
         pub True pid
 
       satisfyQoS p ch pid
-        | q == 0 = pure ()
-        | q == 1 = void $ atomically $ readTChan ch
-        | q == 2 = waitRec
+        | q == QoS0 = pure ()
+        | q == QoS1 = void $ atomically $ readTChan ch
+        | q == QoS2 = waitRec
         | otherwise = error "invalid QoS"
 
         where
@@ -309,7 +309,7 @@ disconnect c@MQTTClient{..} = race_ getDisconnected orDieTrying
 mkLWT :: Text -> BL.ByteString -> Bool -> T.LastWill
 mkLWT t m r = T.LastWill{
   T._willRetain=r,
-  T._willQoS=0,
+  T._willQoS=QoS0,
   T._willTopic = textToBL t,
   T._willMsg=m
   }

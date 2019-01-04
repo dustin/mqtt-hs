@@ -13,11 +13,11 @@ main = do
   mc <- runClient mqttConfig{_hostname="localhost", _service="1883", _connID="hasqttl",
                              _lwt=Just $ mkLWT "tmp/haskquit" "bye for now" False,
                              _msgCB=Just showme}
-  print =<< subscribe mc [("oro/#", 0), ("tmp/#", 0)]
+  print =<< subscribe mc [("oro/#", QoS0), ("tmp/#", QoS0)]
   p <- async $ forever $ publish mc "tmp/mqtths" "hi from haskell" False >> threadDelay 10000000
 
   putStrLn "Publishing at QoS > 0"
-  publishq mc "tmp/q" "this message is at QoS 2" False 2
+  publishq mc "tmp/q" "this message is at QoS 2" False QoS2
   putStrLn "Published!"
 
   print =<< waitForClient mc
