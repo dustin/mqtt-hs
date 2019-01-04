@@ -37,7 +37,7 @@ import           Control.Monad                   (forever, void, when)
 import qualified Data.Attoparsec.ByteString.Lazy as A
 import qualified Data.ByteString.Lazy            as BL
 import qualified Data.ByteString.Lazy.Char8      as BC
-import           Data.Either                     (fromRight, isLeft, isRight)
+import           Data.Either                     (fromRight, isLeft)
 import           Data.IntMap                     (IntMap)
 import qualified Data.IntMap                     as IntMap
 import           Data.Text                       (Text)
@@ -256,13 +256,15 @@ unsubscribe c@MQTTClient{..} ls = do
 publish :: MQTTClient -> Text -> BL.ByteString -> Bool -> IO ()
 publish c t m r = void $ publishq c t m r 0
 
-publishq :: MQTTClient -> Text -> BL.ByteString -> Bool -> Int -> IO (Bool)
+publishq :: MQTTClient -> Text -> BL.ByteString -> Bool -> Int -> IO ()
 publishq c t m r q = do
   (ch,pid) <- atomically $ reservePktID c
-  isRight <$> E.finally (publishAndWait ch pid) (atomically $ releasePktID c pid)
+  E.finally (publishAndWait ch pid) (atomically $ releasePktID c pid)
 
     where
-      publishAndWait ch pid = race (pub False pid) (satisfyQoS ch pid)
+      publishAndWait ch pid = do
+        p <- async (pub False pid)
+        E.finally (satisfyQoS p ch pid) (cancel p)
 
       pub dup pid = do
         sendPacketIO c (PublishPkt $ PublishRequest {
@@ -275,7 +277,7 @@ publishq c t m r q = do
         threadDelay 5000000
         pub True pid
 
-      satisfyQoS ch pid
+      satisfyQoS p ch pid
         | q == 0 = pure ()
         | q == 1 = void $ atomically $ readTChan ch
         | q == 2 = waitRec
@@ -285,6 +287,7 @@ publishq c t m r q = do
           waitRec = do
             (PubRECPkt _) <- atomically $ readTChan ch
             sendPacketIO c (PubRELPkt $ PubREL pid)
+            cancel p -- must not publish after rel
             void $ atomically $ readTChan ch
 
 -- | Disconnect from the MQTT server.
