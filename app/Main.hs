@@ -16,6 +16,10 @@ main = do
   print =<< subscribe mc [("oro/#", 0), ("tmp/#", 0)]
   p <- async $ forever $ publish mc "tmp/mqtths" "hi from haskell" False >> threadDelay 10000000
 
+  putStrLn "Publishing at QoS > 0"
+  publishq mc "tmp/q" "this message is at QoS 2" False 2
+  putStrLn "Published!"
+
   print =<< waitForClient mc
   cancel p
 
