@@ -27,12 +27,13 @@ import           Control.Concurrent.Async        (Async, async, cancel,
                                                   cancelWith, race, race_, wait,
                                                   waitCatch)
 import           Control.Concurrent.STM          (STM, TChan, TVar, atomically,
-                                                  modifyTVar', newTChanIO,
-                                                  newTVarIO, readTChan,
-                                                  readTVar, readTVarIO, retry,
-                                                  writeTChan, writeTVar)
+                                                  modifyTVar', newTChan,
+                                                  newTChanIO, newTVarIO,
+                                                  readTChan, readTVar,
+                                                  readTVarIO, retry, writeTChan,
+                                                  writeTVar)
 import qualified Control.Exception               as E
-import           Control.Monad                   (forever, when)
+import           Control.Monad                   (forever, void, when)
 import qualified Data.Attoparsec.ByteString.Lazy as A
 import qualified Data.ByteString.Lazy            as BL
 import qualified Data.ByteString.Lazy.Char8      as BC
@@ -62,7 +63,7 @@ data MQTTClient = MQTTClient {
   , _pktID :: TVar Word16
   , _cb    :: Maybe (Text -> BL.ByteString -> IO ())
   , _ts    :: TVar [Async ()]
-  , _acks  :: TVar (IntMap MQTTPkt)
+  , _acks  :: TVar (IntMap (TChan MQTTPkt))
   , _st    :: TVar ConnState
   , _ct    :: TVar (Async ())
   }
@@ -117,7 +118,7 @@ runClient MQTTConfig{..} = do
     clientThread cli = E.finally resolveConnRun markDisco
       where
         resolveConnRun = resolve _hostname _service >>= \addr ->
-                           E.bracket (open addr) close $ \s -> E.bracket (start cli s) cancelAll capture
+                           E.bracket (open addr) close $ \s -> E.bracket (start cli s) cancelAll dispatch
         markDisco = atomically $ writeTVar (_st cli) Disconnected
 
     resolve host port = do
@@ -173,8 +174,8 @@ data MQTTException = Timeout deriving(Eq, Show)
 
 instance E.Exception MQTTException
 
-capture :: MQTTClient -> IO ()
-capture c@MQTTClient{..} = do
+dispatch :: MQTTClient -> IO ()
+dispatch c@MQTTClient{..} = do
   epkt <- race (threadDelay 60000000) (pure $! A.parse parsePacket _in)
   when (isLeft epkt) $ E.throwIO Timeout
 
@@ -183,13 +184,17 @@ capture c@MQTTClient{..} = do
     (PublishPkt PublishRequest{..}) -> case _cb of
                                          Nothing -> pure ()
                                          Just x -> x (blToText _pubTopic) _pubBody
-    (SubACKPkt (SubscribeResponse i _)) -> remember res i
-    (UnsubACKPkt (UnsubscribeResponse i)) -> remember res i
+    (SubACKPkt (SubscribeResponse i _)) -> delegate res i
+    (UnsubACKPkt (UnsubscribeResponse i)) -> delegate res i
     PongPkt -> pure ()
     x -> print x
-  capture c{_in=s'}
+  dispatch c{_in=s'}
 
-  where remember pkt pid = atomically $ modifyTVar' _acks (IntMap.insert (fromEnum pid) pkt)
+  where delegate pkt pid = atomically $ do
+          m <- readTVar _acks
+          case IntMap.lookup (fromEnum pid) m of
+            Nothing -> pure ()
+            Just ch -> writeTChan ch pkt
 
 sendPacket :: MQTTClient -> MQTTPkt -> STM ()
 sendPacket MQTTClient{..} = writeTChan _ch
@@ -203,23 +208,27 @@ textToBL = BL.fromStrict . TE.encodeUtf8
 blToText :: BL.ByteString -> Text
 blToText = TE.decodeUtf8 . BL.toStrict
 
+sendAndWait :: MQTTClient -> (Word16 -> MQTTPkt) -> IO (MQTTPkt)
+sendAndWait c@MQTTClient{..} f = do
+  (ch,pid) <- atomically $ do
+    ch <- newTChan
+    pid <- readTVar _pktID
+    modifyTVar' _pktID succ
+    modifyTVar' _acks (IntMap.insert (fromEnum pid) ch)
+
+    sendPacket c (f pid)
+    pure (ch,pid)
+
+  -- Wait for the response in a separate transaction.
+  atomically $ do
+    modifyTVar' _acks (IntMap.delete (fromEnum pid))
+    readTChan ch
+
 -- | Subscribe to a list of topics with their respective QoSes.  The
 -- accepted QoSes are returned in the same order.
 subscribe :: MQTTClient -> [(Text, Int)] -> IO [Int]
 subscribe c@MQTTClient{..} ls = do
-  p <- atomically $ do
-    pid <- readTVar _pktID
-    modifyTVar' _pktID succ
-    sendPacket c (SubscribePkt $ SubscribeRequest pid ls')
-    pure pid
-
-  let pint = fromEnum p
-  r <- atomically $ do
-    m <- readTVar _acks
-    case IntMap.lookup pint m of
-      Nothing  -> retry
-      Just pkt -> modifyTVar' _acks (IntMap.delete pint) >> pure pkt
-
+  r <- sendAndWait c (\pid -> SubscribePkt $ SubscribeRequest pid ls')
   let (SubACKPkt (SubscribeResponse _ rs)) = r
   pure $ map fromEnum rs
 
@@ -228,22 +237,7 @@ subscribe c@MQTTClient{..} ls = do
 -- | Unsubscribe from a list of topics.
 unsubscribe :: MQTTClient -> [Text] -> IO ()
 unsubscribe c@MQTTClient{..} ls = do
-  p <- atomically $ do
-    pid <- readTVar _pktID
-    modifyTVar' _pktID succ
-    sendPacket c (UnsubscribePkt $ UnsubscribeRequest pid ls')
-    pure pid
-
-  let pint = fromEnum p
-  atomically $ do
-    m <- readTVar _acks
-    case IntMap.lookup pint m of
-      Nothing -> retry
-      Just _  -> modifyTVar' _acks (IntMap.delete pint)
-
-  pure ()
-
-    where ls' = map textToBL ls
+  void $ sendAndWait c (\pid -> UnsubscribePkt $ UnsubscribeRequest pid (map textToBL ls))
 
 -- | Publish a message (QoS 0).
 publish :: MQTTClient -> Text -> BL.ByteString -> Bool -> IO ()
