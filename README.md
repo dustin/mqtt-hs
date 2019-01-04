@@ -9,7 +9,7 @@ An [MQTT][mqtt] client for Haskell.
 ```haskell
 main :: IO
 main = do
-  mc <- runClient mqttConfig{_hostname="localhost", _service="1883", _connID="hasqttl"}
+  mc <- runClient mqttConfig{}
   publish mc "tmp/topic" "hello!" False
 ```
 
@@ -18,8 +18,7 @@ main = do
 ```haskell
 main :: IO
 main = do
-  mc <- runClient mqttConfig{_hostname="localhost", _service="1883", _connID="hasqttl",
-                             _msgCB=Just msgReceived}
+  mc <- runClient mqttConfig{_msgCB=Just msgReceived}
   print =<< subscribe mc [("tmp/topic1", QoS0), ("tmp/topic2", QoS0)]
   print =<< waitForClient mc   -- wait for the the client to disconnect
 

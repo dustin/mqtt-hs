@@ -80,9 +80,10 @@ data MQTTConfig = MQTTConfig{
   , _msgCB        :: Maybe (Text -> BL.ByteString -> IO ()) -- ^ Callback for incoming messages.
   }
 
--- | A default MQTTConfig.  _connID must be provided.
+-- | A default MQTTConfig.  A _connID /should/ be provided by the client in the returned config,
+-- but the defaults should work for testing.
 mqttConfig :: MQTTConfig
-mqttConfig = MQTTConfig{_hostname="", _service="", _connID="",
+mqttConfig = MQTTConfig{_hostname="localhost", _service="1883", _connID="haskell-mqtt",
                         _username=Nothing, _password=Nothing,
                         _cleanSession=True, _lwt=Nothing,
                         _msgCB=Nothing}
