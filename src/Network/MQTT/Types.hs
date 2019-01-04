@@ -1,3 +1,14 @@
+{-|
+Module      : Network.MQTT.Types
+Description : Parsers and serializers for MQTT.
+Copyright   : (c) Dustin Sallings, 2019
+License     : BSD3
+Maintainer  : dustin@spy.net
+Stability   : experimental
+
+MQTT Types.
+-}
+
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 

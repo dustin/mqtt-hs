@@ -4,7 +4,7 @@ github:              "dustin/mqtt"
 license:             BSD3
 author:              "Dustin Sallings"
 maintainer:          "dustin@spy.net"
-copyright:           "MIT"
+copyright:           "BSD3"
 
 extra-source-files:
 - README.md

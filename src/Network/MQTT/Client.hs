@@ -2,7 +2,7 @@
 Module      : Network.MQTT.Client.
 Description : An MQTT client.
 Copyright   : (c) Dustin Sallings, 2019
-License     : MIT
+License     : BSD3
 Maintainer  : dustin@spy.net
 Stability   : experimental
 
