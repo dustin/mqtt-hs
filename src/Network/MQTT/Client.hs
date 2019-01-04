@@ -208,21 +208,26 @@ textToBL = BL.fromStrict . TE.encodeUtf8
 blToText :: BL.ByteString -> Text
 blToText = TE.decodeUtf8 . BL.toStrict
 
+reservePktID :: MQTTClient -> STM (TChan MQTTPkt, Word16)
+reservePktID MQTTClient{..}= do
+  ch <- newTChan
+  pid <- readTVar _pktID
+  modifyTVar' _pktID succ
+  modifyTVar' _acks (IntMap.insert (fromEnum pid) ch)
+  pure (ch,pid)
+
+releasePktID :: MQTTClient -> Word16 -> STM ()
+releasePktID MQTTClient{..} p = modifyTVar' _acks (IntMap.delete (fromEnum p))
+
 sendAndWait :: MQTTClient -> (Word16 -> MQTTPkt) -> IO (MQTTPkt)
 sendAndWait c@MQTTClient{..} f = do
   (ch,pid) <- atomically $ do
-    ch <- newTChan
-    pid <- readTVar _pktID
-    modifyTVar' _pktID succ
-    modifyTVar' _acks (IntMap.insert (fromEnum pid) ch)
-
+    (ch,pid) <- reservePktID c
     sendPacket c (f pid)
     pure (ch,pid)
 
   -- Wait for the response in a separate transaction.
-  atomically $ do
-    modifyTVar' _acks (IntMap.delete (fromEnum pid))
-    readTChan ch
+  atomically $ releasePktID c pid >> readTChan ch
 
 -- | Subscribe to a list of topics with their respective QoSes.  The
 -- accepted QoSes are returned in the same order.
