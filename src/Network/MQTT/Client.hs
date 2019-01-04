@@ -19,7 +19,7 @@ module Network.MQTT.Client (
   runClient, waitForClient,
   disconnect,
   -- * General client interactions.
-  subscribe, unsubscribe, publish
+  subscribe, unsubscribe, publish, publishQoS1
   ) where
 
 import           Control.Concurrent              (threadDelay)
@@ -37,7 +37,7 @@ import           Control.Monad                   (forever, void, when)
 import qualified Data.Attoparsec.ByteString.Lazy as A
 import qualified Data.ByteString.Lazy            as BL
 import qualified Data.ByteString.Lazy.Char8      as BC
-import           Data.Either                     (isLeft)
+import           Data.Either                     (isLeft, isRight)
 import           Data.IntMap                     (IntMap)
 import qualified Data.IntMap                     as IntMap
 import           Data.Text                       (Text)
@@ -186,6 +186,7 @@ dispatch c@MQTTClient{..} = do
                                          Just x -> x (blToText _pubTopic) _pubBody
     (SubACKPkt (SubscribeResponse i _)) -> delegate res i
     (UnsubACKPkt (UnsubscribeResponse i)) -> delegate res i
+    (PubACKPkt (PubACK i)) -> delegate res i
     PongPkt -> pure ()
     x -> print x
   dispatch c{_in=s'}
@@ -253,6 +254,25 @@ publish c t m r = sendPacketIO c (PublishPkt $ PublishRequest {
                                      _pubRetain = r,
                                      _pubTopic = textToBL t,
                                      _pubBody = m})
+
+publishQoS1 :: MQTTClient -> Text -> BL.ByteString -> Bool -> IO (Bool)
+publishQoS1 c t m r = do
+  (ch,pid) <- atomically $ reservePktID c
+  isRight <$> E.finally (publishAndWait ch pid) (atomically $ releasePktID c pid)
+
+    where
+      publishAndWait ch pid = race (pub False pid) (atomically $ readTChan ch)
+
+      pub dup pid = do
+        sendPacketIO c (PublishPkt $ PublishRequest {
+                           _pubDup = dup,
+                           _pubQoS = 1,
+                           _pubPktID = pid,
+                           _pubRetain = r,
+                           _pubTopic = textToBL t,
+                           _pubBody = m})
+        threadDelay 5000000
+        pub True pid
 
 -- | Disconnect from the MQTT server.
 disconnect :: MQTTClient -> IO ()

@@ -207,7 +207,7 @@ data PublishRequest = PublishRequest{
   , _pubQoS    :: Word8
   , _pubRetain :: Bool
   , _pubTopic  :: BL.ByteString
-  , _pubPktID  :: Word8
+  , _pubPktID  :: Word16
   , _pubBody   :: BL.ByteString
   } deriving(Eq, Show)
 
@@ -220,7 +220,7 @@ instance ByteMe PublishRequest where
           rb = boolBit _pubRetain
           pktid
             | _pubQoS == 0 = mempty
-            | otherwise = BL.singleton _pubPktID
+            | otherwise = encodeWord16 _pubPktID
           val = toByteString _pubTopic <> pktid <> _pubBody
 
 parsePublish :: A.Parser MQTTPkt
@@ -231,13 +231,13 @@ parsePublish = do
       _pubQoS = (w ≫ 1) .&. 3
       _pubRetain = w .&. 1 == 1
   _pubTopic <- aString
-  _pubPktID <- if _pubQoS == 0 then pure 0 else A.anyWord8
+  _pubPktID <- if _pubQoS == 0 then pure 0 else aWord16
   _pubBody <- BL.fromStrict <$> A.take (plen - (fromEnum $ BL.length _pubTopic) - 2 - qlen _pubQoS)
   pure $ PublishPkt PublishRequest{..}
 
   where qlen qos
           | qos == 0 = 0
-          | otherwise = 1
+          | otherwise = 2
 
 data SubscribeRequest = SubscribeRequest Word16 [(BL.ByteString, Word8)]
                       deriving(Eq, Show)
