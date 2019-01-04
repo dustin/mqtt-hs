@@ -73,6 +73,15 @@ instance Arbitrary PublishRequest where
 instance Arbitrary PubACK where
   arbitrary = PubACK <$> arbitrary
 
+instance Arbitrary PubREL where
+  arbitrary = PubREL <$> arbitrary
+
+instance Arbitrary PubREC where
+  arbitrary = PubREC <$> arbitrary
+
+instance Arbitrary PubCOMP where
+  arbitrary = PubCOMP <$> arbitrary
+
 instance Arbitrary SubscribeRequest where
   arbitrary = arbitrary >>= \pid -> choose (1,11) >>= \n -> SubscribeRequest pid <$> vectorOf n sub
     where sub = liftA2 (,) astr (choose (0,2))
@@ -99,6 +108,9 @@ instance Arbitrary MQTTPkt where
     ConnACKPkt <$> arbitrary,
     PublishPkt <$> arbitrary,
     PubACKPkt <$> arbitrary,
+    PubRELPkt <$> arbitrary,
+    PubRECPkt <$> arbitrary,
+    PubCOMPPkt <$> arbitrary,
     SubscribePkt <$> arbitrary,
     SubACKPkt <$> arbitrary,
     UnsubscribePkt <$> arbitrary,
@@ -121,7 +133,7 @@ tests = [
   localOption (QC.QuickCheckTests 10000) $ testProperty "header length rt (parser)" prop_rtLengthParser,
 
   testCase "rt some packets" testPacketRT,
-  testProperty "rt packets" prop_PacketRT
+  localOption (QC.QuickCheckTests 1000) $ testProperty "rt packets" prop_PacketRT
   ]
 
 main :: IO ()

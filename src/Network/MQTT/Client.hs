@@ -37,7 +37,7 @@ import           Control.Monad                   (forever, void, when)
 import qualified Data.Attoparsec.ByteString.Lazy as A
 import qualified Data.ByteString.Lazy            as BL
 import qualified Data.ByteString.Lazy.Char8      as BC
-import           Data.Either                     (isLeft, isRight)
+import           Data.Either                     (fromRight, isLeft, isRight)
 import           Data.IntMap                     (IntMap)
 import qualified Data.IntMap                     as IntMap
 import           Data.Text                       (Text)
@@ -170,7 +170,7 @@ runClient MQTTConfig{..} = do
 waitForClient :: MQTTClient -> IO (Either E.SomeException ())
 waitForClient MQTTClient{..} = waitCatch =<< readTVarIO _ct
 
-data MQTTException = Timeout deriving(Eq, Show)
+data MQTTException = Timeout | BadData deriving(Eq, Show)
 
 instance E.Exception MQTTException
 
@@ -178,6 +178,7 @@ dispatch :: MQTTClient -> IO ()
 dispatch c@MQTTClient{..} = do
   epkt <- race (threadDelay 60000000) (pure $! A.parse parsePacket _in)
   when (isLeft epkt) $ E.throwIO Timeout
+  when (isLeft (A.eitherResult $ fromRight undefined epkt)) $ E.throwIO BadData
 
   let (Right (A.Done s' res)) = epkt
   case res of
@@ -187,6 +188,9 @@ dispatch c@MQTTClient{..} = do
     (SubACKPkt (SubscribeResponse i _)) -> delegate res i
     (UnsubACKPkt (UnsubscribeResponse i)) -> delegate res i
     (PubACKPkt (PubACK i)) -> delegate res i
+    (PubRECPkt (PubREC i)) -> delegate res i
+    (PubRELPkt (PubREL i)) -> delegate res i
+    (PubCOMPPkt (PubCOMP i)) -> delegate res i
     PongPkt -> pure ()
     x -> print x
   dispatch c{_in=s'}
@@ -250,13 +254,7 @@ unsubscribe c@MQTTClient{..} ls = do
 
 -- | Publish a message (QoS 0).
 publish :: MQTTClient -> Text -> BL.ByteString -> Bool -> IO ()
-publish c t m r = sendPacketIO c (PublishPkt $ PublishRequest {
-                                     _pubDup = False,
-                                     _pubQoS = 0,
-                                     _pubPktID = 0,
-                                     _pubRetain = r,
-                                     _pubTopic = textToBL t,
-                                     _pubBody = m})
+publish c t m r = void $ publishq c t m r 0
 
 publishq :: MQTTClient -> Text -> BL.ByteString -> Bool -> Int -> IO (Bool)
 publishq c t m r q = do
@@ -264,7 +262,7 @@ publishq c t m r q = do
   isRight <$> E.finally (publishAndWait ch pid) (atomically $ releasePktID c pid)
 
     where
-      publishAndWait ch pid = race (pub False pid) (atomically $ readTChan ch)
+      publishAndWait ch pid = race (pub False pid) (satisfyQoS ch pid)
 
       pub dup pid = do
         sendPacketIO c (PublishPkt $ PublishRequest {
@@ -276,6 +274,18 @@ publishq c t m r q = do
                            _pubBody = m})
         threadDelay 5000000
         pub True pid
+
+      satisfyQoS ch pid
+        | q == 0 = pure ()
+        | q == 1 = void $ atomically $ readTChan ch
+        | q == 2 = waitRec
+        | otherwise = error "invalid QoS"
+
+        where
+          waitRec = do
+            (PubRECPkt _) <- atomically $ readTChan ch
+            sendPacketIO c (PubRELPkt $ PubREL pid)
+            void $ atomically $ readTChan ch
 
 -- | Disconnect from the MQTT server.
 disconnect :: MQTTClient -> IO ()

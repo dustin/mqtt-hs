@@ -120,6 +120,9 @@ data MQTTPkt = ConnPkt ConnectRequest
              | ConnACKPkt ConnACKFlags
              | PublishPkt PublishRequest
              | PubACKPkt PubACK
+             | PubRECPkt PubREC
+             | PubRELPkt PubREL
+             | PubCOMPPkt PubCOMP
              | SubscribePkt SubscribeRequest
              | SubACKPkt SubscribeResponse
              | UnsubscribePkt UnsubscribeRequest
@@ -134,6 +137,9 @@ instance ByteMe MQTTPkt where
   toByteString (ConnACKPkt x)     = toByteString x
   toByteString (PublishPkt x)     = toByteString x
   toByteString (PubACKPkt x)      = toByteString x
+  toByteString (PubRELPkt x)      = toByteString x
+  toByteString (PubRECPkt x)      = toByteString x
+  toByteString (PubCOMPPkt x)     = toByteString x
   toByteString (SubscribePkt x)   = toByteString x
   toByteString (SubACKPkt x)      = toByteString x
   toByteString (UnsubscribePkt x) = toByteString x
@@ -145,6 +151,7 @@ instance ByteMe MQTTPkt where
 parsePacket :: A.Parser MQTTPkt
 parsePacket = parseConnect <|> parseConnectACK
               <|> parsePublish <|> parsePubACK
+              <|> parsePubREC <|> parsePubREL <|> parsePubCOMP
               <|> parseSubscribe <|> parseSubACK
               <|> parseUnsubscribe <|> parseUnsubACK
               <|> PingPkt <$ A.string "\192\NUL" <|> PongPkt <$ A.string "\208\NUL"
@@ -258,6 +265,39 @@ parsePubACK = do
   _ <- A.word8 0x40
   _ <- parseHdrLen
   PubACKPkt . PubACK <$> aWord16
+
+newtype PubREC = PubREC Word16 deriving(Eq, Show)
+
+instance ByteMe PubREC where
+  toByteString (PubREC pid) = BL.singleton 0x50 <> withLength (encodeWord16 pid)
+
+parsePubREC :: A.Parser MQTTPkt
+parsePubREC = do
+  _ <- A.word8 0x50
+  _ <- parseHdrLen
+  PubRECPkt . PubREC <$> aWord16
+
+newtype PubREL = PubREL Word16 deriving(Eq, Show)
+
+instance ByteMe PubREL where
+  toByteString (PubREL pid) = BL.singleton 0x62 <> withLength (encodeWord16 pid)
+
+parsePubREL :: A.Parser MQTTPkt
+parsePubREL = do
+  _ <- A.word8 0x62
+  _ <- parseHdrLen
+  PubRELPkt . PubREL <$> aWord16
+
+newtype PubCOMP = PubCOMP Word16 deriving(Eq, Show)
+
+instance ByteMe PubCOMP where
+  toByteString (PubCOMP pid) = BL.singleton 0x70 <> withLength (encodeWord16 pid)
+
+parsePubCOMP :: A.Parser MQTTPkt
+parsePubCOMP = do
+  _ <- A.word8 0x70
+  _ <- parseHdrLen
+  PubCOMPPkt . PubCOMP <$> aWord16
 
 parseSubscribe :: A.Parser MQTTPkt
 parseSubscribe = do
