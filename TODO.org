@@ -1,11 +1,4 @@
-* Massive bugs [5/5]
-- [X] Close connection when done
-- [X] Generate packet IDs
-- [X] handle subscription acknowledgments
-- [X] Handle connection drops
-- [X] Don't leak threads
-
-* Regular sized bugs [4/6]
+* Needs [4/6]
 - [ ] TLS Support
 - [X] QoS pub > 0
 - [ ] QoS sub > 0
@@ -13,6 +6,7 @@
 - [ ] conduit
 - [X] give better disconnection reasons
 - [X] explicit disconnect
+- [ ] determine best resolved address
 
-* Would be nice [0/1]
+* Wants [0/1]
 - [ ] A server
