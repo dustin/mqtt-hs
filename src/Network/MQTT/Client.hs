@@ -253,10 +253,20 @@ unsubscribe c@MQTTClient{..} ls = do
   void $ sendAndWait c (\pid -> UnsubscribePkt $ UnsubscribeRequest pid (map textToBL ls))
 
 -- | Publish a message (QoS 0).
-publish :: MQTTClient -> Text -> BL.ByteString -> Bool -> IO ()
+publish :: MQTTClient
+        -> Text          -- ^ Topic
+        -> BL.ByteString -- ^ Message body
+        -> Bool          -- ^ Retain flag
+        -> IO ()
 publish c t m r = void $ publishq c t m r 0
 
-publishq :: MQTTClient -> Text -> BL.ByteString -> Bool -> Int -> IO ()
+-- | Publish a message with the specified QoS.
+publishq :: MQTTClient
+         -> Text          -- ^ Topic
+         -> BL.ByteString -- ^ Message body
+         -> Bool          -- ^ Retain flag
+         -> Int           -- ^ QoS
+         -> IO ()
 publishq c t m r q = do
   (ch,pid) <- atomically $ reservePktID c
   E.finally (publishAndWait ch pid) (atomically $ releasePktID c pid)
