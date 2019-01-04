@@ -19,7 +19,7 @@ module Network.MQTT.Client (
   runClient, waitForClient,
   disconnect,
   -- * General client interactions.
-  subscribe, unsubscribe, publish, publishQoS1
+  subscribe, unsubscribe, publish, publishq
   ) where
 
 import           Control.Concurrent              (threadDelay)
@@ -258,8 +258,8 @@ publish c t m r = sendPacketIO c (PublishPkt $ PublishRequest {
                                      _pubTopic = textToBL t,
                                      _pubBody = m})
 
-publishQoS1 :: MQTTClient -> Text -> BL.ByteString -> Bool -> IO (Bool)
-publishQoS1 c t m r = do
+publishq :: MQTTClient -> Text -> BL.ByteString -> Bool -> Int -> IO (Bool)
+publishq c t m r q = do
   (ch,pid) <- atomically $ reservePktID c
   isRight <$> E.finally (publishAndWait ch pid) (atomically $ releasePktID c pid)
 
@@ -269,7 +269,7 @@ publishQoS1 c t m r = do
       pub dup pid = do
         sendPacketIO c (PublishPkt $ PublishRequest {
                            _pubDup = dup,
-                           _pubQoS = 1,
+                           _pubQoS = toEnum q,
                            _pubPktID = pid,
                            _pubRetain = r,
                            _pubTopic = textToBL t,
