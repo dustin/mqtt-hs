@@ -1,11 +1,25 @@
+{-|
+Module      : Network.MQTT.Client.
+Description : An MQTT client.
+Copyright   : (c) Dustin Sallings, 2019
+License     : MIT
+Maintainer  : dustin@spy.net
+Stability   : experimental
+
+An MQTT client.
+-}
+
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
 module Network.MQTT.Client (
-  MQTTConfig(..), MQTTClient,
-  mqttConfig,  mkLWT, runClient, waitForClient,
-  subscribe, unsubscribe, publish,
-  disconnect
+  -- * Configuring the client.
+  MQTTConfig(..), MQTTClient, mqttConfig,  mkLWT,
+  -- * Running and waiting for the client.
+  runClient, waitForClient,
+  disconnect,
+  -- * General client interactions.
+  subscribe, unsubscribe, publish
   ) where
 
 import           Control.Concurrent              (threadDelay)
@@ -40,6 +54,7 @@ import           Network.MQTT.Types              as T
 
 data ConnState = Starting | Connected | Disconnected deriving (Eq, Show)
 
+-- | The MQTT client.
 data MQTTClient = MQTTClient {
   _out     :: BL.ByteString -> IO ()
   , _in    :: BL.ByteString
@@ -52,23 +67,26 @@ data MQTTClient = MQTTClient {
   , _ct    :: TVar (Async ())
   }
 
+-- | Configuration for setting up an MQTT client.
 data MQTTConfig = MQTTConfig{
-  _hostname       :: String
-  , _service      :: String
-  , _connID       :: String
-  , _username     :: Maybe String
-  , _password     :: Maybe String
-  , _cleanSession :: Bool
-  , _lwt          :: Maybe LastWill
-  , _msgCB        :: Maybe (Text -> BL.ByteString -> IO ())
+  _hostname       :: String -- ^ Host to connect to.
+  , _service      :: String -- ^ Service name or port number.
+  , _connID       :: String -- ^ Unique connection ID (required).
+  , _username     :: Maybe String -- ^ Optional username.
+  , _password     :: Maybe String -- ^ Optional password.
+  , _cleanSession :: Bool -- ^ False if a session should be reused.
+  , _lwt          :: Maybe LastWill -- ^ LastWill message to be sent on client disconnect.
+  , _msgCB        :: Maybe (Text -> BL.ByteString -> IO ()) -- ^ Callback for incoming messages.
   }
 
+-- | A default MQTTConfig.  _connID must be provided.
 mqttConfig :: MQTTConfig
 mqttConfig = MQTTConfig{_hostname="", _service="", _connID="",
                         _username=Nothing, _password=Nothing,
                         _cleanSession=True, _lwt=Nothing,
                         _msgCB=Nothing}
 
+-- | Set up and run a client from the given config.
 runClient :: MQTTConfig -> IO MQTTClient
 runClient MQTTConfig{..} = do
   ch <- newTChanIO
@@ -147,6 +165,7 @@ runClient MQTTConfig{..} = do
 
     cancelAll MQTTClient{..} = mapM_ cancel =<< readTVarIO _ts
 
+-- | Wait for a client to terminate its connection.
 waitForClient :: MQTTClient -> IO (Either E.SomeException ())
 waitForClient MQTTClient{..} = waitCatch =<< readTVarIO _ct
 
@@ -184,6 +203,8 @@ textToBL = BL.fromStrict . TE.encodeUtf8
 blToText :: BL.ByteString -> Text
 blToText = TE.decodeUtf8 . BL.toStrict
 
+-- | Subscribe to a list of topics with their respective QoSes.  The
+-- accepted QoSes are returned in the same order.
 subscribe :: MQTTClient -> [(Text, Int)] -> IO [Int]
 subscribe c@MQTTClient{..} ls = do
   p <- atomically $ do
@@ -204,6 +225,7 @@ subscribe c@MQTTClient{..} ls = do
 
     where ls' = map (\(s, i) -> (textToBL s, toEnum i)) ls
 
+-- | Unsubscribe from a list of topics.
 unsubscribe :: MQTTClient -> [Text] -> IO ()
 unsubscribe c@MQTTClient{..} ls = do
   p <- atomically $ do
@@ -223,6 +245,7 @@ unsubscribe c@MQTTClient{..} ls = do
 
     where ls' = map textToBL ls
 
+-- | Publish a message (QoS 0).
 publish :: MQTTClient -> Text -> BL.ByteString -> Bool -> IO ()
 publish c t m r = sendPacketIO c (PublishPkt $ PublishRequest {
                                      _pubDup = False,
@@ -232,12 +255,14 @@ publish c t m r = sendPacketIO c (PublishPkt $ PublishRequest {
                                      _pubTopic = textToBL t,
                                      _pubBody = m})
 
+-- | Disconnect from the MQTT server.
 disconnect :: MQTTClient -> IO ()
 disconnect c@MQTTClient{..} = race_ getDisconnected orDieTrying
   where
     getDisconnected = sendPacketIO c DisconnectPkt >> waitForClient c
     orDieTrying = threadDelay 10000000 >> readTVarIO _ct >>= \t -> cancelWith t Timeout
 
+-- | A convenience method for creating a LastWill.
 mkLWT :: Text -> BL.ByteString -> Bool -> T.LastWill
 mkLWT t m r = T.LastWill{
   T._willRetain=r,
