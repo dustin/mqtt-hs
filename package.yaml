@@ -21,13 +21,14 @@ description:         Please see the README on GitHub at <https://github.com/dust
 dependencies:
 - base >= 4.7 && < 5
 - bytestring
-- network
 - attoparsec
 - binary
 - stm
 - async
 - text
 - containers
+- conduit
+- conduit-extra
 
 library:
   source-dirs: src

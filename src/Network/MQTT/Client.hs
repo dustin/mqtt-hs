@@ -22,44 +22,38 @@ module Network.MQTT.Client (
   subscribe, unsubscribe, publish, publishq
   ) where
 
-import           Control.Concurrent              (threadDelay)
-import           Control.Concurrent.Async        (Async, async, cancel,
-                                                  cancelWith, race, race_, wait,
-                                                  waitCatch, withAsync)
-import           Control.Concurrent.STM          (STM, TChan, TVar, atomically,
-                                                  modifyTVar', newTChan,
-                                                  newTChanIO, newTVarIO,
-                                                  readTChan, readTVar,
-                                                  readTVarIO, retry, writeTChan,
-                                                  writeTVar)
-import qualified Control.Exception               as E
-import           Control.Monad                   (forever, void, when)
-import qualified Data.Attoparsec.ByteString.Lazy as A
-import qualified Data.ByteString.Lazy            as BL
-import qualified Data.ByteString.Lazy.Char8      as BC
-import           Data.Either                     (fromRight, isLeft)
-import           Data.IntMap                     (IntMap)
-import qualified Data.IntMap                     as IntMap
-import           Data.Text                       (Text)
-import qualified Data.Text.Encoding              as TE
-import           Data.Word                       (Word16)
-import           Network.Socket                  (SocketType (..), addrAddress,
-                                                  addrFamily, addrProtocol,
-                                                  addrSocketType, close,
-                                                  connect, defaultHints,
-                                                  getAddrInfo, socket)
-import           Network.Socket.ByteString.Lazy  (getContents, sendAll)
-import           Prelude                         hiding (getContents)
+import           Control.Concurrent         (threadDelay)
+import           Control.Concurrent.Async   (Async, async, cancel, cancelWith,
+                                             race_, wait, waitCatch, withAsync)
+import           Control.Concurrent.STM     (STM, TChan, TVar, atomically,
+                                             modifyTVar', newTChan, newTChanIO,
+                                             newTVarIO, readTChan, readTVar,
+                                             readTVarIO, retry, writeTChan,
+                                             writeTVar)
+import qualified Control.Exception          as E
+import           Control.Monad              (forever, void, when)
+import           Control.Monad.IO.Class     (liftIO)
+import qualified Data.ByteString.Char8      as BCS
+import qualified Data.ByteString.Lazy       as BL
+import qualified Data.ByteString.Lazy.Char8 as BC
+import           Data.Conduit               (runConduit, yield, (.|))
+import           Data.Conduit.Attoparsec    (sinkParser)
+import           Data.Conduit.Network       (AppData, appSink, appSource,
+                                             clientSettings, runTCPClient)
+import           Data.IntMap                (IntMap)
+import qualified Data.IntMap                as IntMap
+import           Data.Text                  (Text)
+import qualified Data.Text.Encoding         as TE
+import           Data.Word                  (Word16)
 
-import           Network.MQTT.Types              as T
+
+import           Network.MQTT.Types         as T
 
 data ConnState = Starting | Connected | Disconnected deriving (Eq, Show)
 
 -- | The MQTT client.
 data MQTTClient = MQTTClient {
-  _out     :: BL.ByteString -> IO ()
-  , _in    :: BL.ByteString
-  , _ch    :: TChan MQTTPkt
+  _ch      :: TChan MQTTPkt
   , _pktID :: TVar Word16
   , _cb    :: Maybe (Text -> BL.ByteString -> IO ())
   , _ts    :: TVar [Async ()]
@@ -71,7 +65,7 @@ data MQTTClient = MQTTClient {
 -- | Configuration for setting up an MQTT client.
 data MQTTConfig = MQTTConfig{
   _hostname       :: String -- ^ Host to connect to.
-  , _service      :: String -- ^ Service name or port number.
+  , _port         :: Int -- ^ Port number.
   , _connID       :: String -- ^ Unique connection ID (required).
   , _username     :: Maybe String -- ^ Optional username.
   , _password     :: Maybe String -- ^ Optional password.
@@ -83,7 +77,7 @@ data MQTTConfig = MQTTConfig{
 -- | A default MQTTConfig.  A _connID /should/ be provided by the client in the returned config,
 -- but the defaults should work for testing.
 mqttConfig :: MQTTConfig
-mqttConfig = MQTTConfig{_hostname="localhost", _service="1883", _connID="haskell-mqtt",
+mqttConfig = MQTTConfig{_hostname="localhost", _port=1883, _connID="haskell-mqtt",
                         _username=Nothing, _password=Nothing,
                         _cleanSession=True, _lwt=Nothing,
                         _msgCB=Nothing}
@@ -98,9 +92,7 @@ runClient MQTTConfig{..} = do
   st <- newTVarIO Starting
   ct <- newTVarIO undefined
 
-  let cli = MQTTClient{_out=undefined,
-                       _in=mempty,
-                       _ch=ch,
+  let cli = MQTTClient{_ch=ch,
                        _cb=_msgCB,
                        _pktID=pid,
                        _ts=thr,
@@ -116,44 +108,45 @@ runClient MQTTConfig{..} = do
   pure cli
 
   where
-    clientThread cli = E.finally resolveConnRun markDisco
+    clientThread cli = E.finally connectAndRun markDisco
       where
-        resolveConnRun = resolve _hostname _service >>= \addr ->
-                           E.bracket (open addr) close $ \s -> E.bracket (start cli s) cancelAll dispatch
+        connectAndRun = do
+          runTCPClient (clientSettings _port (BCS.pack _hostname)) $ \ad ->
+            E.bracket (start cli ad) cancelAll (run ad)
         markDisco = atomically $ writeTVar (_st cli) Disconnected
 
-    resolve host port = do
-      let hints = defaultHints { addrSocketType = Stream }
-      addr:_ <- getAddrInfo (Just hints) (Just host) (Just port)
-      pure addr
-    open addr = do
-      sock <- socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)
-      connect sock $ addrAddress addr
-      pure sock
-    start c@MQTTClient{..} s = do
-      _in <- getContents s
-      let out = sendAll s
-          r = connectRequest{T._connID=BC.pack _connID,
-                             T._lastWill=_lwt,
-                             T._username=BC.pack <$> _username,
-                             T._password=BC.pack <$> _password,
-                             T._cleanSession=_cleanSession}
-      out (toByteString r)
-      let (A.Done in' res) = A.parse parsePacket _in
-      let (ConnACKPkt (ConnACKFlags _ val)) = res
-      case val of
-        ConnAccepted -> pure ()
-        x            -> fail (show x)
+    start :: MQTTClient -> AppData -> IO MQTTClient
+    start c@MQTTClient{..} ad = do
+      runConduit $ do
+        let req = connectRequest{T._connID=BC.pack _connID,
+                                 T._lastWill=_lwt,
+                                 T._username=BC.pack <$> _username,
+                                 T._password=BC.pack <$> _password,
+                                 T._cleanSession=_cleanSession}
+        yield (BL.toStrict $ toByteString req) .| appSink ad
+        (ConnACKPkt (ConnACKFlags _ val)) <- (appSource ad .| sinkParser parsePacket)
+        case val of
+          ConnAccepted -> pure ()
+          x            -> fail (show x)
 
-      let c' = c{_out=out, _in=in'}
-      w <- async $ forever $ (atomically . readTChan) _ch >>= out . toByteString
-      p <- async $ forever $ sendPacketIO c' PingPkt >> threadDelay 30000000
+      pure c
+
+    run ad c@MQTTClient{..} = do
+      o <- async processOut
+      p <- async doPing
 
       atomically $ do
-        modifyTVar' _ts (\l -> w:p:l)
+        modifyTVar' _ts (\l -> o:p:l)
         writeTVar _st Connected
 
-      pure c'
+      runConduit $ forever $ (appSource ad .| sinkParser parsePacket) >>= \x -> liftIO (dispatch c x)
+
+      where
+        processOut = runConduit $ forever $ do
+          pkt <- liftIO (atomically $ readTChan _ch)
+          yield (BL.toStrict (toByteString pkt)) .| appSink ad
+
+        doPing = forever $ threadDelay 30000000 >> sendPacketIO c PingPkt
 
     waitForLaunch MQTTClient{..} t = do
       writeTVar _ct t
@@ -170,26 +163,20 @@ data MQTTException = Timeout | BadData deriving(Eq, Show)
 
 instance E.Exception MQTTException
 
-dispatch :: MQTTClient -> IO ()
-dispatch c@MQTTClient{..} = do
-  epkt <- race (threadDelay 60000000) (pure $! A.parse parsePacket _in)
-  when (isLeft epkt) $ E.throwIO Timeout
-  when (isLeft (A.eitherResult $ fromRight undefined epkt)) $ E.throwIO BadData
-
-  let (Right (A.Done s' res)) = epkt
-  case res of
+dispatch :: MQTTClient -> MQTTPkt -> IO ()
+dispatch c@MQTTClient{..} pkt = do
+  case pkt of
     (PublishPkt p)                        -> pubMachine p
-    (SubACKPkt (SubscribeResponse i _))   -> delegate res i
-    (UnsubACKPkt (UnsubscribeResponse i)) -> delegate res i
-    (PubACKPkt (PubACK i))                -> delegate res i
-    (PubRECPkt (PubREC i))                -> delegate res i
-    (PubRELPkt (PubREL i))                -> delegate res i
-    (PubCOMPPkt (PubCOMP i))              -> delegate res i
+    (SubACKPkt (SubscribeResponse i _))   -> delegate i
+    (UnsubACKPkt (UnsubscribeResponse i)) -> delegate i
+    (PubACKPkt (PubACK i))                -> delegate i
+    (PubRECPkt (PubREC i))                -> delegate i
+    (PubRELPkt (PubREL i))                -> delegate i
+    (PubCOMPPkt (PubCOMP i))              -> delegate i
     PongPkt                               -> pure ()
     x                                     -> print x
-  dispatch c{_in=s'}
 
-  where delegate pkt pid = atomically $ do
+  where delegate pid = atomically $ do
           m <- readTVar _acks
           case IntMap.lookup (fromEnum pid) m of
             Nothing -> pure ()
