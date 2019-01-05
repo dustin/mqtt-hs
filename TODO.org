@@ -1,12 +1,11 @@
-* Needs [5/8]
-- [ ] TLS Support
+* Needs [7/8]
+- [X] TLS Support
 - [X] QoS pub > 0
 - [X] QoS sub > 0
 - [X] convenient unsubscribe
-- [ ] conduit
+- [X] conduit
 - [X] give better disconnection reasons
 - [X] explicit disconnect
-- [ ] determine best resolved address
 - [ ] outbound message IDs can collide with QoS 2 subscriber inbound messages
 
 * Wants [0/1]

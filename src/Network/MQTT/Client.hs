@@ -16,7 +16,7 @@ module Network.MQTT.Client (
   -- * Configuring the client.
   MQTTConfig(..), MQTTClient, QoS(..), mqttConfig,  mkLWT, LastWill(..),
   -- * Running and waiting for the client.
-  runClient, waitForClient,
+  runClient, runClientTLS, waitForClient,
   disconnect,
   -- * General client interactions.
   subscribe, unsubscribe, publish, publishq
@@ -41,6 +41,7 @@ import           Data.Conduit.Attoparsec    (sinkParser)
 import qualified Data.Conduit.Combinators   as C
 import           Data.Conduit.Network       (AppData, appSink, appSource,
                                              clientSettings, runTCPClient)
+import           Data.Conduit.Network.TLS   (runTLSClient, tlsClientConfig)
 import           Data.IntMap                (IntMap)
 import qualified Data.IntMap                as IntMap
 import           Data.Text                  (Text)
@@ -83,9 +84,18 @@ mqttConfig = MQTTConfig{_hostname="localhost", _port=1883, _connID="haskell-mqtt
                         _cleanSession=True, _lwt=Nothing,
                         _msgCB=Nothing}
 
+
 -- | Set up and run a client from the given config.
 runClient :: MQTTConfig -> IO MQTTClient
-runClient MQTTConfig{..} = do
+runClient cfg@MQTTConfig{..} = runClientAppData (runTCPClient (clientSettings _port (BCS.pack _hostname))) cfg
+
+-- | Set up and run a client connected via TLS.
+runClientTLS :: MQTTConfig -> IO MQTTClient
+runClientTLS cfg@MQTTConfig{..} = runClientAppData (runTLSClient (tlsClientConfig _port (BCS.pack _hostname))) cfg
+
+-- | Set up and run a client from the given conduit AppData function.
+runClientAppData :: ((AppData -> IO c) -> IO ()) -> MQTTConfig -> IO MQTTClient
+runClientAppData mkconn MQTTConfig{..} = do
   ch <- newTChanIO
   pid <- newTVarIO 0
   thr <- newTVarIO []
@@ -111,7 +121,7 @@ runClient MQTTConfig{..} = do
   where
     clientThread cli = E.finally connectAndRun markDisco
       where
-        connectAndRun = runTCPClient (clientSettings _port (BCS.pack _hostname)) $ \ad ->
+        connectAndRun = mkconn $ \ad ->
           E.bracket (start cli ad) cancelAll (run ad)
         markDisco = atomically $ writeTVar (_st cli) Disconnected
 

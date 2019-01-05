@@ -29,6 +29,7 @@ dependencies:
 - containers
 - conduit
 - conduit-extra
+- network-conduit-tls
 
 library:
   source-dirs: src
