@@ -37,7 +37,7 @@ import qualified Data.ByteString.Char8      as BCS
 import qualified Data.ByteString.Lazy       as BL
 import qualified Data.ByteString.Lazy.Char8 as BC
 import           Data.Conduit               (runConduit, yield, (.|))
-import           Data.Conduit.Attoparsec    (sinkParser)
+import           Data.Conduit.Attoparsec    (conduitParser, sinkParser)
 import qualified Data.Conduit.Combinators   as C
 import           Data.Conduit.Network       (AppData, appSink, appSource,
                                              clientSettings, runTCPClient)
@@ -97,7 +97,7 @@ runClientTLS :: MQTTConfig -> IO MQTTClient
 runClientTLS cfg@MQTTConfig{..} = runClientAppData (runTLSClient (tlsClientConfig _port (BCS.pack _hostname))) cfg
 
 -- | Set up and run a client from the given conduit AppData function.
-runClientAppData :: ((AppData -> IO c) -> IO ()) -> MQTTConfig -> IO MQTTClient
+runClientAppData :: ((AppData -> IO ()) -> IO ()) -> MQTTConfig -> IO MQTTClient
 runClientAppData mkconn MQTTConfig{..} = do
   ch <- newTChanIO
   pid <- newTVarIO 0
@@ -128,7 +128,6 @@ runClientAppData mkconn MQTTConfig{..} = do
           E.bracket (start cli ad) cancelAll (run ad)
         markDisco = atomically $ writeTVar (_st cli) Disconnected
 
-    start :: MQTTClient -> AppData -> IO MQTTClient
     start c@MQTTClient{..} ad = do
       runConduit $ do
         let req = connectRequest{T._connID=BC.pack _connID,
@@ -152,11 +151,15 @@ runClientAppData mkconn MQTTConfig{..} = do
         modifyTVar' _ts (\l -> o:p:l)
         writeTVar _st Connected
 
-      runConduit $ forever $ (appSource ad .| sinkParser parsePacket) >>= \x -> liftIO (dispatch c x)
+      runConduit $ appSource ad
+        .| conduitParser parsePacket
+        .| C.mapM_ (\(_,x) -> liftIO (dispatch c x))
 
       where
         processOut = runConduit $
-          C.repeatM (liftIO (atomically $ readTChan _ch)) .| C.map (BL.toStrict . toByteString) .| appSink ad
+          C.repeatM (liftIO (atomically $ readTChan _ch))
+          .| C.map (BL.toStrict . toByteString)
+          .| appSink ad
 
         doPing = forever $ threadDelay 30000000 >> sendPacketIO c PingPkt
 
