@@ -38,6 +38,7 @@ import qualified Data.ByteString.Lazy       as BL
 import qualified Data.ByteString.Lazy.Char8 as BC
 import           Data.Conduit               (runConduit, yield, (.|))
 import           Data.Conduit.Attoparsec    (sinkParser)
+import qualified Data.Conduit.Combinators   as C
 import           Data.Conduit.Network       (AppData, appSink, appSource,
                                              clientSettings, runTCPClient)
 import           Data.IntMap                (IntMap)
@@ -110,9 +111,8 @@ runClient MQTTConfig{..} = do
   where
     clientThread cli = E.finally connectAndRun markDisco
       where
-        connectAndRun = do
-          runTCPClient (clientSettings _port (BCS.pack _hostname)) $ \ad ->
-            E.bracket (start cli ad) cancelAll (run ad)
+        connectAndRun = runTCPClient (clientSettings _port (BCS.pack _hostname)) $ \ad ->
+          E.bracket (start cli ad) cancelAll (run ad)
         markDisco = atomically $ writeTVar (_st cli) Disconnected
 
     start :: MQTTClient -> AppData -> IO MQTTClient
@@ -124,7 +124,7 @@ runClient MQTTConfig{..} = do
                                  T._password=BC.pack <$> _password,
                                  T._cleanSession=_cleanSession}
         yield (BL.toStrict $ toByteString req) .| appSink ad
-        (ConnACKPkt (ConnACKFlags _ val)) <- (appSource ad .| sinkParser parsePacket)
+        (ConnACKPkt (ConnACKFlags _ val)) <- appSource ad .| sinkParser parsePacket
         case val of
           ConnAccepted -> pure ()
           x            -> fail (show x)
@@ -142,9 +142,8 @@ runClient MQTTConfig{..} = do
       runConduit $ forever $ (appSource ad .| sinkParser parsePacket) >>= \x -> liftIO (dispatch c x)
 
       where
-        processOut = runConduit $ forever $ do
-          pkt <- liftIO (atomically $ readTChan _ch)
-          yield (BL.toStrict (toByteString pkt)) .| appSink ad
+        processOut = runConduit $
+          C.repeatM (liftIO (atomically $ readTChan _ch)) .| C.map (BL.toStrict . toByteString) .| appSink ad
 
         doPing = forever $ threadDelay 30000000 >> sendPacketIO c PingPkt
 
@@ -164,7 +163,7 @@ data MQTTException = Timeout | BadData deriving(Eq, Show)
 instance E.Exception MQTTException
 
 dispatch :: MQTTClient -> MQTTPkt -> IO ()
-dispatch c@MQTTClient{..} pkt = do
+dispatch c@MQTTClient{..} pkt =
   case pkt of
     (PublishPkt p)                        -> pubMachine p
     (SubACKPkt (SubscribeResponse i _))   -> delegate i
@@ -229,7 +228,7 @@ reservePktID MQTTClient{..}= do
 releasePktID :: MQTTClient -> Word16 -> STM ()
 releasePktID MQTTClient{..} p = modifyTVar' _acks (IntMap.delete (fromEnum p))
 
-sendAndWait :: MQTTClient -> (Word16 -> MQTTPkt) -> IO (MQTTPkt)
+sendAndWait :: MQTTClient -> (Word16 -> MQTTPkt) -> IO MQTTPkt
 sendAndWait c@MQTTClient{..} f = do
   (ch,pid) <- atomically $ do
     (ch,pid) <- reservePktID c
@@ -251,7 +250,7 @@ subscribe c@MQTTClient{..} ls = do
 
 -- | Unsubscribe from a list of topics.
 unsubscribe :: MQTTClient -> [Text] -> IO ()
-unsubscribe c@MQTTClient{..} ls = do
+unsubscribe c@MQTTClient{..} ls =
   void $ sendAndWait c (\pid -> UnsubscribePkt $ UnsubscribeRequest pid (map textToBL ls))
 
 -- | Publish a message (QoS 0).
