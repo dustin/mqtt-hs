@@ -42,8 +42,8 @@ import qualified Data.Conduit.Combinators   as C
 import           Data.Conduit.Network       (AppData, appSink, appSource,
                                              clientSettings, runTCPClient)
 import           Data.Conduit.Network.TLS   (runTLSClient, tlsClientConfig)
-import           Data.IntMap                (IntMap)
-import qualified Data.IntMap                as IntMap
+import           Data.Map.Strict            (Map)
+import qualified Data.Map.Strict            as Map
 import           Data.Text                  (Text)
 import qualified Data.Text.Encoding         as TE
 import           Data.Word                  (Word16)
@@ -53,13 +53,16 @@ import           Network.MQTT.Types         as T
 
 data ConnState = Starting | Connected | Disconnected deriving (Eq, Show)
 
+data DispatchType = DSubACK | DUnsubACK | DPubACK | DPubREC | DPubREL | DPubCOMP
+  deriving (Eq, Show, Ord, Enum, Bounded)
+
 -- | The MQTT client.
 data MQTTClient = MQTTClient {
   _ch      :: TChan MQTTPkt
   , _pktID :: TVar Word16
   , _cb    :: Maybe (Text -> BL.ByteString -> IO ())
   , _ts    :: TVar [Async ()]
-  , _acks  :: TVar (IntMap (TChan MQTTPkt))
+  , _acks  :: TVar (Map (DispatchType,Word16) (TChan MQTTPkt))
   , _st    :: TVar ConnState
   , _ct    :: TVar (Async ())
   }
@@ -176,18 +179,18 @@ dispatch :: MQTTClient -> MQTTPkt -> IO ()
 dispatch c@MQTTClient{..} pkt =
   case pkt of
     (PublishPkt p)                        -> pubMachine p
-    (SubACKPkt (SubscribeResponse i _))   -> delegate i
-    (UnsubACKPkt (UnsubscribeResponse i)) -> delegate i
-    (PubACKPkt (PubACK i))                -> delegate i
-    (PubRECPkt (PubREC i))                -> delegate i
-    (PubRELPkt (PubREL i))                -> delegate i
-    (PubCOMPPkt (PubCOMP i))              -> delegate i
+    (SubACKPkt (SubscribeResponse i _))   -> delegate DSubACK i
+    (UnsubACKPkt (UnsubscribeResponse i)) -> delegate DUnsubACK i
+    (PubACKPkt (PubACK i))                -> delegate DPubACK i
+    (PubRECPkt (PubREC i))                -> delegate DPubREC i
+    (PubRELPkt (PubREL i))                -> delegate DPubREL i
+    (PubCOMPPkt (PubCOMP i))              -> delegate DPubCOMP i
     PongPkt                               -> pure ()
     x                                     -> print x
 
-  where delegate pid = atomically $ do
+  where delegate dt pid = atomically $ do
           m <- readTVar _acks
-          case IntMap.lookup (fromEnum pid) m of
+          case Map.lookup (dt, pid) m of
             Nothing -> pure ()
             Just ch -> writeTChan ch pkt
 
@@ -203,8 +206,8 @@ dispatch c@MQTTClient{..} pkt =
 
             manageQoS2 = do
               ch <- newTChanIO
-              atomically $ modifyTVar' _acks (IntMap.insert (fromEnum _pubPktID) ch)
-              E.finally (manageQoS2' ch) (atomically $ releasePktID c _pubPktID)
+              atomically $ modifyTVar' _acks (Map.insert (DPubREL, _pubPktID) ch)
+              E.finally (manageQoS2' ch) (atomically $ releasePktID c (DPubREL, _pubPktID))
                 where
                   manageQoS2' ch = do
                     sendPacketIO c (PubRECPkt (PubREC _pubPktID))
@@ -227,32 +230,36 @@ textToBL = BL.fromStrict . TE.encodeUtf8
 blToText :: BL.ByteString -> Text
 blToText = TE.decodeUtf8 . BL.toStrict
 
-reservePktID :: MQTTClient -> STM (TChan MQTTPkt, Word16)
-reservePktID MQTTClient{..}= do
+reservePktID :: MQTTClient -> [DispatchType] -> STM (TChan MQTTPkt, Word16)
+reservePktID MQTTClient{..} dts = do
   ch <- newTChan
   pid <- readTVar _pktID
   modifyTVar' _pktID succ
-  modifyTVar' _acks (IntMap.insert (fromEnum pid) ch)
+  modifyTVar' _acks (Map.union (Map.fromList [((t, pid), ch) | t <- dts]))
   pure (ch,pid)
 
-releasePktID :: MQTTClient -> Word16 -> STM ()
-releasePktID MQTTClient{..} p = modifyTVar' _acks (IntMap.delete (fromEnum p))
+releasePktID :: MQTTClient -> (DispatchType,Word16) -> STM ()
+releasePktID MQTTClient{..} k = modifyTVar' _acks (Map.delete k)
 
-sendAndWait :: MQTTClient -> (Word16 -> MQTTPkt) -> IO MQTTPkt
-sendAndWait c@MQTTClient{..} f = do
+releasePktIDs :: MQTTClient -> [(DispatchType,Word16)] -> STM ()
+releasePktIDs MQTTClient{..} ks = modifyTVar' _acks deleteMany
+  where deleteMany m = foldr Map.delete m ks
+
+sendAndWait :: MQTTClient -> DispatchType -> (Word16 -> MQTTPkt) -> IO MQTTPkt
+sendAndWait c@MQTTClient{..} dt f = do
   (ch,pid) <- atomically $ do
-    (ch,pid) <- reservePktID c
+    (ch,pid) <- reservePktID c [dt]
     sendPacket c (f pid)
     pure (ch,pid)
 
   -- Wait for the response in a separate transaction.
-  atomically $ releasePktID c pid >> readTChan ch
+  atomically $ releasePktID c (dt,pid) >> readTChan ch
 
 -- | Subscribe to a list of topics with their respective QoSes.  The
 -- accepted QoSes are returned in the same order.
 subscribe :: MQTTClient -> [(Text, QoS)] -> IO [Maybe QoS]
 subscribe c@MQTTClient{..} ls = do
-  r <- sendAndWait c (\pid -> SubscribePkt $ SubscribeRequest pid ls')
+  r <- sendAndWait c DSubACK (\pid -> SubscribePkt $ SubscribeRequest pid ls')
   let (SubACKPkt (SubscribeResponse _ rs)) = r
   pure rs
 
@@ -261,7 +268,7 @@ subscribe c@MQTTClient{..} ls = do
 -- | Unsubscribe from a list of topics.
 unsubscribe :: MQTTClient -> [Text] -> IO ()
 unsubscribe c@MQTTClient{..} ls =
-  void $ sendAndWait c (\pid -> UnsubscribePkt $ UnsubscribeRequest pid (map textToBL ls))
+  void $ sendAndWait c DUnsubACK (\pid -> UnsubscribePkt $ UnsubscribeRequest pid (map textToBL ls))
 
 -- | Publish a message (QoS 0).
 publish :: MQTTClient
@@ -279,10 +286,11 @@ publishq :: MQTTClient
          -> QoS           -- ^ QoS
          -> IO ()
 publishq c t m r q = do
-  (ch,pid) <- atomically $ reservePktID c
-  E.finally (publishAndWait ch pid) (atomically $ releasePktID c pid)
+  (ch,pid) <- atomically $ reservePktID c types
+  E.finally (publishAndWait ch pid) (atomically $ releasePktIDs c [(t',pid) | t' <- types])
 
     where
+      types = [DPubREC, DPubCOMP]
       publishAndWait ch pid = withAsync (pub False pid) (\p -> satisfyQoS p ch pid)
 
       pub dup pid = do

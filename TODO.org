@@ -1,4 +1,4 @@
-* Needs [7/8]
+* Needs [8/8]
 - [X] TLS Support
 - [X] QoS pub > 0
 - [X] QoS sub > 0
@@ -6,7 +6,7 @@
 - [X] conduit
 - [X] give better disconnection reasons
 - [X] explicit disconnect
-- [ ] outbound message IDs can collide with QoS 2 subscriber inbound messages
+- [X] outbound message IDs can collide with QoS 2 subscriber inbound messages
 
 * Wants [0/1]
 - [ ] A server
