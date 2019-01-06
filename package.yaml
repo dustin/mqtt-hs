@@ -10,7 +10,7 @@ extra-source-files:
 - README.md
 
 # Metadata used when publishing your package
-# synopsis:            Short description of your package
+synopsis:            An MQTT Protocol Client.
 category:            Network
 
 # To avoid duplicated efforts in documentation and dealing with the

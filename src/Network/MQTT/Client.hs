@@ -6,7 +6,8 @@ License     : BSD3
 Maintainer  : dustin@spy.net
 Stability   : experimental
 
-An MQTT client.
+An MQTT protocol client, based on the 3.1.1 specification:
+<http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html>
 -}
 
 {-# LANGUAGE OverloadedStrings #-}
@@ -14,7 +15,7 @@ An MQTT client.
 
 module Network.MQTT.Client (
   -- * Configuring the client.
-  MQTTConfig(..), MQTTClient, QoS(..), mqttConfig,  mkLWT, LastWill(..),
+  MQTTConfig(..), MQTTClient, QoS(..), Topic, mqttConfig,  mkLWT, LastWill(..),
   -- * Running and waiting for the client.
   runClient, runClientTLS, waitForClient,
   disconnect,
@@ -51,16 +52,26 @@ import           Data.Word                  (Word16)
 
 import           Network.MQTT.Types         as T
 
+-- | Topic is a type alias for topic values.
+type Topic = Text
+
 data ConnState = Starting | Connected | Disconnected deriving (Eq, Show)
 
 data DispatchType = DSubACK | DUnsubACK | DPubACK | DPubREC | DPubREL | DPubCOMP
   deriving (Eq, Show, Ord, Enum, Bounded)
 
 -- | The MQTT client.
+-- A client may be built using either runClient or runClientTLS.  For example:
+--
+-- @
+--   mc <- runClient mqttConfig{}
+--   publish mc "some/topic" "some message" False
+-- @
+--
 data MQTTClient = MQTTClient {
   _ch      :: TChan MQTTPkt
   , _pktID :: TVar Word16
-  , _cb    :: Maybe (Text -> BL.ByteString -> IO ())
+  , _cb    :: Maybe (Topic -> BL.ByteString -> IO ())
   , _ts    :: TVar [Async ()]
   , _acks  :: TVar (Map (DispatchType,Word16) (TChan MQTTPkt))
   , _st    :: TVar ConnState
@@ -76,7 +87,7 @@ data MQTTConfig = MQTTConfig{
   , _password     :: Maybe String -- ^ Optional password.
   , _cleanSession :: Bool -- ^ False if a session should be reused.
   , _lwt          :: Maybe LastWill -- ^ LastWill message to be sent on client disconnect.
-  , _msgCB        :: Maybe (Text -> BL.ByteString -> IO ()) -- ^ Callback for incoming messages.
+  , _msgCB        :: Maybe (Topic -> BL.ByteString -> IO ()) -- ^ Callback for incoming messages.
   }
 
 -- | A default MQTTConfig.  A _connID /should/ be provided by the client in the returned config,
@@ -259,8 +270,8 @@ sendAndWait c@MQTTClient{..} dt f = do
   atomically $ releasePktID c (dt,pid) >> readTChan ch
 
 -- | Subscribe to a list of topics with their respective QoSes.  The
--- accepted QoSes are returned in the same order.
-subscribe :: MQTTClient -> [(Text, QoS)] -> IO [Maybe QoS]
+-- accepted QoSes are returned in the same order as requested.
+subscribe :: MQTTClient -> [(Topic, QoS)] -> IO [Maybe QoS]
 subscribe c@MQTTClient{..} ls = do
   r <- sendAndWait c DSubACK (\pid -> SubscribePkt $ SubscribeRequest pid ls')
   let (SubACKPkt (SubscribeResponse _ rs)) = r
@@ -269,13 +280,13 @@ subscribe c@MQTTClient{..} ls = do
     where ls' = map (\(s, i) -> (textToBL s, i)) ls
 
 -- | Unsubscribe from a list of topics.
-unsubscribe :: MQTTClient -> [Text] -> IO ()
+unsubscribe :: MQTTClient -> [Topic] -> IO ()
 unsubscribe c@MQTTClient{..} ls =
   void $ sendAndWait c DUnsubACK (\pid -> UnsubscribePkt $ UnsubscribeRequest pid (map textToBL ls))
 
 -- | Publish a message (QoS 0).
 publish :: MQTTClient
-        -> Text          -- ^ Topic
+        -> Topic         -- ^ Topic
         -> BL.ByteString -- ^ Message body
         -> Bool          -- ^ Retain flag
         -> IO ()
@@ -283,7 +294,7 @@ publish c t m r = void $ publishq c t m r QoS0
 
 -- | Publish a message with the specified QoS.
 publishq :: MQTTClient
-         -> Text          -- ^ Topic
+         -> Topic         -- ^ Topic
          -> BL.ByteString -- ^ Message body
          -> Bool          -- ^ Retain flag
          -> QoS           -- ^ QoS
@@ -328,7 +339,7 @@ disconnect c@MQTTClient{..} = race_ getDisconnected orDieTrying
     orDieTrying = threadDelay 10000000 >> readTVarIO _ct >>= \t -> cancelWith t Timeout
 
 -- | A convenience method for creating a LastWill.
-mkLWT :: Text -> BL.ByteString -> Bool -> T.LastWill
+mkLWT :: Topic -> BL.ByteString -> Bool -> T.LastWill
 mkLWT t m r = T.LastWill{
   T._willRetain=r,
   T._willQoS=QoS0,
