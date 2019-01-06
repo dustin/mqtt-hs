@@ -1,8 +1,8 @@
 # mqtt
 
-An [MQTT][mqtt] client for Haskell.
+An [MQTT][mqtt] protocol implementation for Haskell.
 
-## Example
+## Client Examples
 
 ### Publish
 
