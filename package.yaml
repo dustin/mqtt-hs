@@ -45,7 +45,7 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - mqtt
+    - net-mqtt
 
 tests:
   mqtt-test:
@@ -56,7 +56,7 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - mqtt
+    - net-mqtt
     - QuickCheck
     - HUnit
     - tasty
