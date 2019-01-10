@@ -304,7 +304,7 @@ publishq c t m r q = do
   E.finally (publishAndWait ch pid q) (atomically $ releasePktIDs c [(t',pid) | t' <- types])
 
     where
-      types = [DPubREC, DPubCOMP]
+      types = [DPubACK, DPubREC, DPubCOMP]
       publishAndWait ch pid QoS0 = sendPacketIO c (pkt False pid)
       publishAndWait ch pid _ = withAsync (pub False pid) (\p -> satisfyQoS p ch pid)
 
