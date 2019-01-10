@@ -305,8 +305,8 @@ publishq c t m r q = do
 
     where
       types = [DPubACK, DPubREC, DPubCOMP]
-      publishAndWait ch pid QoS0 = sendPacketIO c (pkt False pid)
-      publishAndWait ch pid _ = withAsync (pub False pid) (\p -> satisfyQoS p ch pid)
+      publishAndWait _ pid QoS0 = sendPacketIO c (pkt False pid)
+      publishAndWait ch pid _   = withAsync (pub False pid) (\p -> satisfyQoS p ch pid)
 
       pub dup pid = do
         sendPacketIO c (pkt dup pid)
