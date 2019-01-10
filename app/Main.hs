@@ -25,4 +25,4 @@ main = do
   print =<< waitForClient mc
   cancel p
 
-    where showme t m = print (t,m)
+    where showme _ t m = print (t,m)
