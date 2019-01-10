@@ -1,5 +1,5 @@
 name:                net-mqtt
-version:             0.1.0.0
+version:             0.2.0.0
 github:              "dustin/mqtt"
 license:             BSD3
 author:              "Dustin Sallings"
@@ -8,6 +8,7 @@ copyright:           "BSD3"
 
 extra-source-files:
 - README.md
+- Changelog.md
 
 # Metadata used when publishing your package
 synopsis:            An MQTT Protocol Implementation.
