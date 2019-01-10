@@ -301,22 +301,25 @@ publishq :: MQTTClient
          -> IO ()
 publishq c t m r q = do
   (ch,pid) <- atomically $ reservePktID c types
-  E.finally (publishAndWait ch pid) (atomically $ releasePktIDs c [(t',pid) | t' <- types])
+  E.finally (publishAndWait ch pid q) (atomically $ releasePktIDs c [(t',pid) | t' <- types])
 
     where
       types = [DPubREC, DPubCOMP]
-      publishAndWait ch pid = withAsync (pub False pid) (\p -> satisfyQoS p ch pid)
+      publishAndWait ch pid QoS0 = sendPacketIO c (pkt False pid)
+      publishAndWait ch pid _ = withAsync (pub False pid) (\p -> satisfyQoS p ch pid)
 
       pub dup pid = do
-        sendPacketIO c (PublishPkt $ PublishRequest {
-                           _pubDup = dup,
-                           _pubQoS = q,
-                           _pubPktID = pid,
-                           _pubRetain = r,
-                           _pubTopic = textToBL t,
-                           _pubBody = m})
+        sendPacketIO c (pkt dup pid)
         threadDelay 5000000
         pub True pid
+
+      pkt dup pid = (PublishPkt $ PublishRequest {
+                        _pubDup = dup,
+                        _pubQoS = q,
+                        _pubPktID = pid,
+                        _pubRetain = r,
+                        _pubTopic = textToBL t,
+                        _pubBody = m})
 
       satisfyQoS p ch pid
         | q == QoS0 = pure ()
