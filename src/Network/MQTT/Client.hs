@@ -18,6 +18,7 @@ module Network.MQTT.Client (
   MQTTConfig(..), MQTTClient, QoS(..), Topic, mqttConfig,  mkLWT, LastWill(..),
   -- * Running and waiting for the client.
   runClient, runClientTLS, waitForClient,
+  connectURI,
   disconnect,
   -- * General client interactions.
   subscribe, unsubscribe, publish, publishq
@@ -48,6 +49,9 @@ import qualified Data.Map.Strict            as Map
 import           Data.Text                  (Text)
 import qualified Data.Text.Encoding         as TE
 import           Data.Word                  (Word16)
+import           Network.URI                (URI (..), unEscapeString, uriPort,
+                                             uriRegName, uriUserInfo)
+
 
 
 import           Network.MQTT.Types         as T
@@ -97,6 +101,33 @@ mqttConfig = MQTTConfig{_hostname="localhost", _port=1883, _connID="haskell-mqtt
                         _username=Nothing, _password=Nothing,
                         _cleanSession=True, _lwt=Nothing,
                         _msgCB=Nothing}
+
+
+-- | Connect to an MQTT server by URI.  Currently only mqtt and mqtts
+-- URLs are supported.  The host, port, username, and password will be
+-- derived from the URI and the values supplied in the config will be
+-- ignored.
+connectURI :: MQTTConfig -> URI -> IO MQTTClient
+connectURI cfg uri = do
+  let cf = case uriScheme uri of
+             "mqtt:"  -> runClient
+             "mqtts:" -> runClientTLS
+             us       -> fail $ "invalid URI scheme: " <> us
+
+      (Just a) = uriAuthority uri
+      (u,p) = up (uriUserInfo a)
+
+  cf cfg{_hostname=uriRegName a, _port=port (uriPort a) (uriScheme uri),
+                Network.MQTT.Client._username=u, Network.MQTT.Client._password=p}
+
+  where
+    port "" "mqtt:"  = 1883
+    port "" "mqtts:" = 8883
+    port x _         = read x
+
+    up "" = (Nothing, Nothing)
+    up x = let (u,r) = break (== ':') (init x) in
+             (Just (unEscapeString u), if r == "" then Nothing else Just (unEscapeString $ tail r))
 
 
 -- | Set up and run a client from the given config.

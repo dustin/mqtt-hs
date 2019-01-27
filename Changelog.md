@@ -1,5 +1,10 @@
 # Changelog for net-mqtt
 
+## 0.2.2.0
+
+Added connectURI to make it easier to connect to mqtt or mqtts via
+URI.
+
 ## 0.2.1.0
 
 No externally visible changes, but a few bug fixes I found when
