@@ -54,10 +54,8 @@ import           Network.URI                (URI (..), unEscapeString, uriPort,
 
 
 
+import           Network.MQTT.Topic         (Topic)
 import           Network.MQTT.Types         as T
-
--- | Topic is a type alias for topic values.
-type Topic = Text
 
 data ConnState = Starting | Connected | Disconnected deriving (Eq, Show)
 

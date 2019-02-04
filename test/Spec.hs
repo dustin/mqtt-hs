@@ -14,6 +14,7 @@ import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck           as QC
 
+import           Network.MQTT.Topic
 import           Network.MQTT.Types
 
 prop_rtLengthParser :: NonNegative (Large Int) -> Property
@@ -131,12 +132,27 @@ prop_PacketRT p = label (lab p) $ case A.parse parsePacket (toByteString p) of
 
   where lab x = let (s,_) = break (== ' ') . show $ x in s
 
+testTopicMatching :: [TestTree]
+testTopicMatching = let allTopics = ["a", "a/b", "a/b/c/d", "b/a/c/d",
+                                     "$SYS/a/b", "a/$SYS/b"]
+                        tsts = [("a", ["a"]), ("a/#", ["a/b", "a/b/c/d"]),
+                                ("+/b", ["a/b"]),
+                                ("+/+/c/+", ["a/b/c/d", "b/a/c/d"]),
+                                ("+/+/b", []),
+                                ("+/$SYS/b", ["a/$SYS/b"]),
+                                ("$SYS/#", ["$SYS/a/b"]),
+                                ("+/$SYS/+", ["a/$SYS/b"]),
+                                ("#/b", [])] in
+    map (\(p,want) -> testCase (show p) $ assertEqual "" want (filter (match p) allTopics)) tsts
+
 tests :: [TestTree]
 tests = [
   localOption (QC.QuickCheckTests 10000) $ testProperty "header length rt (parser)" prop_rtLengthParser,
 
   testCase "rt some packets" testPacketRT,
-  localOption (QC.QuickCheckTests 1000) $ testProperty "rt packets" prop_PacketRT
+  localOption (QC.QuickCheckTests 1000) $ testProperty "rt packets" prop_PacketRT,
+
+  testGroup "topic matching" testTopicMatching
   ]
 
 main :: IO ()
