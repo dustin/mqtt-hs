@@ -1,5 +1,13 @@
 # Changelog for net-mqtt
 
+## 0.2.3.1
+
+Fixed up github links.
+
+## 0.2.3.0
+
+Added Network.MQTT.Topic with `match` to test `Topic`s against wildcards.
+
 ## 0.2.2.0
 
 Added connectURI to make it easier to connect to mqtt or mqtts via
