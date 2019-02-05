@@ -54,7 +54,7 @@ import           Network.URI                (URI (..), unEscapeString, uriPort,
 
 
 
-import           Network.MQTT.Topic         (Topic)
+import           Network.MQTT.Topic         (Filter, Topic)
 import           Network.MQTT.Types         as T
 
 data ConnState = Starting | Connected | Disconnected deriving (Eq, Show)
@@ -298,9 +298,9 @@ sendAndWait c@MQTTClient{..} dt f = do
   -- Wait for the response in a separate transaction.
   atomically $ releasePktID c (dt,pid) >> readTChan ch
 
--- | Subscribe to a list of topics with their respective QoSes.  The
--- accepted QoSes are returned in the same order as requested.
-subscribe :: MQTTClient -> [(Topic, QoS)] -> IO [Maybe QoS]
+-- | Subscribe to a list of topic filters with their respective QoSes.
+-- The accepted QoSes are returned in the same order as requested.
+subscribe :: MQTTClient -> [(Filter, QoS)] -> IO [Maybe QoS]
 subscribe c@MQTTClient{..} ls = do
   r <- sendAndWait c DSubACK (\pid -> SubscribePkt $ SubscribeRequest pid ls')
   let (SubACKPkt (SubscribeResponse _ rs)) = r
@@ -308,8 +308,8 @@ subscribe c@MQTTClient{..} ls = do
 
     where ls' = map (\(s, i) -> (textToBL s, i)) ls
 
--- | Unsubscribe from a list of topics.
-unsubscribe :: MQTTClient -> [Topic] -> IO ()
+-- | Unsubscribe from a list of topic filters.
+unsubscribe :: MQTTClient -> [Filter] -> IO ()
 unsubscribe c@MQTTClient{..} ls =
   void $ sendAndWait c DUnsubACK (\pid -> UnsubscribePkt $ UnsubscribeRequest pid (map textToBL ls))
 
