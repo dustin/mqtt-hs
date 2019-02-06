@@ -26,7 +26,8 @@ module Network.MQTT.Client (
 
 import           Control.Concurrent         (threadDelay)
 import           Control.Concurrent.Async   (Async, async, cancel, cancelWith,
-                                             race_, wait, waitCatch, withAsync)
+                                             link, race_, wait, waitCatch,
+                                             withAsync)
 import           Control.Concurrent.STM     (STM, TChan, TVar, atomically,
                                              modifyTVar', newTChan, newTChanIO,
                                              newTVarIO, readTChan, readTVar,
@@ -51,6 +52,7 @@ import qualified Data.Text.Encoding         as TE
 import           Data.Word                  (Word16)
 import           Network.URI                (URI (..), unEscapeString, uriPort,
                                              uriRegName, uriUserInfo)
+import           System.Timeout             (timeout)
 
 
 
@@ -136,6 +138,9 @@ runClient cfg@MQTTConfig{..} = runClientAppData (runTCPClient (clientSettings _p
 runClientTLS :: MQTTConfig -> IO MQTTClient
 runClientTLS cfg@MQTTConfig{..} = runClientAppData (runTLSClient (tlsClientConfig _port (BCS.pack _hostname))) cfg
 
+pingPeriod :: Int
+pingPeriod = 30000000 -- 30 seconds
+
 -- | Set up and run a client from the given conduit AppData function.
 runClientAppData :: ((AppData -> IO ()) -> IO ()) -> MQTTConfig -> IO MQTTClient
 runClientAppData mkconn MQTTConfig{..} = do
@@ -185,15 +190,18 @@ runClientAppData mkconn MQTTConfig{..} = do
 
     run ad c@MQTTClient{..} = do
       o <- async processOut
+      pch <- newTChanIO
       p <- async doPing
+      to <- async (watchdog pch)
+      link to
 
       atomically $ do
-        modifyTVar' _ts (\l -> o:p:l)
+        modifyTVar' _ts (\l -> o:p:to:l)
         writeTVar _st Connected
 
       runConduit $ appSource ad
         .| conduitParser parsePacket
-        .| C.mapM_ (\(_,x) -> liftIO (dispatch c x))
+        .| C.mapM_ (\(_,x) -> liftIO (dispatch c pch x))
 
       where
         processOut = runConduit $
@@ -201,7 +209,16 @@ runClientAppData mkconn MQTTConfig{..} = do
           .| C.map (BL.toStrict . toByteString)
           .| appSink ad
 
-        doPing = forever $ threadDelay 30000000 >> sendPacketIO c PingPkt
+        doPing = forever $ threadDelay pingPeriod >> sendPacketIO c PingPkt
+
+
+        watchdog ch = do
+          r <- timeout (pingPeriod * 3) w
+          case r of
+            Nothing -> E.throwIO Timeout
+            Just _  -> watchdog ch
+
+            where w = atomically . readTChan $ ch
 
     waitForLaunch MQTTClient{..} t = do
       writeTVar _ct t
@@ -218,8 +235,8 @@ data MQTTException = Timeout | BadData deriving(Eq, Show)
 
 instance E.Exception MQTTException
 
-dispatch :: MQTTClient -> MQTTPkt -> IO ()
-dispatch c@MQTTClient{..} pkt =
+dispatch :: MQTTClient -> TChan Bool -> MQTTPkt -> IO ()
+dispatch c@MQTTClient{..} pch pkt =
   case pkt of
     (PublishPkt p)                        -> pubMachine p
     (SubACKPkt (SubscribeResponse i _))   -> delegate DSubACK i
@@ -228,7 +245,7 @@ dispatch c@MQTTClient{..} pkt =
     (PubRECPkt (PubREC i))                -> delegate DPubREC i
     (PubRELPkt (PubREL i))                -> delegate DPubREL i
     (PubCOMPPkt (PubCOMP i))              -> delegate DPubCOMP i
-    PongPkt                               -> pure ()
+    PongPkt                               -> atomically . writeTChan pch $ True
     x                                     -> print x
 
   where delegate dt pid = atomically $ do
