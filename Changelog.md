@@ -1,5 +1,16 @@
 # Changelog for net-mqtt
 
+## 0.2.4.0
+
+Introduced `Filter` type alias to distinguish from `Topic`.
+
+Reintroduced timeout management at the protocol layer, dropping a
+connection when a pong response hasn't come in in a while (~3x longer
+than the current 30s ping rate).  This was mostly after noticing
+mosquitto do really weird things where it seemed to just forget about
+all my active connections (other clients figured that out and dropped
+and reconnected).
+
 ## 0.2.3.1
 
 Fixed up github links.
