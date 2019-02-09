@@ -269,11 +269,19 @@ dispatch c@MQTTClient{..} pch pkt =
               atomically $ modifyTVar' _acks (Map.insert (DPubREL, _pubPktID) ch)
               E.finally (manageQoS2' ch) (atomically $ releasePktID c (DPubREL, _pubPktID))
                 where
-                  manageQoS2' ch = do
+                  sendREC ch = do
                     sendPacketIO c (PubRECPkt (PubREC _pubPktID))
                     (PubRELPkt _) <- atomically $ readTChan ch
-                    notify
-                    sendPacketIO c (PubCOMPPkt (PubCOMP _pubPktID))
+                    pure ()
+
+                  manageQoS2' ch = do
+                    v <- timeout 10000000 (sendREC ch)
+                    case v of
+                      Nothing -> killConn c Timeout
+                      _ ->  notify >> sendPacketIO c (PubCOMPPkt (PubCOMP _pubPktID))
+
+killConn :: E.Exception e => MQTTClient -> e -> IO ()
+killConn MQTTClient{..} e = readTVarIO _ct >>= \t -> cancelWith t e
 
 sendPacket :: MQTTClient -> MQTTPkt -> STM ()
 sendPacket MQTTClient{..} p = do
@@ -385,7 +393,7 @@ disconnect :: MQTTClient -> IO ()
 disconnect c@MQTTClient{..} = race_ getDisconnected orDieTrying
   where
     getDisconnected = sendPacketIO c DisconnectPkt >> waitForClient c
-    orDieTrying = threadDelay 10000000 >> readTVarIO _ct >>= \t -> cancelWith t Timeout
+    orDieTrying = threadDelay 10000000 >> killConn c Timeout
 
 -- | A convenience method for creating a LastWill.
 mkLWT :: Topic -> BL.ByteString -> Bool -> T.LastWill
