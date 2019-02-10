@@ -255,7 +255,7 @@ dispatch c@MQTTClient{..} pch pkt =
             Just ch -> writeTChan ch pkt
 
         pubMachine PublishRequest{..}
-          | _pubQoS == QoS2 = void $ async manageQoS2
+          | _pubQoS == QoS2 = void $ async manageQoS2 >>= link
           | _pubQoS == QoS1 = notify >> sendPacketIO c (PubACKPkt (PubACK _pubPktID))
           | otherwise = notify
 
