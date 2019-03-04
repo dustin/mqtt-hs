@@ -1,5 +1,5 @@
 name:                net-mqtt
-version:             0.2.4.0
+version:             0.2.4.1
 github:              "dustin/mqtt-hs"
 license:             BSD3
 author:              "Dustin Sallings"

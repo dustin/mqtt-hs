@@ -1,5 +1,16 @@
 # Changelog for net-mqtt
 
+## 0.2.4.1
+
+Link QoS2 completion thread on subscriber.
+
+An exception from a subscriber callback could be silently dropped
+without completing the handshake which would then cause the MQTT
+broker to just stop sending messages to the subscriber.
+Unfortunately, the broker (at least mosquitto) still responds to pings
+and doesn't give any useful notification that it's no longer sending
+messages.
+
 ## 0.2.4.0
 
 Introduced `Filter` type alias to distinguish from `Topic`.
