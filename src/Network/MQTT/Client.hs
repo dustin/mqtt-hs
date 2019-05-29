@@ -145,7 +145,7 @@ pingPeriod = 30000000 -- 30 seconds
 runClientAppData :: ((AppData -> IO ()) -> IO ()) -> MQTTConfig -> IO MQTTClient
 runClientAppData mkconn MQTTConfig{..} = do
   ch <- newTChanIO
-  pid <- newTVarIO 0
+  pid <- newTVarIO 1
   thr <- newTVarIO []
   acks <- newTVarIO mempty
   st <- newTVarIO Starting
