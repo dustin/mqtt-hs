@@ -16,8 +16,12 @@ An MQTT protocol client, based on the 3.1.1 specification:
 module Network.MQTT.Client (
   -- * Configuring the client.
   MQTTConfig(..), MQTTClient, QoS(..), Topic, mqttConfig,  mkLWT, LastWill(..),
-  -- * Running and waiting for the client.
-  runClient, runClientTLS, waitForClient,
+  -- * Client connection management
+  withClient, withClientTLS, withConnectURI,
+  -- ** Waiting for the client
+  waitForClient, 
+  -- ** Client connection and disconnection
+  runClient, runClientTLS, 
   connectURI,
   disconnect,
   -- * General client interactions.
@@ -129,6 +133,17 @@ connectURI cfg uri = do
     up x = let (u,r) = break (== ':') (init x) in
              (Just (unEscapeString u), if r == "" then Nothing else Just (unEscapeString $ tail r))
 
+-- | Memory 'E.bracket' around 'connectURI' and 'disconnect'
+withConnectURI :: MQTTConfig -> URI -> (MQTTClient -> IO c) -> IO c
+withConnectURI cfg uri = E.bracket (connectURI cfg uri) disconnect
+
+-- | Memory 'E.bracket' around 'runClient' and 'disconnect'
+withClient :: MQTTConfig -> (MQTTClient -> IO c) -> IO c
+withClient cfg = E.bracket (runClient cfg) disconnect
+
+-- | Memory 'E.bracket' around 'runClientTLS' and 'disconnect'
+withClientTLS :: MQTTConfig -> (MQTTClient -> IO c) -> IO c
+withClientTLS cfg = E.bracket (runClientTLS cfg) disconnect
 
 -- | Set up and run a client from the given config.
 runClient :: MQTTConfig -> IO MQTTClient
@@ -395,7 +410,7 @@ disconnect c@MQTTClient{..} = race_ getDisconnected orDieTrying
     getDisconnected = sendPacketIO c DisconnectPkt >> waitForClient c
     orDieTrying = threadDelay 10000000 >> killConn c Timeout
 
--- | A convenience method for creating a LastWill.
+-- | A convenience method for creating a LastWill, with a default QoS set at QoS0.
 mkLWT :: Topic -> BL.ByteString -> Bool -> T.LastWill
 mkLWT t m r = T.LastWill{
   T._willRetain=r,

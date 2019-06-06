@@ -98,10 +98,10 @@ instance ByteMe ProtocolLevel where toByteString _ = BL.singleton 4
 
 -- | An MQTT Will message.
 data LastWill = LastWill {
-  _willRetain  :: Bool
-  , _willQoS   :: QoS
-  , _willTopic :: BL.ByteString
-  , _willMsg   :: BL.ByteString
+  _willRetain  :: Bool  -- ^ If the published message should have the retain flag on or not.
+  , _willQoS   :: QoS  -- ^ Maximum QoS level of the topic.
+  , _willTopic :: BL.ByteString -- ^ MQTT topic to publish the message on.
+  , _willMsg   :: BL.ByteString -- ^ Message content
   } deriving(Eq, Show)
 
 data ConnectRequest = ConnectRequest {

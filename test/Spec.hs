@@ -145,7 +145,7 @@ testTopicMatching = let allTopics = ["a", "a/b", "a/b/c/d", "b/a/c/d",
 tests :: [TestTree]
 tests = [
   localOption (QC.QuickCheckTests 10000) $ testProperty "header length rt (parser)" prop_rtLengthParser,
-  
+
   testCase "rt some packets" testPacketRT,
   localOption (QC.QuickCheckTests 1000) $ testProperty "rt packets" prop_PacketRT,
 
