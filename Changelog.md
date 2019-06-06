@@ -1,5 +1,14 @@
 # Changelog for net-mqtt
 
+## 0.2.4.2
+
+Relaxed lower dependency bounds.
+
+Pinned QuickCheck lower version due
+to the signature change in `cover` after QuickCheck-2.12.
+
+Add `withClient`, `withClientTLS`, `withConnectURI`.
+
 ## 0.2.4.1
 
 Link QoS2 completion thread on subscriber.

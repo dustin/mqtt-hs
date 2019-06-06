@@ -19,10 +19,8 @@ import           Network.MQTT.Types
 
 prop_rtLengthParser :: NonNegative (Large Int) -> Property
 prop_rtLengthParser (NonNegative (Large x)) =
-  x <= 268435455 ==> label (show (length e) <> "B") $
-  cover 20 (length e > 1) "multi-byte" $
-  d e == x
-
+  x <= 268435455 ==>
+    label (show (length e) <> "B") $ cover 20 (length e > 1) "multi-byte" $ d e == x
   where e = encodeLength x
         d :: [Word8] -> Int
         d l = case A.parse parseHdrLen (L.pack l) of
@@ -34,7 +32,6 @@ testPacketRT = mapM_ tryParse [
   "\DLE0\NUL\EOTMQTT\EOT\198\SOH,\NUL\ACKsomeid\NUL\btmp/test\NUL\STXhi\NUL\ACKdustin\NUL\ACKpasswd",
   " \STX\SOH\NUL"
   ]
-
   where
     tryParse s = do
       let (A.Done _ x) = A.parse parsePacket s
