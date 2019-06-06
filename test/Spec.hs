@@ -88,11 +88,8 @@ instance Arbitrary SubscribeRequest where
     where sub = liftA2 (,) astr arbitrary
 
 instance Arbitrary SubscribeResponse where
-  arbitrary = arbitrary >>= \pid ->
-    choose (1,11) >>= \n ->
-      SubscribeResponse pid <$> vectorOf n sub
-      where
-        sub = oneof (pure <$> [Just QoS0, Just QoS1, Just QoS2, Nothing])
+  arbitrary = arbitrary >>= \pid -> choose (1,11) >>= \n -> SubscribeResponse pid <$> vectorOf n sub
+    where sub = oneof (pure <$> [Just QoS0, Just QoS1, Just QoS2, Nothing])
   shrink (SubscribeResponse pid l)
     | length l == 1 = []
     | otherwise = [SubscribeResponse pid sl | sl <- shrinkList (:[]) l, length sl > 0]
