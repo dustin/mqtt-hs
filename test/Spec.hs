@@ -19,10 +19,8 @@ import           Network.MQTT.Types
 
 prop_rtLengthParser :: NonNegative (Large Int) -> Property
 prop_rtLengthParser (NonNegative (Large x)) =
-  x <= 268435455 ==> label (show (length e) <> "B") $
-  cover 20 (length e > 1) "multi-byte" $
-  d e == x
-
+  x <= 268435455 ==>
+    label (show (length e) <> "B") $ cover 20 (length e > 1) "multi-byte" $ d e == x
   where e = encodeLength x
         d :: [Word8] -> Int
         d l = case A.parse parseHdrLen (L.pack l) of
@@ -34,7 +32,6 @@ testPacketRT = mapM_ tryParse [
   "\DLE0\NUL\EOTMQTT\EOT\198\SOH,\NUL\ACKsomeid\NUL\btmp/test\NUL\STXhi\NUL\ACKdustin\NUL\ACKpasswd",
   " \STX\SOH\NUL"
   ]
-
   where
     tryParse s = do
       let (A.Done _ x) = A.parse parsePacket s
@@ -91,8 +88,11 @@ instance Arbitrary SubscribeRequest where
     where sub = liftA2 (,) astr arbitrary
 
 instance Arbitrary SubscribeResponse where
-  arbitrary = arbitrary >>= \pid -> choose (1,11) >>= \n -> SubscribeResponse pid <$> vectorOf n sub
-    where sub = oneof (pure <$> [Just QoS0, Just QoS1, Just QoS2, Nothing])
+  arbitrary = arbitrary >>= \pid ->
+    choose (1,11) >>= \n ->
+      SubscribeResponse pid <$> vectorOf n sub
+      where
+        sub = oneof (pure <$> [Just QoS0, Just QoS1, Just QoS2, Nothing])
   shrink (SubscribeResponse pid l)
     | length l == 1 = []
     | otherwise = [SubscribeResponse pid sl | sl <- shrinkList (:[]) l, length sl > 0]
@@ -148,7 +148,7 @@ testTopicMatching = let allTopics = ["a", "a/b", "a/b/c/d", "b/a/c/d",
 tests :: [TestTree]
 tests = [
   localOption (QC.QuickCheckTests 10000) $ testProperty "header length rt (parser)" prop_rtLengthParser,
-
+  
   testCase "rt some packets" testPacketRT,
   localOption (QC.QuickCheckTests 1000) $ testProperty "rt packets" prop_PacketRT,
 
