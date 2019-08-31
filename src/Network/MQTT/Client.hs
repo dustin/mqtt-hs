@@ -321,7 +321,11 @@ sendAndWait c@MQTTClient{..} dt f = do
     pure (ch,pid)
 
   -- Wait for the response in a separate transaction.
-  atomically $ releasePktID c (dt,pid) >> readTChan ch
+  atomically $ do
+    st <- readTVar _st
+    when (st /= Connected) $ fail "disconnected waiting for response"
+    releasePktID c (dt,pid)
+    readTChan ch
 
 -- | Subscribe to a list of topic filters with their respective QoSes.
 -- The accepted QoSes are returned in the same order as requested.
