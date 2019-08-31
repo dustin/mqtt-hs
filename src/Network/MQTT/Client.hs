@@ -145,7 +145,7 @@ pingPeriod = 30000000 -- 30 seconds
 runClientAppData :: ((AppData -> IO ()) -> IO ()) -> MQTTConfig -> IO MQTTClient
 runClientAppData mkconn MQTTConfig{..} = do
   ch <- newTChanIO
-  pid <- newTVarIO 0
+  pid <- newTVarIO 1
   thr <- newTVarIO []
   acks <- newTVarIO mempty
   st <- newTVarIO Starting
@@ -302,7 +302,7 @@ reservePktID :: MQTTClient -> [DispatchType] -> STM (TChan MQTTPkt, Word16)
 reservePktID MQTTClient{..} dts = do
   ch <- newTChan
   pid <- readTVar _pktID
-  modifyTVar' _pktID succ
+  modifyTVar' _pktID (\x -> case succ x of 0 -> 1; x' -> x')
   modifyTVar' _acks (Map.union (Map.fromList [((t, pid), ch) | t <- dts]))
   pure (ch,pid)
 
