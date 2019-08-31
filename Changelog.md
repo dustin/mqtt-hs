@@ -1,5 +1,13 @@
 # Changelog for net-mqtt
 
+## 0.2.4.2
+
+Don't set a message ID of 0.
+
+This had been working fine for a while, but starting in mosquitto 1.6,
+the server would just hang up on a subscribe request with a message ID
+of zero.
+
 ## 0.2.4.1
 
 Link QoS2 completion thread on subscriber.
