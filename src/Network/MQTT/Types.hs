@@ -16,7 +16,7 @@ module Network.MQTT.Types (
   LastWill(..), MQTTPkt(..), QoS(..),
   ConnectRequest(..), connectRequest, ConnACKFlags(..), ConnACKRC(..),
   PublishRequest(..), PubACK(..), PubREC(..), PubREL(..), PubCOMP(..),
-  ProtocolLevel(..),
+  ProtocolLevel(..), Property(..),
   SubscribeRequest(..), SubscribeResponse(..),
   UnsubscribeRequest(..), UnsubscribeResponse(..),
   parsePacket, ByteMe(toByteString),
@@ -27,11 +27,12 @@ module Network.MQTT.Types (
 import           Control.Applicative             (liftA2, (<|>))
 import           Control.Monad                   (replicateM)
 import qualified Data.Attoparsec.ByteString.Lazy as A
+import           Data.Binary.Put                 (putWord32be, runPut)
 import           Data.Bits                       (Bits (..), shiftL, testBit,
                                                   (.&.), (.|.))
 import qualified Data.ByteString.Lazy            as BL
 import           Data.Maybe                      (isJust)
-import           Data.Word                       (Word16, Word8)
+import           Data.Word                       (Word16, Word32, Word8)
 
 -- | QoS values for publishing and subscribing.
 data QoS = QoS0 | QoS1 | QoS2 deriving (Bounded, Enum, Eq, Show)
@@ -59,7 +60,10 @@ boolBit False = 0
 boolBit True  = 1
 
 parseHdrLen :: A.Parser Int
-parseHdrLen = go 0 1
+parseHdrLen = decodeVarInt
+
+decodeVarInt :: A.Parser Int
+decodeVarInt = go 0 1
   where
     go :: Int -> Int -> A.Parser Int
     go v m = do
@@ -70,7 +74,10 @@ parseHdrLen = go 0 1
         else pure a
 
 encodeLength :: Int -> [Word8]
-encodeLength n = go (n `quotRem` 128)
+encodeLength = encodeVarInt
+
+encodeVarInt :: Int -> [Word8]
+encodeVarInt n = go (n `quotRem` 128)
   where
     go (x,e)
       | x > 0 = en (e .|. 128) : go (x `quotRem` 128)
@@ -79,19 +86,136 @@ encodeLength n = go (n `quotRem` 128)
     en :: Int -> Word8
     en = toEnum
 
+encodeWord8 :: Word8 -> BL.ByteString
+encodeWord8 = BL.singleton
+
 encodeWord16 :: Word16 -> BL.ByteString
 encodeWord16 a = let (h,l) = a `quotRem` 256 in BL.pack [w h, w l]
     where w = toEnum.fromEnum
 
+encodeWord32 :: Word32 -> BL.ByteString
+encodeWord32 = runPut . putWord32be
+
+encodeBytes :: BL.ByteString -> BL.ByteString
+encodeBytes = blLength
+
+encodeUTF8 :: BL.ByteString -> BL.ByteString
+encodeUTF8 = encodeBytes
+
+encodeUTF8Pair :: BL.ByteString -> BL.ByteString -> BL.ByteString
+encodeUTF8Pair x y = encodeUTF8 x <> encodeUTF8 y
 
 blLength :: BL.ByteString -> BL.ByteString
-blLength = BL.pack . encodeLength . fromEnum . BL.length
+blLength = BL.pack . encodeVarInt . fromEnum . BL.length
 
 withLength :: BL.ByteString -> BL.ByteString
 withLength a = blLength a <> a
 
 instance ByteMe BL.ByteString where
   toByteString a = (encodeWord16 . toEnum . fromEnum . BL.length) a <> a
+
+data Property = PropPayloadFormatIndicator Word8
+              | PropMessageExpiryInterval Word32
+              | PropContentType BL.ByteString
+              | PropResponseTopic BL.ByteString
+              | PropCorrelationData BL.ByteString
+              | PropSubscriptionIdentifier Int
+              | PropSessionExpiryInterval Word32
+              | PropAssignedClientIdentifier BL.ByteString
+              | PropServerKeepAlive Word16
+              | PropAuthenticationMethod BL.ByteString
+              | PropAuthenticationData BL.ByteString
+              | PropRequestProblemInformation Word8
+              | PropWillDelayInterval Word32
+              | PropRequestResponseInformation Word8
+              | PropResponseInformation BL.ByteString
+              | PropServerReference BL.ByteString
+              | PropReasonString BL.ByteString
+              | PropReceiveMaximum Word16
+              | PropTopicAliasMaximum Word16
+              | PropTopicAlias Word16
+              | PropMaximumQoS Word8
+              | PropRetainAvailable Word8
+              | PropUserProperty BL.ByteString BL.ByteString
+              | PropMaximumPacketSize Word32
+              | PropWildcardSubscriptionAvailable Word8
+              | PropSubscriptionIdentifierAvailable Word8
+              | PropSharedSubscriptionAvailable Word8
+              deriving (Show, Eq)
+
+peW8 :: Word8 -> Word8 -> BL.ByteString
+peW8 i x = BL.singleton i <> encodeWord8 x
+
+peW16 :: Word8 -> Word16 -> BL.ByteString
+peW16 i x = BL.singleton i <> encodeWord16 x
+
+peW32 :: Word8 -> Word32 -> BL.ByteString
+peW32 i x = BL.singleton i <> encodeWord32 x
+
+peUTF8 :: Word8 -> BL.ByteString -> BL.ByteString
+peUTF8 i x = BL.singleton i <> encodeUTF8 x
+
+peBin :: Word8 -> BL.ByteString -> BL.ByteString
+peBin i x = BL.singleton i <> encodeBytes x
+
+peVarInt :: Word8 -> Int -> BL.ByteString
+peVarInt i x = BL.singleton i <> (BL.pack . encodeVarInt) x
+
+instance ByteMe Property where
+  toByteString (PropPayloadFormatIndicator x)          = peW8 0x01 x
+
+  toByteString (PropMessageExpiryInterval x)           = peW32 0x02 x
+
+  toByteString (PropContentType x)                     = peUTF8 0x03 x
+
+  toByteString (PropResponseTopic x)                   = peUTF8 0x08 x
+
+  toByteString (PropCorrelationData x)                 = peBin 0x09 x
+
+  toByteString (PropSubscriptionIdentifier x)          = peVarInt 0x0b x
+
+  toByteString (PropSessionExpiryInterval x)           = peW32 0x11 x
+
+  toByteString (PropAssignedClientIdentifier x)        = peUTF8 0x12 x
+
+  toByteString (PropServerKeepAlive x)                 = peW16 0x13 x
+
+  toByteString (PropAuthenticationMethod x)            = peUTF8 0x15 x
+
+  toByteString (PropAuthenticationData x)              = peBin 0x16 x
+
+  toByteString (PropRequestProblemInformation x)       = peW8 0x17 x
+
+  toByteString (PropWillDelayInterval x)               = peW32 0x18 x
+
+  toByteString (PropRequestResponseInformation x)      = peW8 0x19 x
+
+  toByteString (PropResponseInformation x)             = peUTF8 0x1a x
+
+  toByteString (PropServerReference x)                 = peUTF8 0x1c x
+
+  toByteString (PropReasonString x)                    = peUTF8 0x1f x
+
+  toByteString (PropReceiveMaximum x)                  = peW16 0x21 x
+
+  toByteString (PropTopicAliasMaximum x)               = peW16 0x22 x
+
+  toByteString (PropTopicAlias x)                      = peW16 0x23 x
+
+  toByteString (PropMaximumQoS x)                      = peW8 0x24 x
+
+  toByteString (PropRetainAvailable x)                 = peW8 0x25 x
+
+  toByteString (PropUserProperty k v)                  = BL.singleton 0x26 <> encodeUTF8Pair k v
+
+  toByteString (PropMaximumPacketSize x)               = peW32 0x27 x
+
+  toByteString (PropWildcardSubscriptionAvailable x)   = peW8 0x28 x
+
+  toByteString (PropSubscriptionIdentifierAvailable x) = peW8 0x29 x
+
+  toByteString (PropSharedSubscriptionAvailable x)     = peW8 0x2a x
+
 
 data ProtocolLevel = Protocol311
                    | Protocol50 deriving(Eq, Show)

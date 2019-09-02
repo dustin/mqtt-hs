@@ -9,7 +9,7 @@ import qualified Data.ByteString.Char8           as BC
 import qualified Data.ByteString.Lazy            as L
 import           Data.Word                       (Word8)
 import           Numeric                         (showHex)
-import           Test.QuickCheck
+import           Test.QuickCheck                 as QC
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck           as QC
@@ -17,13 +17,12 @@ import           Test.Tasty.QuickCheck           as QC
 import           Network.MQTT.Topic
 import           Network.MQTT.Types
 
-
 newtype SizeT = SizeT Int deriving(Eq, Show)
 
 instance Arbitrary SizeT where
   arbitrary = SizeT <$> choose (0, 268435455)
 
-prop_rtLengthParser :: SizeT -> Property
+prop_rtLengthParser :: SizeT -> QC.Property
 prop_rtLengthParser (SizeT x) =
   label (show (length e) <> "B") $
   cover 20 (length e > 1) "multi-byte" $
@@ -136,7 +135,7 @@ instance Arbitrary MQTTPkt where
   shrink (UnsubscribePkt x) = UnsubscribePkt <$> shrink x
   shrink _                  = []
 
-prop_PacketRT :: MQTTPkt -> Property
+prop_PacketRT :: MQTTPkt -> QC.Property
 prop_PacketRT p = label (lab p) $ case A.parse parsePacket (toByteString p) of
                                     (A.Fail _ _ _) -> False
                                     (A.Done _ r)   -> r == p
