@@ -47,8 +47,11 @@ testPacketRT = mapM_ tryParse [
         f@(A.Fail _ _ _) -> assertFailure (show f)
         (A.Done _ x')    -> assertEqual (show s) x x'
 
+
 instance Arbitrary LastWill where
   arbitrary = LastWill <$> arbitrary <*> arbitrary <*> astr <*> astr
+
+instance Arbitrary ProtocolLevel where arbitrary = arbitraryBoundedEnum
 
 instance Arbitrary ConnectRequest where
   arbitrary = do
@@ -58,10 +61,17 @@ instance Arbitrary ConnectRequest where
     cs <- arbitrary
     ka <- arbitrary
     lw <- arbitrary
+    pl <- arbitrary
+    props <- arbitraryProps pl
 
     pure ConnectRequest{_username=u, _password=p, _lastWill=lw,
                         _cleanSession=cs, _keepAlive=ka, _connID=cid,
-                        _connLvl=Protocol311}
+                        _connLvl=pl, _properties=props}
+
+    where
+      arbitraryProps :: ProtocolLevel -> Gen Properties
+      arbitraryProps Protocol311 = pure $ Properties []
+      arbitraryProps Protocol50  = arbitrary
 
 mastr :: Gen (Maybe L.ByteString)
 mastr = fmap (L.fromStrict . BC.pack . getUnicodeString) <$> arbitrary

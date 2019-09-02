@@ -31,6 +31,7 @@ import qualified Data.Attoparsec.ByteString.Lazy as A
 import           Data.Binary.Put                 (putWord32be, runPut)
 import           Data.Bits                       (Bits (..), shiftL, testBit,
                                                   (.&.), (.|.))
+import           Data.Functor               (($>))
 import qualified Data.ByteString.Lazy            as BL
 import           Data.Maybe                      (isJust)
 import           Data.Word                       (Word16, Word32, Word8)
@@ -268,7 +269,7 @@ parseProperties = do
                Right x -> pure x
 
 data ProtocolLevel = Protocol311
-                   | Protocol50 deriving(Eq, Show)
+                   | Protocol50 deriving(Bounded, Enum, Eq, Show)
 
 instance ByteMe ProtocolLevel where toByteString _ = BL.singleton 4
 
@@ -288,24 +289,34 @@ data ConnectRequest = ConnectRequest {
   , _keepAlive    :: Word16
   , _connID       :: BL.ByteString
   , _connLvl      :: ProtocolLevel
+  , _properties   :: Properties
   } deriving (Eq, Show)
 
 connectRequest :: ConnectRequest
 connectRequest = ConnectRequest{_username=Nothing, _password=Nothing, _lastWill=Nothing,
-                                _cleanSession=True, _keepAlive=300, _connID="", _connLvl=Protocol311}
+                                _cleanSession=True, _keepAlive=300, _connID="", _connLvl=Protocol311,
+                                _properties=Properties []}
 
 instance ByteMe ConnectRequest where
   toByteString ConnectRequest{..} = BL.singleton 0x10
-                                    <> withLength val
+                                    <> withLength (val _connLvl)
     where
-      val :: BL.ByteString
-      val =  "\NUL\EOTMQTT\EOT" -- MQTT + Protocol311
-             <> BL.singleton connBits
-             <> encodeWord16 _keepAlive
-             <> toByteString _connID
-             <> lwt _lastWill
-             <> perhaps _username
-             <> perhaps _password
+      val :: ProtocolLevel -> BL.ByteString
+      val Protocol311 = "\NUL\EOTMQTT\EOT" -- MQTT + Protocol311
+                        <> common
+
+      val Protocol50 = "\NUL\EOTMQTT\ENQ" -- MQTT + Protocol50
+                       <> common
+                       <> toByteString _properties
+
+      common = BL.singleton connBits
+               <> encodeWord16 _keepAlive
+               <> toByteString _connID
+               <> lwt _lastWill
+               <> perhaps _username
+               <> perhaps _password
+
+
       connBits = hasu .|. hasp .|. willBits .|. clean
         where
           hasu = boolBit (isJust _username) ≪ 7
@@ -380,22 +391,34 @@ parseConnect :: A.Parser MQTTPkt
 parseConnect = do
   _ <- A.word8 0x10
   _ <- parseHdrLen
-  _ <- A.string "\NUL\EOTMQTT\EOT" -- "MQTT" Protocol level = 4
+  _ <- A.string "\NUL\EOTMQTT" -- "MQTT"
+  pl <- parseLevel
+
   connFlagBits <- A.anyWord8
   keepAlive <- aWord16
   cid <- aString
   lwt <- parseLwt connFlagBits
   u <- mstr (testBit connFlagBits 7)
   p <- mstr (testBit connFlagBits 6)
+
+  props <- parseProps pl
+
   pure $ ConnPkt ConnectRequest{_connID=cid, _username=u, _password=p,
                                 _lastWill=lwt, _keepAlive=keepAlive,
                                 _cleanSession=testBit connFlagBits 1,
-                                _connLvl=Protocol311}
+                                _connLvl=pl,
+                                _properties=props}
 
   where
     mstr :: Bool -> A.Parser (Maybe BL.ByteString)
     mstr False = pure Nothing
     mstr True  = Just <$> aString
+
+    parseLevel = A.string "\EOT" $> Protocol311
+                 <|> A.string "\ENQ" $> Protocol50
+
+    parseProps Protocol311 = pure $ Properties []
+    parseProps Protocol50  = parseProperties
 
     parseLwt bits
       | testBit bits 2 = do
