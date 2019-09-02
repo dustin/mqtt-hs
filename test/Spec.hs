@@ -15,7 +15,7 @@ import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck           as QC
 
 import           Network.MQTT.Topic
-import           Network.MQTT.Types
+import           Network.MQTT.Types              as MT
 
 newtype SizeT = SizeT Int deriving(Eq, Show)
 
@@ -116,6 +116,38 @@ instance Arbitrary UnsubscribeRequest where
 instance Arbitrary UnsubscribeResponse where
   arbitrary = UnsubscribeResponse <$> arbitrary
 
+instance Arbitrary MT.Property where
+  arbitrary = oneof [
+    PropPayloadFormatIndicator <$> arbitrary,
+    PropMessageExpiryInterval <$> arbitrary,
+    PropMessageExpiryInterval <$> arbitrary,
+    PropContentType <$> astr,
+    PropResponseTopic <$> astr,
+    PropCorrelationData <$> astr,
+    PropSubscriptionIdentifier <$> arbitrary `suchThat` (>= 0),
+    PropSessionExpiryInterval <$> arbitrary,
+    PropAssignedClientIdentifier <$> astr,
+    PropServerKeepAlive <$> arbitrary,
+    PropAuthenticationMethod <$> astr,
+    PropAuthenticationData <$> astr,
+    PropRequestProblemInformation <$> arbitrary,
+    PropWillDelayInterval <$> arbitrary,
+    PropRequestResponseInformation <$> arbitrary,
+    PropResponseInformation <$> astr,
+    PropServerReference <$> astr,
+    PropReasonString <$> astr,
+    PropReceiveMaximum <$> arbitrary,
+    PropTopicAliasMaximum <$> arbitrary,
+    PropTopicAlias <$> arbitrary,
+    PropMaximumQoS <$> arbitrary,
+    PropRetainAvailable <$> arbitrary,
+    PropUserProperty <$> astr <*> astr,
+    PropMaximumPacketSize <$> arbitrary,
+    PropWildcardSubscriptionAvailable <$> arbitrary,
+    PropSubscriptionIdentifierAvailable <$> arbitrary,
+    PropSharedSubscriptionAvailable <$> arbitrary
+    ]
+
 instance Arbitrary MQTTPkt where
   arbitrary = oneof [
     ConnPkt <$> arbitrary,
@@ -142,6 +174,13 @@ prop_PacketRT p = label (lab p) $ case A.parse parsePacket (toByteString p) of
 
   where lab x = let (s,_) = break (== ' ') . show $ x in s
 
+prop_OptionRT :: MT.Property -> QC.Property
+prop_OptionRT p = label (lab p) $ case A.parse parseProperty (toByteString p) of
+                                    (A.Fail _ _ _) -> False
+                                    (A.Done _ r)   -> r == p
+
+  where lab x = let (s,_) = break (== ' ') . show $ x in s
+
 testTopicMatching :: [TestTree]
 testTopicMatching = let allTopics = ["a", "a/b", "a/b/c/d", "b/a/c/d",
                                      "$SYS/a/b", "a/$SYS/b"]
@@ -161,6 +200,7 @@ tests = [
 
   testCase "rt some packets" testPacketRT,
   localOption (QC.QuickCheckTests 1000) $ testProperty "rt packets" prop_PacketRT,
+  localOption (QC.QuickCheckTests 1000) $ testProperty "rt options" prop_OptionRT,
 
   testGroup "topic matching" testTopicMatching
   ]

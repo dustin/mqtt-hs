@@ -21,11 +21,12 @@ module Network.MQTT.Types (
   UnsubscribeRequest(..), UnsubscribeResponse(..),
   parsePacket, ByteMe(toByteString),
   -- for testing
-  encodeLength, parseHdrLen, connACKRC
+  encodeLength, parseHdrLen, connACKRC, parseProperty
   ) where
 
 import           Control.Applicative             (liftA2, (<|>))
 import           Control.Monad                   (replicateM)
+import           Data.Attoparsec.Binary          (anyWord16be, anyWord32be)
 import qualified Data.Attoparsec.ByteString.Lazy as A
 import           Data.Binary.Put                 (putWord32be, runPut)
 import           Data.Bits                       (Bits (..), shiftL, testBit,
@@ -97,13 +98,16 @@ encodeWord32 :: Word32 -> BL.ByteString
 encodeWord32 = runPut . putWord32be
 
 encodeBytes :: BL.ByteString -> BL.ByteString
-encodeBytes = blLength
+encodeBytes x = twoByteLen x <> x
 
 encodeUTF8 :: BL.ByteString -> BL.ByteString
 encodeUTF8 = encodeBytes
 
 encodeUTF8Pair :: BL.ByteString -> BL.ByteString -> BL.ByteString
 encodeUTF8Pair x y = encodeUTF8 x <> encodeUTF8 y
+
+twoByteLen :: BL.ByteString -> BL.ByteString
+twoByteLen = encodeWord16 . toEnum . fromEnum . BL.length
 
 blLength :: BL.ByteString -> BL.ByteString
 blLength = BL.pack . encodeVarInt . fromEnum . BL.length
@@ -216,6 +220,35 @@ instance ByteMe Property where
 
   toByteString (PropSharedSubscriptionAvailable x)     = peW8 0x2a x
 
+parseProperty :: A.Parser Property
+parseProperty = do
+  A.word8 0x01 >> PropPayloadFormatIndicator <$> A.anyWord8
+  <|> (A.word8 0x02 >> PropMessageExpiryInterval <$> aWord32)
+  <|> (A.word8 0x03 >> PropContentType <$> aString)
+  <|> (A.word8 0x08 >> PropResponseTopic <$> aString)
+  <|> (A.word8 0x09 >> PropCorrelationData <$> aString)
+  <|> (A.word8 0x0b >> PropSubscriptionIdentifier <$> decodeVarInt)
+  <|> (A.word8 0x11 >> PropSessionExpiryInterval <$> aWord32)
+  <|> (A.word8 0x12 >> PropAssignedClientIdentifier <$> aString)
+  <|> (A.word8 0x13 >> PropServerKeepAlive <$> aWord16)
+  <|> (A.word8 0x15 >> PropAuthenticationMethod <$> aString)
+  <|> (A.word8 0x16 >> PropAuthenticationData <$> aString)
+  <|> (A.word8 0x17 >> PropRequestProblemInformation <$> A.anyWord8)
+  <|> (A.word8 0x18 >> PropWillDelayInterval <$> aWord32)
+  <|> (A.word8 0x19 >> PropRequestResponseInformation <$> A.anyWord8)
+  <|> (A.word8 0x1a >> PropResponseInformation <$> aString)
+  <|> (A.word8 0x1c >> PropServerReference <$> aString)
+  <|> (A.word8 0x1f >> PropReasonString <$> aString)
+  <|> (A.word8 0x21 >> PropReceiveMaximum <$> aWord16)
+  <|> (A.word8 0x22 >> PropTopicAliasMaximum <$> aWord16)
+  <|> (A.word8 0x23 >> PropTopicAlias <$> aWord16)
+  <|> (A.word8 0x24 >> PropMaximumQoS <$> A.anyWord8)
+  <|> (A.word8 0x25 >> PropRetainAvailable <$> A.anyWord8)
+  <|> (A.word8 0x26 >> PropUserProperty <$> aString <*> aString)
+  <|> (A.word8 0x27 >> PropMaximumPacketSize <$> aWord32)
+  <|> (A.word8 0x28 >> PropWildcardSubscriptionAvailable <$> A.anyWord8)
+  <|> (A.word8 0x29 >> PropSubscriptionIdentifierAvailable <$> A.anyWord8)
+  <|> (A.word8 0x2a >> PropSharedSubscriptionAvailable <$> A.anyWord8)
 
 data ProtocolLevel = Protocol311
                    | Protocol50 deriving(Eq, Show)
@@ -315,8 +348,10 @@ parsePacket = parseConnect <|> parseConnectACK
               <|> DisconnectPkt <$ A.string "\224\NUL"
 
 aWord16 :: A.Parser Word16
-aWord16 = A.anyWord8 >>= \h -> A.anyWord8 >>= \l -> pure $ (c h ≪ 8) .|. c l
-  where c = toEnum . fromEnum
+aWord16 = anyWord16be
+
+aWord32 :: A.Parser Word32
+aWord32 = anyWord32be
 
 aString :: A.Parser BL.ByteString
 aString = do
