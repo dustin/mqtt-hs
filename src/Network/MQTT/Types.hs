@@ -16,12 +16,12 @@ module Network.MQTT.Types (
   LastWill(..), MQTTPkt(..), QoS(..),
   ConnectRequest(..), connectRequest, ConnACKFlags(..), ConnACKRC(..),
   PublishRequest(..), PubACK(..), PubREC(..), PubREL(..), PubCOMP(..),
-  ProtocolLevel(..), Property(..),
+  ProtocolLevel(..), Property(..), Properties(..),
   SubscribeRequest(..), SubscribeResponse(..),
   UnsubscribeRequest(..), UnsubscribeResponse(..),
   parsePacket, ByteMe(toByteString),
   -- for testing
-  encodeLength, parseHdrLen, connACKRC, parseProperty
+  encodeLength, parseHdrLen, connACKRC, parseProperty, parseProperties
   ) where
 
 import           Control.Applicative             (liftA2, (<|>))
@@ -249,6 +249,23 @@ parseProperty = do
   <|> (A.word8 0x28 >> PropWildcardSubscriptionAvailable <$> A.anyWord8)
   <|> (A.word8 0x29 >> PropSubscriptionIdentifierAvailable <$> A.anyWord8)
   <|> (A.word8 0x2a >> PropSharedSubscriptionAvailable <$> A.anyWord8)
+
+newtype Properties = Properties [Property] deriving(Eq, Show)
+
+instance ByteMe Properties where
+  toByteString (Properties l) = let b = (mconcat . map toByteString) l in
+                                  (BL.pack . encodeLength . fromEnum . BL.length) b <> b
+
+parseProperties :: A.Parser Properties
+parseProperties = do
+  len <- decodeVarInt
+  props <- A.take len
+  Properties <$> subs props
+
+  where
+    subs d = case A.parseOnly (A.many' parseProperty) d of
+               Left x  -> fail x
+               Right x -> pure x
 
 data ProtocolLevel = Protocol311
                    | Protocol50 deriving(Eq, Show)

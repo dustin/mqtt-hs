@@ -148,6 +148,9 @@ instance Arbitrary MT.Property where
     PropSharedSubscriptionAvailable <$> arbitrary
     ]
 
+instance Arbitrary Properties where
+  arbitrary = Properties <$> arbitrary
+
 instance Arbitrary MQTTPkt where
   arbitrary = oneof [
     ConnPkt <$> arbitrary,
@@ -174,12 +177,17 @@ prop_PacketRT p = label (lab p) $ case A.parse parsePacket (toByteString p) of
 
   where lab x = let (s,_) = break (== ' ') . show $ x in s
 
-prop_OptionRT :: MT.Property -> QC.Property
-prop_OptionRT p = label (lab p) $ case A.parse parseProperty (toByteString p) of
+prop_PropertyRT :: MT.Property -> QC.Property
+prop_PropertyRT p = label (lab p) $ case A.parse parseProperty (toByteString p) of
                                     (A.Fail _ _ _) -> False
                                     (A.Done _ r)   -> r == p
 
   where lab x = let (s,_) = break (== ' ') . show $ x in s
+
+prop_PropertiesRT :: Properties -> Bool
+prop_PropertiesRT p = case A.parse parseProperties (toByteString p) of
+                        (A.Fail _ _ _) -> False
+                        (A.Done _ r)   -> r == p
 
 testTopicMatching :: [TestTree]
 testTopicMatching = let allTopics = ["a", "a/b", "a/b/c/d", "b/a/c/d",
@@ -200,7 +208,8 @@ tests = [
 
   testCase "rt some packets" testPacketRT,
   localOption (QC.QuickCheckTests 1000) $ testProperty "rt packets" prop_PacketRT,
-  localOption (QC.QuickCheckTests 1000) $ testProperty "rt options" prop_OptionRT,
+  localOption (QC.QuickCheckTests 1000) $ testProperty "rt property" prop_PropertyRT,
+  testProperty "rt properties" prop_PropertiesRT,
 
   testGroup "topic matching" testTopicMatching
   ]
