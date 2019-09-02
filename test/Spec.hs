@@ -61,7 +61,8 @@ instance Arbitrary ConnectRequest where
     lw <- arbitrary
 
     pure ConnectRequest{_username=u, _password=p, _lastWill=lw,
-                        _cleanSession=cs, _keepAlive=ka, _connID=cid}
+                        _cleanSession=cs, _keepAlive=ka, _connID=cid,
+                        _connLvl=Protocol311}
 
 mastr :: Gen (Maybe L.ByteString)
 mastr = fmap (L.fromStrict . BC.pack . getUnicodeString) <$> arbitrary

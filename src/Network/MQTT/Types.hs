@@ -16,6 +16,7 @@ module Network.MQTT.Types (
   LastWill(..), MQTTPkt(..), QoS(..),
   ConnectRequest(..), connectRequest, ConnACKFlags(..), ConnACKRC(..),
   PublishRequest(..), PubACK(..), PubREC(..), PubREL(..), PubCOMP(..),
+  ProtocolLevel(..),
   SubscribeRequest(..), SubscribeResponse(..),
   UnsubscribeRequest(..), UnsubscribeResponse(..),
   parsePacket, ByteMe(toByteString),
@@ -92,7 +93,8 @@ withLength a = blLength a <> a
 instance ByteMe BL.ByteString where
   toByteString a = (encodeWord16 . toEnum . fromEnum . BL.length) a <> a
 
-data ProtocolLevel = Protocol311 deriving(Eq, Show)
+data ProtocolLevel = Protocol311
+                   | Protocol50 deriving(Eq, Show)
 
 instance ByteMe ProtocolLevel where toByteString _ = BL.singleton 4
 
@@ -111,11 +113,12 @@ data ConnectRequest = ConnectRequest {
   , _cleanSession :: Bool
   , _keepAlive    :: Word16
   , _connID       :: BL.ByteString
+  , _connLvl      :: ProtocolLevel
   } deriving (Eq, Show)
 
 connectRequest :: ConnectRequest
 connectRequest = ConnectRequest{_username=Nothing, _password=Nothing, _lastWill=Nothing,
-                                _cleanSession=True, _keepAlive=300, _connID=""}
+                                _cleanSession=True, _keepAlive=300, _connID="", _connLvl=Protocol311}
 
 instance ByteMe ConnectRequest where
   toByteString ConnectRequest{..} = BL.singleton 0x10
@@ -210,7 +213,8 @@ parseConnect = do
   p <- mstr (testBit connFlagBits 6)
   pure $ ConnPkt ConnectRequest{_connID=cid, _username=u, _password=p,
                                 _lastWill=lwt, _keepAlive=keepAlive,
-                                _cleanSession=testBit connFlagBits 1}
+                                _cleanSession=testBit connFlagBits 1,
+                                _connLvl=Protocol311}
 
   where
     mstr :: Bool -> A.Parser (Maybe BL.ByteString)
