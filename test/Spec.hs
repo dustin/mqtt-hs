@@ -82,7 +82,11 @@ astr = L.fromStrict . BC.pack . getUnicodeString <$> arbitrary
 instance Arbitrary QoS where
   arbitrary = arbitraryBoundedEnum
 
-instance Arbitrary ConnACKFlags where arbitrary = ConnACKFlags <$> arbitrary <*> (connACKRC <$> choose (0,5))
+instance Arbitrary ConnACKFlags where
+  arbitrary = ConnACKFlags <$> arbitrary <*> (connACKRC <$> choose (0,5)) <*> arbitrary
+  shrink (ConnACKFlags b c p@(Properties pl))
+    | length pl == 0 = []
+    | otherwise = ConnACKFlags b c <$> shrink p
 
 instance Arbitrary PublishRequest where
   arbitrary = do
@@ -160,6 +164,9 @@ instance Arbitrary MT.Property where
 
 instance Arbitrary Properties where
   arbitrary = Properties <$> arbitrary
+  shrink (Properties l)
+    | length l == 1 = []
+    | otherwise = [Properties sl | sl <- shrinkList (:[]) l, length sl > 0]
 
 instance Arbitrary MQTTPkt where
   arbitrary = oneof [
@@ -177,6 +184,7 @@ instance Arbitrary MQTTPkt where
     pure PingPkt, pure PongPkt, pure DisconnectPkt
     ]
   shrink (SubACKPkt x)      = SubACKPkt <$> shrink x
+  shrink (ConnACKPkt x)     = ConnACKPkt <$> shrink x
   shrink (UnsubscribePkt x) = UnsubscribePkt <$> shrink x
   shrink _                  = []
 

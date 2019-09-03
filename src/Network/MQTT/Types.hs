@@ -25,14 +25,14 @@ module Network.MQTT.Types (
   ) where
 
 import           Control.Applicative             (liftA2, (<|>))
-import           Control.Monad                   (replicateM)
+import           Control.Monad                   (replicateM, when)
 import           Data.Attoparsec.Binary          (anyWord16be, anyWord32be)
 import qualified Data.Attoparsec.ByteString.Lazy as A
 import           Data.Binary.Put                 (putWord32be, runPut)
 import           Data.Bits                       (Bits (..), shiftL, testBit,
                                                   (.&.), (.|.))
-import           Data.Functor               (($>))
 import qualified Data.ByteString.Lazy            as BL
+import           Data.Functor                    (($>))
 import           Data.Maybe                      (isJust)
 import           Data.Word                       (Word16, Word32, Word8)
 
@@ -452,18 +452,28 @@ connACKVal BadCredentials       = 4
 connACKVal NotAuthorized        = 5
 connACKVal (InvalidConnACKRC x) = x
 
-data ConnACKFlags = ConnACKFlags Bool ConnACKRC deriving (Eq, Show)
+data ConnACKFlags = ConnACKFlags Bool ConnACKRC Properties deriving (Eq, Show)
 
 instance ByteMe ConnACKFlags where
-  toBytes (ConnACKFlags sp rc) = [0x20, 2, boolBit sp, connACKVal rc]
+  toBytes (ConnACKFlags sp rc (Properties [])) = [0x20, 2, boolBit sp, connACKVal rc]
+  toBytes (ConnACKFlags sp rc props) = let pbytes = toBytes props in
+                                         [0x20]
+                                         <> encodeVarInt (2 + length pbytes)
+                                         <>[ boolBit sp, connACKVal rc] <> pbytes
 
 parseConnectACK :: A.Parser MQTTPkt
 parseConnectACK = do
   _ <- A.word8 0x20
-  _ <- A.word8 2 -- two bytes left
+  rl <- decodeVarInt -- remaining length
+  when (rl < 2) $ fail "conn ack packet too short"
   ackFlags <- A.anyWord8
   rc <- A.anyWord8
-  pure $ ConnACKPkt $ ConnACKFlags (testBit ackFlags 0) (connACKRC rc)
+  p <- props rl
+  pure $ ConnACKPkt $ ConnACKFlags (testBit ackFlags 0) (connACKRC rc) p
+
+    where
+      props 2 = pure $ Properties []
+      props _ = parseProperties
 
 data PublishRequest = PublishRequest{
   _pubDup      :: Bool

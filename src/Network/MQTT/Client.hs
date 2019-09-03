@@ -181,7 +181,7 @@ runClientAppData mkconn MQTTConfig{..} = do
                                  T._password=BC.pack <$> _password,
                                  T._cleanSession=_cleanSession}
         yield (BL.toStrict $ toByteString req) .| appSink ad
-        (ConnACKPkt (ConnACKFlags _ val)) <- appSource ad .| sinkParser parsePacket
+        (ConnACKPkt (ConnACKFlags _ val _)) <- appSource ad .| sinkParser parsePacket
         case val of
           ConnAccepted -> pure ()
           x            -> fail (show x)
