@@ -17,9 +17,15 @@ import           Test.Tasty.QuickCheck           as QC
 import           Network.MQTT.Topic
 import           Network.MQTT.Types
 
-prop_rtLengthParser :: NonNegative (Large Int) -> Property
-prop_rtLengthParser (NonNegative (Large x)) =
-  x <= 268435455 ==> label (show (length e) <> "B") $
+
+newtype SizeT = SizeT Int deriving(Eq, Show)
+
+instance Arbitrary SizeT where
+  arbitrary = SizeT <$> choose (0, 268435455)
+
+prop_rtLengthParser :: SizeT -> Property
+prop_rtLengthParser (SizeT x) =
+  label (show (length e) <> "B") $
   cover 20 (length e > 1) "multi-byte" $
   d e == x
 
