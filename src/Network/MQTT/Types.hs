@@ -254,6 +254,12 @@ parseProperty = do
 
 newtype Properties = Properties [Property] deriving(Eq, Show)
 
+instance Monoid Properties where
+  mempty = Properties []
+
+instance Semigroup Properties where
+  (Properties a) <> (Properties b) = Properties (a <> b)
+
 instance ByteMe Properties where
   toByteString p (Properties l) = let b = (mconcat . map (toByteString p)) l in
                                     (BL.pack . encodeLength . fromEnum . BL.length) b <> b
@@ -297,7 +303,7 @@ data ConnectRequest = ConnectRequest {
 connectRequest :: ConnectRequest
 connectRequest = ConnectRequest{_username=Nothing, _password=Nothing, _lastWill=Nothing,
                                 _cleanSession=True, _keepAlive=300, _connID="",
-                                _properties=Properties []}
+                                _properties=mempty}
 
 instance ByteMe ConnectRequest where
   toByteString prot ConnectRequest{..} = BL.singleton 0x10
@@ -419,7 +425,7 @@ parseConnect = do
     parseLevel = A.string "\EOT" $> Protocol311
                  <|> A.string "\ENQ" $> Protocol50
 
-    parseProps Protocol311 = pure $ Properties []
+    parseProps Protocol311 = pure mempty
     parseProps Protocol50  = parseProperties
 
     parseLwt bits
@@ -474,7 +480,7 @@ parseConnectACK = do
   pure $ ConnACKPkt $ ConnACKFlags (testBit ackFlags 0) (connACKRC rc) p
 
     where
-      props 2 = pure $ Properties []
+      props 2 = pure mempty
       props _ = parseProperties
 
 data PublishRequest = PublishRequest{
