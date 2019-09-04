@@ -16,6 +16,7 @@ An MQTT protocol client, based on the 3.1.1 specification:
 module Network.MQTT.Client (
   -- * Configuring the client.
   MQTTConfig(..), MQTTClient, QoS(..), Topic, mqttConfig,  mkLWT, LastWill(..),
+  ProtocolLevel(..),
   -- * Running and waiting for the client.
   runClient, runClientTLS, waitForClient,
   connectURI,
