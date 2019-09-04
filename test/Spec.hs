@@ -193,17 +193,17 @@ prop_PacketRT50 p = label (lab p) $ case A.parse parsePacket (toByteString Proto
 
 prop_PacketRT311 :: MQTTPkt -> QC.Property
 prop_PacketRT311 p =
-  noprops p ==>
-  label (lab p) $ case A.parse parsePacket (toByteString Protocol311 p) of
-                    (A.Fail _ _ _) -> False
-                    (A.Done _ r)   -> r == p
+  let p' = v311mask p in
+    label (lab p') $ case A.parse parsePacket (toByteString Protocol311 p') of
+                      (A.Fail _ _ _) -> False
+                      (A.Done _ r)   -> r == p'
 
-  where lab x = let (s,_) = break (== ' ') . show $ x in s
-        noprops (ConnPkt (ConnectRequest{_properties=Properties []})) = True
-        noprops (ConnPkt _)                                           = False
-        noprops (ConnACKPkt (ConnACKFlags _ _ (Properties [])))       = True
-        noprops (ConnACKPkt _)                                        = False
-        noprops _                                                     = True
+  where
+    lab x = let (s,_) = break (== ' ') . show $ x in s
+    v311mask :: MQTTPkt -> MQTTPkt
+    v311mask (ConnPkt c) = ConnPkt (c{_properties=Properties []})
+    v311mask (ConnACKPkt (ConnACKFlags a b _)) = ConnACKPkt (ConnACKFlags a b (Properties []))
+    v311mask x = x
 
 prop_PropertyRT :: MT.Property -> QC.Property
 prop_PropertyRT p = label (lab p) $ case A.parse parseProperty (toByteString Protocol50 p) of
