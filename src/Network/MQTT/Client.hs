@@ -16,7 +16,7 @@ An MQTT protocol client, based on the 3.1.1 specification:
 module Network.MQTT.Client (
   -- * Configuring the client.
   MQTTConfig(..), MQTTClient, QoS(..), Topic, mqttConfig,  mkLWT, LastWill(..),
-  ProtocolLevel(..),
+  ProtocolLevel(..), Properties(..), Property(..),
   -- * Running and waiting for the client.
   runClient, runClientTLS, waitForClient,
   connectURI,
@@ -94,6 +94,7 @@ data MQTTConfig = MQTTConfig{
   , _lwt          :: Maybe LastWill -- ^ LastWill message to be sent on client disconnect.
   , _msgCB        :: Maybe (MQTTClient -> Topic -> BL.ByteString -> IO ()) -- ^ Callback for incoming messages.
   , _protLvl      :: ProtocolLevel
+  , _connProps    :: Properties
   }
 
 -- | A default MQTTConfig.  A _connID /should/ be provided by the client in the returned config,
@@ -103,7 +104,7 @@ mqttConfig = MQTTConfig{_hostname="localhost", _port=1883, _connID="haskell-mqtt
                         _username=Nothing, _password=Nothing,
                         _cleanSession=True, _lwt=Nothing,
                         _msgCB=Nothing,
-                        _protLvl=Protocol311}
+                        _protLvl=Protocol311, _connProps=Properties []}
 
 
 -- | Connect to an MQTT server by URI.  Currently only mqtt and mqtts
@@ -182,7 +183,8 @@ runClientAppData mkconn MQTTConfig{..} = do
                                  T._lastWill=_lwt,
                                  T._username=BC.pack <$> _username,
                                  T._password=BC.pack <$> _password,
-                                 T._cleanSession=_cleanSession}
+                                 T._cleanSession=_cleanSession,
+                                 T._properties=_connProps}
         yield (BL.toStrict $ toByteString _protLvl req) .| appSink ad
         (ConnACKPkt (ConnACKFlags _ val _)) <- appSource ad .| sinkParser parsePacket
         case val of
