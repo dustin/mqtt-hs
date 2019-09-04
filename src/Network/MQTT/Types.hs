@@ -52,10 +52,11 @@ wQos = toEnum.fromEnum
 (≪) = shiftL
 
 class ByteMe a where
-  toBytes :: a -> [Word8]
-  toBytes = BL.unpack . toByteString
-  toByteString :: a -> BL.ByteString
-  toByteString = BL.pack . toBytes
+  toBytes :: ProtocolLevel -> a -> [Word8]
+  toBytes p = BL.unpack . toByteString p
+
+  toByteString :: ProtocolLevel -> a -> BL.ByteString
+  toByteString p = BL.pack . toBytes p
 
 boolBit :: Bool -> Word8
 boolBit False = 0
@@ -117,7 +118,7 @@ withLength :: BL.ByteString -> BL.ByteString
 withLength a = blLength a <> a
 
 instance ByteMe BL.ByteString where
-  toByteString a = (encodeWord16 . toEnum . fromEnum . BL.length) a <> a
+  toByteString _ a = (encodeWord16 . toEnum . fromEnum . BL.length) a <> a
 
 data Property = PropPayloadFormatIndicator Word8
               | PropMessageExpiryInterval Word32
@@ -167,59 +168,59 @@ peVarInt :: Word8 -> Int -> BL.ByteString
 peVarInt i x = BL.singleton i <> (BL.pack . encodeVarInt) x
 
 instance ByteMe Property where
-  toByteString (PropPayloadFormatIndicator x)          = peW8 0x01 x
+  toByteString _ (PropPayloadFormatIndicator x)          = peW8 0x01 x
 
-  toByteString (PropMessageExpiryInterval x)           = peW32 0x02 x
+  toByteString _ (PropMessageExpiryInterval x)           = peW32 0x02 x
 
-  toByteString (PropContentType x)                     = peUTF8 0x03 x
+  toByteString _ (PropContentType x)                     = peUTF8 0x03 x
 
-  toByteString (PropResponseTopic x)                   = peUTF8 0x08 x
+  toByteString _ (PropResponseTopic x)                   = peUTF8 0x08 x
 
-  toByteString (PropCorrelationData x)                 = peBin 0x09 x
+  toByteString _ (PropCorrelationData x)                 = peBin 0x09 x
 
-  toByteString (PropSubscriptionIdentifier x)          = peVarInt 0x0b x
+  toByteString _ (PropSubscriptionIdentifier x)          = peVarInt 0x0b x
 
-  toByteString (PropSessionExpiryInterval x)           = peW32 0x11 x
+  toByteString _ (PropSessionExpiryInterval x)           = peW32 0x11 x
 
-  toByteString (PropAssignedClientIdentifier x)        = peUTF8 0x12 x
+  toByteString _ (PropAssignedClientIdentifier x)        = peUTF8 0x12 x
 
-  toByteString (PropServerKeepAlive x)                 = peW16 0x13 x
+  toByteString _ (PropServerKeepAlive x)                 = peW16 0x13 x
 
-  toByteString (PropAuthenticationMethod x)            = peUTF8 0x15 x
+  toByteString _ (PropAuthenticationMethod x)            = peUTF8 0x15 x
 
-  toByteString (PropAuthenticationData x)              = peBin 0x16 x
+  toByteString _ (PropAuthenticationData x)              = peBin 0x16 x
 
-  toByteString (PropRequestProblemInformation x)       = peW8 0x17 x
+  toByteString _ (PropRequestProblemInformation x)       = peW8 0x17 x
 
-  toByteString (PropWillDelayInterval x)               = peW32 0x18 x
+  toByteString _ (PropWillDelayInterval x)               = peW32 0x18 x
 
-  toByteString (PropRequestResponseInformation x)      = peW8 0x19 x
+  toByteString _ (PropRequestResponseInformation x)      = peW8 0x19 x
 
-  toByteString (PropResponseInformation x)             = peUTF8 0x1a x
+  toByteString _ (PropResponseInformation x)             = peUTF8 0x1a x
 
-  toByteString (PropServerReference x)                 = peUTF8 0x1c x
+  toByteString _ (PropServerReference x)                 = peUTF8 0x1c x
 
-  toByteString (PropReasonString x)                    = peUTF8 0x1f x
+  toByteString _ (PropReasonString x)                    = peUTF8 0x1f x
 
-  toByteString (PropReceiveMaximum x)                  = peW16 0x21 x
+  toByteString _ (PropReceiveMaximum x)                  = peW16 0x21 x
 
-  toByteString (PropTopicAliasMaximum x)               = peW16 0x22 x
+  toByteString _ (PropTopicAliasMaximum x)               = peW16 0x22 x
 
-  toByteString (PropTopicAlias x)                      = peW16 0x23 x
+  toByteString _ (PropTopicAlias x)                      = peW16 0x23 x
 
-  toByteString (PropMaximumQoS x)                      = peW8 0x24 x
+  toByteString _ (PropMaximumQoS x)                      = peW8 0x24 x
 
-  toByteString (PropRetainAvailable x)                 = peW8 0x25 x
+  toByteString _ (PropRetainAvailable x)                 = peW8 0x25 x
 
-  toByteString (PropUserProperty k v)                  = BL.singleton 0x26 <> encodeUTF8Pair k v
+  toByteString _ (PropUserProperty k v)                  = BL.singleton 0x26 <> encodeUTF8Pair k v
 
-  toByteString (PropMaximumPacketSize x)               = peW32 0x27 x
+  toByteString _ (PropMaximumPacketSize x)               = peW32 0x27 x
 
-  toByteString (PropWildcardSubscriptionAvailable x)   = peW8 0x28 x
+  toByteString _ (PropWildcardSubscriptionAvailable x)   = peW8 0x28 x
 
-  toByteString (PropSubscriptionIdentifierAvailable x) = peW8 0x29 x
+  toByteString _ (PropSubscriptionIdentifierAvailable x) = peW8 0x29 x
 
-  toByteString (PropSharedSubscriptionAvailable x)     = peW8 0x2a x
+  toByteString _ (PropSharedSubscriptionAvailable x)     = peW8 0x2a x
 
 parseProperty :: A.Parser Property
 parseProperty = do
@@ -254,8 +255,8 @@ parseProperty = do
 newtype Properties = Properties [Property] deriving(Eq, Show)
 
 instance ByteMe Properties where
-  toByteString (Properties l) = let b = (mconcat . map toByteString) l in
-                                  (BL.pack . encodeLength . fromEnum . BL.length) b <> b
+  toByteString p (Properties l) = let b = (mconcat . map (toByteString p)) l in
+                                    (BL.pack . encodeLength . fromEnum . BL.length) b <> b
 
 parseProperties :: A.Parser Properties
 parseProperties = do
@@ -271,7 +272,9 @@ parseProperties = do
 data ProtocolLevel = Protocol311
                    | Protocol50 deriving(Bounded, Enum, Eq, Show)
 
-instance ByteMe ProtocolLevel where toByteString _ = BL.singleton 4
+instance ByteMe ProtocolLevel where
+  toByteString _ Protocol311 = BL.singleton 4
+  toByteString _ Protocol50  = BL.singleton 5
 
 -- | An MQTT Will message.
 data LastWill = LastWill {
@@ -288,18 +291,17 @@ data ConnectRequest = ConnectRequest {
   , _cleanSession :: Bool
   , _keepAlive    :: Word16
   , _connID       :: BL.ByteString
-  , _connLvl      :: ProtocolLevel
   , _properties   :: Properties
   } deriving (Eq, Show)
 
 connectRequest :: ConnectRequest
 connectRequest = ConnectRequest{_username=Nothing, _password=Nothing, _lastWill=Nothing,
-                                _cleanSession=True, _keepAlive=300, _connID="", _connLvl=Protocol311,
+                                _cleanSession=True, _keepAlive=300, _connID="",
                                 _properties=Properties []}
 
 instance ByteMe ConnectRequest where
-  toByteString ConnectRequest{..} = BL.singleton 0x10
-                                    <> withLength (val _connLvl)
+  toByteString prot ConnectRequest{..} = BL.singleton 0x10
+                                         <> withLength (val prot)
     where
       val :: ProtocolLevel -> BL.ByteString
       val Protocol311 = "\NUL\EOTMQTT\EOT" -- MQTT + Protocol311
@@ -307,11 +309,11 @@ instance ByteMe ConnectRequest where
 
       val Protocol50 = "\NUL\EOTMQTT\ENQ" -- MQTT + Protocol50
                        <> common
-                       <> toByteString _properties
+                       <> toByteString prot _properties
 
       common = BL.singleton connBits
                <> encodeWord16 _keepAlive
-               <> toByteString _connID
+               <> toByteString prot _connID
                <> lwt _lastWill
                <> perhaps _username
                <> perhaps _password
@@ -328,11 +330,11 @@ instance ByteMe ConnectRequest where
 
       lwt :: Maybe LastWill -> BL.ByteString
       lwt Nothing = mempty
-      lwt (Just LastWill{..}) = toByteString _willTopic <> toByteString _willMsg
+      lwt (Just LastWill{..}) = toByteString prot _willTopic <> toByteString prot _willMsg
 
       perhaps :: Maybe BL.ByteString -> BL.ByteString
       perhaps Nothing  = ""
-      perhaps (Just s) = toByteString s
+      perhaps (Just s) = toByteString prot s
 
 data MQTTPkt = ConnPkt ConnectRequest
              | ConnACKPkt ConnACKFlags
@@ -351,20 +353,20 @@ data MQTTPkt = ConnPkt ConnectRequest
   deriving (Eq, Show)
 
 instance ByteMe MQTTPkt where
-  toByteString (ConnPkt x)        = toByteString x
-  toByteString (ConnACKPkt x)     = toByteString x
-  toByteString (PublishPkt x)     = toByteString x
-  toByteString (PubACKPkt x)      = toByteString x
-  toByteString (PubRELPkt x)      = toByteString x
-  toByteString (PubRECPkt x)      = toByteString x
-  toByteString (PubCOMPPkt x)     = toByteString x
-  toByteString (SubscribePkt x)   = toByteString x
-  toByteString (SubACKPkt x)      = toByteString x
-  toByteString (UnsubscribePkt x) = toByteString x
-  toByteString (UnsubACKPkt x)    = toByteString x
-  toByteString PingPkt            = "\192\NUL"
-  toByteString PongPkt            = "\208\NUL"
-  toByteString DisconnectPkt      = "\224\NUL"
+  toByteString p (ConnPkt x)        = toByteString p x
+  toByteString p (ConnACKPkt x)     = toByteString p x
+  toByteString p (PublishPkt x)     = toByteString p x
+  toByteString p (PubACKPkt x)      = toByteString p x
+  toByteString p (PubRELPkt x)      = toByteString p x
+  toByteString p (PubRECPkt x)      = toByteString p x
+  toByteString p (PubCOMPPkt x)     = toByteString p x
+  toByteString p (SubscribePkt x)   = toByteString p x
+  toByteString p (SubACKPkt x)      = toByteString p x
+  toByteString p (UnsubscribePkt x) = toByteString p x
+  toByteString p (UnsubACKPkt x)    = toByteString p x
+  toByteString _ PingPkt            = "\192\NUL"
+  toByteString _ PongPkt            = "\208\NUL"
+  toByteString _ DisconnectPkt      = "\224\NUL"
 
 parsePacket :: A.Parser MQTTPkt
 parsePacket = parseConnect <|> parseConnectACK
@@ -406,7 +408,6 @@ parseConnect = do
   pure $ ConnPkt ConnectRequest{_connID=cid, _username=u, _password=p,
                                 _lastWill=lwt, _keepAlive=keepAlive,
                                 _cleanSession=testBit connFlagBits 1,
-                                _connLvl=pl,
                                 _properties=props}
 
   where
@@ -455,11 +456,11 @@ connACKVal (InvalidConnACKRC x) = x
 data ConnACKFlags = ConnACKFlags Bool ConnACKRC Properties deriving (Eq, Show)
 
 instance ByteMe ConnACKFlags where
-  toBytes (ConnACKFlags sp rc (Properties [])) = [0x20, 2, boolBit sp, connACKVal rc]
-  toBytes (ConnACKFlags sp rc props) = let pbytes = toBytes props in
-                                         [0x20]
-                                         <> encodeVarInt (2 + length pbytes)
-                                         <>[ boolBit sp, connACKVal rc] <> pbytes
+  toBytes Protocol311 (ConnACKFlags sp rc _) = [0x20, 2, boolBit sp, connACKVal rc]
+  toBytes Protocol50 (ConnACKFlags sp rc props) = let pbytes = toBytes Protocol50 props in
+                                                    [0x20]
+                                                    <> encodeVarInt (2 + length pbytes)
+                                                    <>[ boolBit sp, connACKVal rc] <> pbytes
 
 parseConnectACK :: A.Parser MQTTPkt
 parseConnectACK = do
@@ -485,8 +486,8 @@ data PublishRequest = PublishRequest{
   } deriving(Eq, Show)
 
 instance ByteMe PublishRequest where
-  toByteString PublishRequest{..} = BL.singleton (0x30 .|. f)
-                                    <> withLength val
+  toByteString prot PublishRequest{..} = BL.singleton (0x30 .|. f)
+                                         <> withLength val
     where f = (db ≪ 3) .|. (qb ≪ 1) .|. rb
           db = boolBit _pubDup
           qb = qosW _pubQoS .&. 0x3
@@ -494,7 +495,7 @@ instance ByteMe PublishRequest where
           pktid
             | _pubQoS == QoS0 = mempty
             | otherwise = encodeWord16 _pubPktID
-          val = toByteString _pubTopic <> pktid <> _pubBody
+          val = toByteString prot _pubTopic <> pktid <> _pubBody
 
 parsePublish :: A.Parser MQTTPkt
 parsePublish = do
@@ -515,15 +516,15 @@ data SubscribeRequest = SubscribeRequest Word16 [(BL.ByteString, QoS)]
                       deriving(Eq, Show)
 
 instance ByteMe SubscribeRequest where
-  toByteString (SubscribeRequest pid sreq) =
+  toByteString prot (SubscribeRequest pid sreq) =
     BL.singleton 0x82
     <> withLength (encodeWord16 pid <> reqs)
-    where reqs = (BL.concat . map (\(bs,q) -> toByteString bs <> BL.singleton (qosW q))) sreq
+    where reqs = (BL.concat . map (\(bs,q) -> toByteString prot bs <> BL.singleton (qosW q))) sreq
 
 newtype PubACK = PubACK Word16 deriving(Eq, Show)
 
 instance ByteMe PubACK where
-  toByteString (PubACK pid) = BL.singleton 0x40 <> withLength (encodeWord16 pid)
+  toByteString _ (PubACK pid) = BL.singleton 0x40 <> withLength (encodeWord16 pid)
 
 parsePubACK :: A.Parser MQTTPkt
 parsePubACK = do
@@ -534,7 +535,7 @@ parsePubACK = do
 newtype PubREC = PubREC Word16 deriving(Eq, Show)
 
 instance ByteMe PubREC where
-  toByteString (PubREC pid) = BL.singleton 0x50 <> withLength (encodeWord16 pid)
+  toByteString _ (PubREC pid) = BL.singleton 0x50 <> withLength (encodeWord16 pid)
 
 parsePubREC :: A.Parser MQTTPkt
 parsePubREC = do
@@ -545,7 +546,7 @@ parsePubREC = do
 newtype PubREL = PubREL Word16 deriving(Eq, Show)
 
 instance ByteMe PubREL where
-  toByteString (PubREL pid) = BL.singleton 0x62 <> withLength (encodeWord16 pid)
+  toByteString _ (PubREL pid) = BL.singleton 0x62 <> withLength (encodeWord16 pid)
 
 parsePubREL :: A.Parser MQTTPkt
 parsePubREL = do
@@ -556,7 +557,7 @@ parsePubREL = do
 newtype PubCOMP = PubCOMP Word16 deriving(Eq, Show)
 
 instance ByteMe PubCOMP where
-  toByteString (PubCOMP pid) = BL.singleton 0x70 <> withLength (encodeWord16 pid)
+  toByteString _ (PubCOMP pid) = BL.singleton 0x70 <> withLength (encodeWord16 pid)
 
 parsePubCOMP :: A.Parser MQTTPkt
 parsePubCOMP = do
@@ -580,7 +581,7 @@ parseSubscribe = do
 data SubscribeResponse = SubscribeResponse Word16 [Maybe QoS] deriving (Eq, Show)
 
 instance ByteMe SubscribeResponse where
-  toByteString (SubscribeResponse pid sres) =
+  toByteString _ (SubscribeResponse pid sres) =
     BL.singleton 0x90 <> withLength (encodeWord16 pid <> BL.pack (b <$> sres))
 
     where
@@ -602,9 +603,9 @@ data UnsubscribeRequest = UnsubscribeRequest Word16 [BL.ByteString]
                         deriving(Eq, Show)
 
 instance ByteMe UnsubscribeRequest where
-  toByteString (UnsubscribeRequest pid sreq) =
+  toByteString prot (UnsubscribeRequest pid sreq) =
     BL.singleton 0xa2
-    <> withLength (encodeWord16 pid <> mconcat (toByteString <$> sreq))
+    <> withLength (encodeWord16 pid <> mconcat (toByteString prot <$> sreq))
 
 parseUnsubscribe :: A.Parser MQTTPkt
 parseUnsubscribe = do
@@ -621,7 +622,7 @@ parseUnsubscribe = do
 newtype UnsubscribeResponse = UnsubscribeResponse Word16 deriving(Eq, Show)
 
 instance ByteMe UnsubscribeResponse where
-  toByteString (UnsubscribeResponse pid) = BL.singleton 0xb0 <> withLength (encodeWord16 pid)
+  toByteString _ (UnsubscribeResponse pid) = BL.singleton 0xb0 <> withLength (encodeWord16 pid)
 
 parseUnsubACK :: A.Parser MQTTPkt
 parseUnsubACK = do

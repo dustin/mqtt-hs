@@ -43,7 +43,7 @@ testPacketRT = mapM_ tryParse [
   where
     tryParse s = do
       let (A.Done _ x) = A.parse parsePacket s
-      case A.parse parsePacket (toByteString x) of
+      case A.parse parsePacket (toByteString Protocol311 x) of
         f@(A.Fail _ _ _) -> assertFailure (show f)
         (A.Done _ x')    -> assertEqual (show s) x x'
 
@@ -61,17 +61,11 @@ instance Arbitrary ConnectRequest where
     cs <- arbitrary
     ka <- arbitrary
     lw <- arbitrary
-    pl <- arbitrary
-    props <- arbitraryProps pl
+    props <- arbitrary
 
     pure ConnectRequest{_username=u, _password=p, _lastWill=lw,
                         _cleanSession=cs, _keepAlive=ka, _connID=cid,
-                        _connLvl=pl, _properties=props}
-
-    where
-      arbitraryProps :: ProtocolLevel -> Gen Properties
-      arbitraryProps Protocol311 = pure $ Properties []
-      arbitraryProps Protocol50  = arbitrary
+                        _properties=props}
 
 mastr :: Gen (Maybe L.ByteString)
 mastr = fmap (L.fromStrict . BC.pack . getUnicodeString) <$> arbitrary
@@ -188,22 +182,36 @@ instance Arbitrary MQTTPkt where
   shrink (UnsubscribePkt x) = UnsubscribePkt <$> shrink x
   shrink _                  = []
 
-prop_PacketRT :: MQTTPkt -> QC.Property
-prop_PacketRT p = label (lab p) $ case A.parse parsePacket (toByteString p) of
-                                    (A.Fail _ _ _) -> False
-                                    (A.Done _ r)   -> r == p
+prop_PacketRT50 :: MQTTPkt -> QC.Property
+prop_PacketRT50 p = label (lab p) $ case A.parse parsePacket (toByteString Protocol50 p) of
+                                         (A.Fail _ _ _) -> False
+                                         (A.Done _ r)   -> r == p
 
   where lab x = let (s,_) = break (== ' ') . show $ x in s
 
+prop_PacketRT311 :: MQTTPkt -> QC.Property
+prop_PacketRT311 p =
+  noprops p ==>
+  label (lab p) $ case A.parse parsePacket (toByteString Protocol311 p) of
+                    (A.Fail _ _ _) -> False
+                    (A.Done _ r)   -> r == p
+
+  where lab x = let (s,_) = break (== ' ') . show $ x in s
+        noprops (ConnPkt (ConnectRequest{_properties=Properties []})) = True
+        noprops (ConnPkt _)                                           = False
+        noprops (ConnACKPkt (ConnACKFlags _ _ (Properties [])))       = True
+        noprops (ConnACKPkt _)                                        = False
+        noprops _                                                     = True
+
 prop_PropertyRT :: MT.Property -> QC.Property
-prop_PropertyRT p = label (lab p) $ case A.parse parseProperty (toByteString p) of
+prop_PropertyRT p = label (lab p) $ case A.parse parseProperty (toByteString Protocol50 p) of
                                     (A.Fail _ _ _) -> False
                                     (A.Done _ r)   -> r == p
 
   where lab x = let (s,_) = break (== ' ') . show $ x in s
 
 prop_PropertiesRT :: Properties -> Bool
-prop_PropertiesRT p = case A.parse parseProperties (toByteString p) of
+prop_PropertiesRT p = case A.parse parseProperties (toByteString Protocol50 p) of
                         (A.Fail _ _ _) -> False
                         (A.Done _ r)   -> r == p
 
@@ -225,7 +233,8 @@ tests = [
   localOption (QC.QuickCheckTests 10000) $ testProperty "header length rt (parser)" prop_rtLengthParser,
 
   testCase "rt some packets" testPacketRT,
-  localOption (QC.QuickCheckTests 1000) $ testProperty "rt packets" prop_PacketRT,
+  localOption (QC.QuickCheckTests 1000) $ testProperty "rt packets 3.11" (prop_PacketRT311),
+  localOption (QC.QuickCheckTests 1000) $ testProperty "rt packets 5.0" (prop_PacketRT50),
   localOption (QC.QuickCheckTests 1000) $ testProperty "rt property" prop_PropertyRT,
   testProperty "rt properties" prop_PropertiesRT,
 

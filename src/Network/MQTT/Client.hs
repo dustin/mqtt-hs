@@ -92,6 +92,7 @@ data MQTTConfig = MQTTConfig{
   , _cleanSession :: Bool -- ^ False if a session should be reused.
   , _lwt          :: Maybe LastWill -- ^ LastWill message to be sent on client disconnect.
   , _msgCB        :: Maybe (MQTTClient -> Topic -> BL.ByteString -> IO ()) -- ^ Callback for incoming messages.
+  , _protLvl      :: ProtocolLevel
   }
 
 -- | A default MQTTConfig.  A _connID /should/ be provided by the client in the returned config,
@@ -100,7 +101,8 @@ mqttConfig :: MQTTConfig
 mqttConfig = MQTTConfig{_hostname="localhost", _port=1883, _connID="haskell-mqtt",
                         _username=Nothing, _password=Nothing,
                         _cleanSession=True, _lwt=Nothing,
-                        _msgCB=Nothing}
+                        _msgCB=Nothing,
+                        _protLvl=Protocol311}
 
 
 -- | Connect to an MQTT server by URI.  Currently only mqtt and mqtts
@@ -180,7 +182,7 @@ runClientAppData mkconn MQTTConfig{..} = do
                                  T._username=BC.pack <$> _username,
                                  T._password=BC.pack <$> _password,
                                  T._cleanSession=_cleanSession}
-        yield (BL.toStrict $ toByteString req) .| appSink ad
+        yield (BL.toStrict $ toByteString _protLvl req) .| appSink ad
         (ConnACKPkt (ConnACKFlags _ val _)) <- appSource ad .| sinkParser parsePacket
         case val of
           ConnAccepted -> pure ()
@@ -206,7 +208,7 @@ runClientAppData mkconn MQTTConfig{..} = do
       where
         processOut = runConduit $
           C.repeatM (liftIO (atomically $ readTChan _ch))
-          .| C.map (BL.toStrict . toByteString)
+          .| C.map (BL.toStrict . toByteString _protLvl)
           .| appSink ad
 
         doPing = forever $ threadDelay pingPeriod >> sendPacketIO c PingPkt
