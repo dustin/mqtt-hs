@@ -20,12 +20,14 @@ import           Network.MQTT.Types              as MT
 newtype SizeT = SizeT Int deriving(Eq, Show)
 
 instance Arbitrary SizeT where
-  arbitrary = SizeT <$> choose (0, 268435455)
+  arbitrary = SizeT <$> oneof [ choose (0, 127),
+                                choose (128, 16383),
+                                choose (16384, 2097151),
+                                choose (2097152, 268435455)]
 
 prop_rtLengthParser :: SizeT -> QC.Property
 prop_rtLengthParser (SizeT x) =
   label (show (length e) <> "B") $
-  cover 20 (length e > 1) "multi-byte" $
   d e == x
 
   where e = encodeLength x
