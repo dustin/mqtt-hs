@@ -17,11 +17,13 @@ module Network.MQTT.Types (
   ConnectRequest(..), connectRequest, ConnACKFlags(..), ConnACKRC(..),
   PublishRequest(..), PubACK(..), PubREC(..), PubREL(..), PubCOMP(..),
   ProtocolLevel(..), Property(..), Properties(..),
-  SubscribeRequest(..), SubscribeResponse(..),
+  SubscribeRequest(..), SubOptions(..), defaultSubOptions, SubscribeResponse(..),
+  RetainHandling(..),
   UnsubscribeRequest(..), UnsubscribeResponse(..),
   parsePacket, ByteMe(toByteString),
   -- for testing
-  encodeLength, parseHdrLen, connACKRC, parseProperty, parseProperties
+  encodeLength, parseHdrLen, connACKRC, parseProperty, parseProperties,
+  parseSubOptions
   ) where
 
 import           Control.Applicative             (liftA2, (<|>))
@@ -261,11 +263,13 @@ instance Semigroup Properties where
   (Properties a) <> (Properties b) = Properties (a <> b)
 
 instance ByteMe Properties where
+  toByteString Protocol311 _ = mempty
   toByteString p (Properties l) = let b = (mconcat . map (toByteString p)) l in
                                     (BL.pack . encodeLength . fromEnum . BL.length) b <> b
 
-parseProperties :: A.Parser Properties
-parseProperties = do
+parseProperties :: ProtocolLevel -> A.Parser Properties
+parseProperties Protocol311 = pure mempty
+parseProperties Protocol50 = do
   len <- decodeVarInt
   props <- A.take len
   Properties <$> subs props
@@ -377,10 +381,10 @@ instance ByteMe MQTTPkt where
   toByteString _ DisconnectPkt      = "\224\NUL"
 
 parsePacket :: ProtocolLevel -> A.Parser MQTTPkt
-parsePacket _ = parseConnect <|> parseConnectACK
+parsePacket p = parseConnect <|> parseConnectACK
                 <|> parsePublish <|> parsePubACK
                 <|> parsePubREC <|> parsePubREL <|> parsePubCOMP
-                <|> parseSubscribe <|> parseSubACK
+                <|> parseSubscribe p <|> parseSubACK p
                 <|> parseUnsubscribe <|> parseUnsubACK
                 <|> PingPkt <$ A.string "\192\NUL" <|> PongPkt <$ A.string "\208\NUL"
                 <|> DisconnectPkt <$ A.string "\224\NUL"
@@ -406,7 +410,7 @@ parseConnect = do
 
   connFlagBits <- A.anyWord8
   keepAlive <- aWord16
-  props <- parseProps pl
+  props <- parseProperties pl
   cid <- aString
   lwt <- parseLwt connFlagBits
   u <- mstr (testBit connFlagBits 7)
@@ -424,9 +428,6 @@ parseConnect = do
 
     parseLevel = A.string "\EOT" $> Protocol311
                  <|> A.string "\ENQ" $> Protocol50
-
-    parseProps Protocol311 = pure mempty
-    parseProps Protocol50  = parseProperties
 
     parseLwt bits
       | testBit bits 2 = do
@@ -463,11 +464,10 @@ connACKVal (InvalidConnACKRC x) = x
 data ConnACKFlags = ConnACKFlags Bool ConnACKRC Properties deriving (Eq, Show)
 
 instance ByteMe ConnACKFlags where
-  toBytes Protocol311 (ConnACKFlags sp rc _) = [0x20, 2, boolBit sp, connACKVal rc]
-  toBytes Protocol50 (ConnACKFlags sp rc props) = let pbytes = toBytes Protocol50 props in
-                                                    [0x20]
-                                                    <> encodeVarInt (2 + length pbytes)
-                                                    <>[ boolBit sp, connACKVal rc] <> pbytes
+  toBytes prot (ConnACKFlags sp rc props) = let pbytes = toBytes prot props in
+                                              [0x20]
+                                              <> encodeVarInt (2 + length pbytes)
+                                              <>[ boolBit sp, connACKVal rc] <> pbytes
 
 parseConnectACK :: A.Parser MQTTPkt
 parseConnectACK = do
@@ -476,12 +476,8 @@ parseConnectACK = do
   when (rl < 2) $ fail "conn ack packet too short"
   ackFlags <- A.anyWord8
   rc <- A.anyWord8
-  p <- props rl
+  p <- parseProperties (if rl == 2 then Protocol311 else Protocol50)
   pure $ ConnACKPkt $ ConnACKFlags (testBit ackFlags 0) (connACKRC rc) p
-
-    where
-      props 2 = pure mempty
-      props _ = parseProperties
 
 data PublishRequest = PublishRequest{
   _pubDup      :: Bool
@@ -519,14 +515,61 @@ parsePublish = do
   where qlen QoS0 = 0
         qlen _    = 2
 
-data SubscribeRequest = SubscribeRequest Word16 [(BL.ByteString, QoS)]
+data RetainHandling = SendOnSubscribe | SendOnSubscribeNew | DoNotSendOnSubscribe
+  deriving (Eq, Show, Bounded, Enum)
+
+data SubOptions = SubOptions{
+  _retainHandling      :: RetainHandling
+  , _retainAsPublished :: Bool
+  , _noLocal           :: Bool
+  , _subQoS            :: QoS
+  } deriving(Eq, Show)
+
+defaultSubOptions :: SubOptions
+defaultSubOptions = SubOptions{_retainHandling=SendOnSubscribe,
+                               _retainAsPublished=False,
+                               _noLocal=False,
+                               _subQoS=QoS0}
+
+instance ByteMe SubOptions where
+  toByteString _ SubOptions{..} = BL.singleton (rh .|. rap .|. nl .|. q)
+
+    where
+      rh = case _retainHandling of
+             SendOnSubscribeNew   -> 0x10
+             DoNotSendOnSubscribe -> 0x20
+             _                    -> 0
+      rap
+        | _retainAsPublished = 0x08
+        | otherwise = 0
+      nl
+        | _noLocal = 0x04
+        | otherwise = 0
+      q = qosW _subQoS
+
+parseSubOptions :: A.Parser SubOptions
+parseSubOptions = do
+  w <- A.anyWord8
+  let rh = case w ≫ 4 of
+             1 -> SendOnSubscribeNew
+             2 -> DoNotSendOnSubscribe
+             _ -> SendOnSubscribe
+
+  pure $ SubOptions{
+    _retainHandling=rh,
+    _retainAsPublished=testBit w 3,
+    _noLocal=testBit w 2,
+    _subQoS=wQos (w .&. 0x3)}
+
+subOptionsBytes :: ProtocolLevel -> [(BL.ByteString, SubOptions)] -> BL.ByteString
+subOptionsBytes prot = (BL.concat . map (\(bs,so) -> toByteString prot bs <> toByteString prot so))
+
+data SubscribeRequest = SubscribeRequest Word16 [(BL.ByteString, SubOptions)] Properties
                       deriving(Eq, Show)
 
 instance ByteMe SubscribeRequest where
-  toByteString prot (SubscribeRequest pid sreq) =
-    BL.singleton 0x82
-    <> withLength (encodeWord16 pid <> reqs)
-    where reqs = (BL.concat . map (\(bs,q) -> toByteString prot bs <> BL.singleton (qosW q))) sreq
+  toByteString prot (SubscribeRequest pid sreq props) =
+    BL.singleton 0x82 <> withLength (encodeWord16 pid <> toByteString prot props <> subOptionsBytes prot sreq)
 
 newtype PubACK = PubACK Word16 deriving(Eq, Show)
 
@@ -572,35 +615,44 @@ parsePubCOMP = do
   _ <- parseHdrLen
   PubCOMPPkt . PubCOMP <$> aWord16
 
-parseSubscribe :: A.Parser MQTTPkt
-parseSubscribe = do
+parseSubscribe :: ProtocolLevel -> A.Parser MQTTPkt
+parseSubscribe prot = do
   _ <- A.word8 0x82
   hl <- parseHdrLen
   pid <- aWord16
-  content <- A.take (fromEnum hl - 2)
-  SubscribePkt . SubscribeRequest pid <$> parseSubs content
+  props <- parseProperties prot
+  content <- A.take (fromEnum hl - 2 - propLen prot props)
+  subs <- parseSubs content
+  pure $ SubscribePkt (SubscribeRequest pid subs props)
+
     where
       parseSubs l = case A.parseOnly (A.many1 parseSub) l of
                       Left x  -> fail x
                       Right x -> pure x
-      parseSub = liftA2 (,) aString (wQos <$> A.anyWord8)
+      parseSub = liftA2 (,) aString parseSubOptions
 
-data SubscribeResponse = SubscribeResponse Word16 [Maybe QoS] deriving (Eq, Show)
+data SubscribeResponse = SubscribeResponse Word16 [Maybe QoS] Properties deriving (Eq, Show)
 
 instance ByteMe SubscribeResponse where
-  toByteString _ (SubscribeResponse pid sres) =
-    BL.singleton 0x90 <> withLength (encodeWord16 pid <> BL.pack (b <$> sres))
+  toByteString prot (SubscribeResponse pid sres props) =
+    BL.singleton 0x90 <> withLength (encodeWord16 pid <> toByteString prot props <> BL.pack (b <$> sres))
 
     where
       b Nothing  = 0x80
       b (Just q) = qosW q
 
-parseSubACK :: A.Parser MQTTPkt
-parseSubACK = do
+propLen :: ProtocolLevel -> Properties -> Int
+propLen Protocol311 _    = 0
+propLen prot props = fromEnum $ BL.length (toByteString prot props)
+
+parseSubACK :: ProtocolLevel -> A.Parser MQTTPkt
+parseSubACK prot = do
   _ <- A.word8 0x90
   hl <- parseHdrLen
   pid <- aWord16
-  SubACKPkt . SubscribeResponse pid <$> replicateM (hl-2) (p <$> A.anyWord8)
+  props <- parseProperties prot
+  res <- replicateM (hl-2 - propLen prot props) (p <$> A.anyWord8)
+  pure $ SubACKPkt (SubscribeResponse pid res props)
 
   where
     p 0x80 = Nothing

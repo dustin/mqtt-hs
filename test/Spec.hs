@@ -107,15 +107,22 @@ instance Arbitrary PubCOMP where
   arbitrary = PubCOMP <$> arbitrary
 
 instance Arbitrary SubscribeRequest where
-  arbitrary = arbitrary >>= \pid -> choose (1,11) >>= \n -> SubscribeRequest pid <$> vectorOf n sub
+  arbitrary = arbitrary >>= \pid -> choose (1,11) >>= \n -> SubscribeRequest pid <$> vectorOf n sub <*> arbitrary
     where sub = liftA2 (,) astr arbitrary
 
+  shrink (SubscribeRequest w s (Properties p)) =
+    if length s < 2 then []
+    else [SubscribeRequest w (take 1 s) (Properties p') | p' <- shrinkList (:[]) p, length p > 1]
+
+instance Arbitrary SubOptions where
+  arbitrary = SubOptions <$> arbitraryBoundedEnum <*> arbitrary <*> arbitrary <*> arbitrary
+
 instance Arbitrary SubscribeResponse where
-  arbitrary = arbitrary >>= \pid -> choose (1,11) >>= \n -> SubscribeResponse pid <$> vectorOf n sub
+  arbitrary = arbitrary >>= \pid -> choose (1,11) >>= \n -> SubscribeResponse pid <$> vectorOf n sub <*> arbitrary
     where sub = oneof (pure <$> [Just QoS0, Just QoS1, Just QoS2, Nothing])
-  shrink (SubscribeResponse pid l)
+  shrink (SubscribeResponse pid l props)
     | length l == 1 = []
-    | otherwise = [SubscribeResponse pid sl | sl <- shrinkList (:[]) l, length sl > 0]
+    | otherwise = [SubscribeResponse pid sl props | sl <- shrinkList (:[]) l, length sl > 0]
 
 instance Arbitrary UnsubscribeRequest where
   arbitrary = arbitrary >>= \pid -> choose (1,11) >>= \n -> UnsubscribeRequest pid <$> vectorOf n astr
@@ -182,6 +189,7 @@ instance Arbitrary MQTTPkt where
   shrink (SubACKPkt x)      = SubACKPkt <$> shrink x
   shrink (ConnACKPkt x)     = ConnACKPkt <$> shrink x
   shrink (UnsubscribePkt x) = UnsubscribePkt <$> shrink x
+  shrink (SubscribePkt x)   = SubscribePkt <$> shrink x
   shrink _                  = []
 
 prop_PacketRT50 :: MQTTPkt -> QC.Property
@@ -203,6 +211,9 @@ prop_PacketRT311 p =
     v311mask :: MQTTPkt -> MQTTPkt
     v311mask (ConnPkt c) = ConnPkt (c{_properties=Properties []})
     v311mask (ConnACKPkt (ConnACKFlags a b _)) = ConnACKPkt (ConnACKFlags a b (Properties []))
+    v311mask (SubscribePkt (SubscribeRequest p s _)) = SubscribePkt (SubscribeRequest p c mempty)
+      where c = map (\(k,SubOptions{..}) -> (k,defaultSubOptions{_subQoS=_subQoS})) s
+    v311mask (SubACKPkt (SubscribeResponse p s _)) = SubACKPkt (SubscribeResponse p s mempty)
     v311mask x = x
 
 prop_PropertyRT :: MT.Property -> QC.Property
@@ -212,8 +223,13 @@ prop_PropertyRT p = label (lab p) $ case A.parse parseProperty (toByteString Pro
 
   where lab x = let (s,_) = break (== ' ') . show $ x in s
 
+prop_SubOptionsRT :: SubOptions -> Bool
+prop_SubOptionsRT o = case A.parse parseSubOptions (toByteString Protocol50 o) of
+                      (A.Fail _ _ _) -> False
+                      (A.Done _ r)   -> r == o
+
 prop_PropertiesRT :: Properties -> Bool
-prop_PropertiesRT p = case A.parse parseProperties (toByteString Protocol50 p) of
+prop_PropertiesRT p = case A.parse (parseProperties Protocol50) (toByteString Protocol50 p) of
                         (A.Fail _ _ _) -> False
                         (A.Done _ r)   -> r == p
 
@@ -239,6 +255,7 @@ tests = [
   localOption (QC.QuickCheckTests 1000) $ testProperty "rt packets 5.0" (prop_PacketRT50),
   localOption (QC.QuickCheckTests 1000) $ testProperty "rt property" prop_PropertyRT,
   testProperty "rt properties" prop_PropertiesRT,
+  testProperty "sub options" prop_SubOptionsRT,
 
   testGroup "topic matching" testTopicMatching
   ]

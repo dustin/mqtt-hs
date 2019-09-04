@@ -10,12 +10,13 @@ import           Network.MQTT.Client
 
 main :: IO ()
 main = do
-  mc <- runClient mqttConfig{_hostname="localhost", _port=1883, _connID="hasqttl",
+  mc <- runClient mqttConfig{_hostname="localhost", _port=1883, _connID="hasq",
                              -- _cleanSession=False,
-                             _lwt=Just $ mkLWT "tmp/haskquit" "bye for now" False,
-                             _msgCB=Just showme}
+                             -- _lwt=Just $ mkLWT "tmp/haskquit" "bye for now" False,
+                             _msgCB=Just showme, _protLvl=Protocol50,
+                             _connProps=Properties [PropReceiveMaximum 20]}
   putStrLn "connected!"
-  print =<< subscribe mc [("oro/#", QoS0), ("tmp/#", QoS2)]
+  print =<< subscribe mc [("oro/#", defaultSubOptions), ("tmp/#", defaultSubOptions{_subQoS=QoS2})]
   p <- async $ forever $ publish mc "tmp/mqtths" "hi from haskell" False >> threadDelay 10000000
 
   putStrLn "Publishing at QoS > 0"

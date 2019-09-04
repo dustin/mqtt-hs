@@ -16,7 +16,7 @@ An MQTT protocol client, based on the 3.1.1 specification:
 module Network.MQTT.Client (
   -- * Configuring the client.
   MQTTConfig(..), MQTTClient, QoS(..), Topic, mqttConfig,  mkLWT, LastWill(..),
-  ProtocolLevel(..), Properties(..), Property(..),
+  ProtocolLevel(..), Properties(..), Property(..), SubOptions(..), defaultSubOptions,
   -- * Running and waiting for the client.
   runClient, runClientTLS, waitForClient,
   connectURI,
@@ -244,7 +244,7 @@ dispatch :: MQTTClient -> TChan Bool -> MQTTPkt -> IO ()
 dispatch c@MQTTClient{..} pch pkt =
   case pkt of
     (PublishPkt p)                        -> pubMachine p
-    (SubACKPkt (SubscribeResponse i _))   -> delegate DSubACK i
+    (SubACKPkt (SubscribeResponse i _ _)) -> delegate DSubACK i
     (UnsubACKPkt (UnsubscribeResponse i)) -> delegate DUnsubACK i
     (PubACKPkt (PubACK i))                -> delegate DPubACK i
     (PubRECPkt (PubREC i))                -> delegate DPubREC i
@@ -334,10 +334,10 @@ sendAndWait c@MQTTClient{..} dt f = do
 
 -- | Subscribe to a list of topic filters with their respective QoSes.
 -- The accepted QoSes are returned in the same order as requested.
-subscribe :: MQTTClient -> [(Filter, QoS)] -> IO [Maybe QoS]
+subscribe :: MQTTClient -> [(Filter, SubOptions)] -> IO [Maybe QoS]
 subscribe c@MQTTClient{..} ls = do
-  r <- sendAndWait c DSubACK (\pid -> SubscribePkt $ SubscribeRequest pid ls')
-  let (SubACKPkt (SubscribeResponse _ rs)) = r
+  r <- sendAndWait c DSubACK (\pid -> SubscribePkt $ SubscribeRequest pid ls' mempty)
+  let (SubACKPkt (SubscribeResponse _ rs props)) = r
   pure rs
 
     where ls' = map (\(s, i) -> (textToBL s, i)) ls
