@@ -186,7 +186,7 @@ runClientAppData mkconn MQTTConfig{..} = do
                                  T._cleanSession=_cleanSession,
                                  T._properties=_connProps}
         yield (BL.toStrict $ toByteString _protLvl req) .| appSink ad
-        (ConnACKPkt (ConnACKFlags _ val _)) <- appSource ad .| sinkParser parsePacket
+        (ConnACKPkt (ConnACKFlags _ val _)) <- appSource ad .| sinkParser (parsePacket _protLvl)
         case val of
           ConnAccepted -> pure ()
           x            -> fail (show x)
@@ -205,7 +205,7 @@ runClientAppData mkconn MQTTConfig{..} = do
         writeTVar _st Connected
 
       runConduit $ appSource ad
-        .| conduitParser parsePacket
+        .| conduitParser (parsePacket _protLvl)
         .| C.mapM_ (\(_,x) -> liftIO (dispatch c pch x))
 
       where

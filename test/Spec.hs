@@ -44,8 +44,8 @@ testPacketRT = mapM_ tryParse [
 
   where
     tryParse s = do
-      let (A.Done _ x) = A.parse parsePacket s
-      case A.parse parsePacket (toByteString Protocol311 x) of
+      let (A.Done _ x) = A.parse (parsePacket Protocol311) s
+      case A.parse (parsePacket Protocol311) (toByteString Protocol311 x) of
         f@(A.Fail _ _ _) -> assertFailure (show f)
         (A.Done _ x')    -> assertEqual (show s) x x'
 
@@ -185,7 +185,7 @@ instance Arbitrary MQTTPkt where
   shrink _                  = []
 
 prop_PacketRT50 :: MQTTPkt -> QC.Property
-prop_PacketRT50 p = label (lab p) $ case A.parse parsePacket (toByteString Protocol50 p) of
+prop_PacketRT50 p = label (lab p) $ case A.parse (parsePacket Protocol50) (toByteString Protocol50 p) of
                                          (A.Fail _ _ _) -> False
                                          (A.Done _ r)   -> r == p
 
@@ -194,7 +194,7 @@ prop_PacketRT50 p = label (lab p) $ case A.parse parsePacket (toByteString Proto
 prop_PacketRT311 :: MQTTPkt -> QC.Property
 prop_PacketRT311 p =
   let p' = v311mask p in
-    label (lab p') $ case A.parse parsePacket (toByteString Protocol311 p') of
+    label (lab p') $ case A.parse (parsePacket Protocol311) (toByteString Protocol311 p') of
                       (A.Fail _ _ _) -> False
                       (A.Done _ r)   -> r == p'
 

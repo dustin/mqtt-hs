@@ -376,14 +376,14 @@ instance ByteMe MQTTPkt where
   toByteString _ PongPkt            = "\208\NUL"
   toByteString _ DisconnectPkt      = "\224\NUL"
 
-parsePacket :: A.Parser MQTTPkt
-parsePacket = parseConnect <|> parseConnectACK
-              <|> parsePublish <|> parsePubACK
-              <|> parsePubREC <|> parsePubREL <|> parsePubCOMP
-              <|> parseSubscribe <|> parseSubACK
-              <|> parseUnsubscribe <|> parseUnsubACK
-              <|> PingPkt <$ A.string "\192\NUL" <|> PongPkt <$ A.string "\208\NUL"
-              <|> DisconnectPkt <$ A.string "\224\NUL"
+parsePacket :: ProtocolLevel -> A.Parser MQTTPkt
+parsePacket _ = parseConnect <|> parseConnectACK
+                <|> parsePublish <|> parsePubACK
+                <|> parsePubREC <|> parsePubREL <|> parsePubCOMP
+                <|> parseSubscribe <|> parseSubACK
+                <|> parseUnsubscribe <|> parseUnsubACK
+                <|> PingPkt <$ A.string "\192\NUL" <|> PongPkt <$ A.string "\208\NUL"
+                <|> DisconnectPkt <$ A.string "\224\NUL"
 
 aWord16 :: A.Parser Word16
 aWord16 = anyWord16be
