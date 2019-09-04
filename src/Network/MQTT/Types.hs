@@ -305,19 +305,21 @@ instance ByteMe ConnectRequest where
     where
       val :: ProtocolLevel -> BL.ByteString
       val Protocol311 = "\NUL\EOTMQTT\EOT" -- MQTT + Protocol311
-                        <> common
+                        <> BL.singleton connBits
+                        <> encodeWord16 _keepAlive
+                        <> toByteString prot _connID
+                        <> lwt _lastWill
+                        <> perhaps _username
+                        <> perhaps _password
 
       val Protocol50 = "\NUL\EOTMQTT\ENQ" -- MQTT + Protocol50
-                       <> common
+                       <> BL.singleton connBits
+                       <> encodeWord16 _keepAlive
                        <> toByteString prot _properties
-
-      common = BL.singleton connBits
-               <> encodeWord16 _keepAlive
-               <> toByteString prot _connID
-               <> lwt _lastWill
-               <> perhaps _username
-               <> perhaps _password
-
+                       <> toByteString prot _connID
+                       <> lwt _lastWill
+                       <> perhaps _username
+                       <> perhaps _password
 
       connBits = hasu .|. hasp .|. willBits .|. clean
         where
@@ -398,12 +400,11 @@ parseConnect = do
 
   connFlagBits <- A.anyWord8
   keepAlive <- aWord16
+  props <- parseProps pl
   cid <- aString
   lwt <- parseLwt connFlagBits
   u <- mstr (testBit connFlagBits 7)
   p <- mstr (testBit connFlagBits 6)
-
-  props <- parseProps pl
 
   pure $ ConnPkt ConnectRequest{_connID=cid, _username=u, _password=p,
                                 _lastWill=lwt, _keepAlive=keepAlive,
