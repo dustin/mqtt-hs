@@ -348,20 +348,23 @@ instance ByteMe ConnectRequest where
       perhaps Nothing  = ""
       perhaps (Just s) = toByteString prot s
 
-data MQTTPkt = ConnPkt ConnectRequest
-             | ConnACKPkt ConnACKFlags
+
+-- TODO:  AUTH
+
+data MQTTPkt = ConnPkt ConnectRequest            -- TODO: will props
+             | ConnACKPkt ConnACKFlags           -- TODO: capture props
              | PublishPkt PublishRequest
-             | PubACKPkt PubACK
-             | PubRECPkt PubREC
-             | PubRELPkt PubREL
-             | PubCOMPPkt PubCOMP
+             | PubACKPkt PubACK                  -- TODO: props
+             | PubRECPkt PubREC                  -- TODO: props
+             | PubRELPkt PubREL                  -- TODO: props
+             | PubCOMPPkt PubCOMP                -- TODO: props
              | SubscribePkt SubscribeRequest
-             | SubACKPkt SubscribeResponse
-             | UnsubscribePkt UnsubscribeRequest
-             | UnsubACKPkt UnsubscribeResponse
+             | SubACKPkt SubscribeResponse       -- TODO: return props
+             | UnsubscribePkt UnsubscribeRequest -- TODO: props
+             | UnsubACKPkt UnsubscribeResponse   -- TODO: props
              | PingPkt
              | PongPkt
-             | DisconnectPkt
+             | DisconnectPkt                     -- TODO: props
   deriving (Eq, Show)
 
 instance ByteMe MQTTPkt where
