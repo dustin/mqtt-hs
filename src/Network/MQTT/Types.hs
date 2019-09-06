@@ -382,7 +382,7 @@ instance ByteMe MQTTPkt where
 
 parsePacket :: ProtocolLevel -> A.Parser MQTTPkt
 parsePacket p = parseConnect <|> parseConnectACK
-                <|> parsePublish <|> parsePubACK
+                <|> parsePublish p <|> parsePubACK
                 <|> parsePubREC <|> parsePubREL <|> parsePubCOMP
                 <|> parseSubscribe p <|> parseSubACK p
                 <|> parseUnsubscribe <|> parseUnsubACK
@@ -486,6 +486,7 @@ data PublishRequest = PublishRequest{
   , _pubTopic  :: BL.ByteString
   , _pubPktID  :: Word16
   , _pubBody   :: BL.ByteString
+  , _pubProps  :: Properties
   } deriving(Eq, Show)
 
 instance ByteMe PublishRequest where
@@ -498,10 +499,10 @@ instance ByteMe PublishRequest where
           pktid
             | _pubQoS == QoS0 = mempty
             | otherwise = encodeWord16 _pubPktID
-          val = toByteString prot _pubTopic <> pktid <> _pubBody
+          val = toByteString prot _pubTopic <> pktid <> toByteString prot _pubProps <> _pubBody
 
-parsePublish :: A.Parser MQTTPkt
-parsePublish = do
+parsePublish :: ProtocolLevel -> A.Parser MQTTPkt
+parsePublish prot = do
   w <- A.satisfy (\x -> x .&. 0xf0 == 0x30)
   plen <- parseHdrLen
   let _pubDup = w .&. 0x8 == 0x8
@@ -509,7 +510,9 @@ parsePublish = do
       _pubRetain = w .&. 1 == 1
   _pubTopic <- aString
   _pubPktID <- if _pubQoS == QoS0 then pure 0 else aWord16
-  _pubBody <- BL.fromStrict <$> A.take (plen - (fromEnum $ BL.length _pubTopic) - 2 - qlen _pubQoS)
+  _pubProps <- parseProperties prot
+  _pubBody <- BL.fromStrict <$> A.take (plen - (fromEnum $ BL.length _pubTopic) - 2
+                                        - qlen _pubQoS - propLen prot _pubProps )
   pure $ PublishPkt PublishRequest{..}
 
   where qlen QoS0 = 0
@@ -642,8 +645,8 @@ instance ByteMe SubscribeResponse where
       b (Just q) = qosW q
 
 propLen :: ProtocolLevel -> Properties -> Int
-propLen Protocol311 _    = 0
-propLen prot props = fromEnum $ BL.length (toByteString prot props)
+propLen Protocol311 _ = 0
+propLen prot props    = fromEnum $ BL.length (toByteString prot props)
 
 parseSubACK :: ProtocolLevel -> A.Parser MQTTPkt
 parseSubACK prot = do

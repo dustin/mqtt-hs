@@ -92,6 +92,7 @@ instance Arbitrary PublishRequest where
     _pubTopic <- astr
     _pubPktID <- if _pubQoS == QoS0 then pure 0 else arbitrary
     _pubBody <- astr
+    _pubProps <- arbitrary
     pure PublishRequest{..}
 
 instance Arbitrary PubACK where
@@ -214,6 +215,7 @@ prop_PacketRT311 p =
     v311mask (SubscribePkt (SubscribeRequest p s _)) = SubscribePkt (SubscribeRequest p c mempty)
       where c = map (\(k,SubOptions{..}) -> (k,defaultSubOptions{_subQoS=_subQoS})) s
     v311mask (SubACKPkt (SubscribeResponse p s _)) = SubACKPkt (SubscribeResponse p s mempty)
+    v311mask (PublishPkt req) = PublishPkt req{_pubProps=mempty}
     v311mask x = x
 
 prop_PropertyRT :: MT.Property -> QC.Property

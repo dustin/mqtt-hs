@@ -20,7 +20,10 @@ main = do
   p <- async $ forever $ publish mc "tmp/mqtths" "hi from haskell" False >> threadDelay 10000000
 
   putStrLn "Publishing at QoS > 0"
-  publishq mc "tmp/q" "this message is at QoS 2" False QoS2
+  publishq mc "tmp/q" "this message is at QoS 2" True QoS2 (Properties [
+                                                               PropUserProperty "hi" "there",
+                                                               PropMessageExpiryInterval 30,
+                                                               PropContentType "text/plain"])
   putStrLn "Published!"
 
   print =<< waitForClient mc

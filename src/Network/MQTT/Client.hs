@@ -353,16 +353,17 @@ publish :: MQTTClient
         -> BL.ByteString -- ^ Message body
         -> Bool          -- ^ Retain flag
         -> IO ()
-publish c t m r = void $ publishq c t m r QoS0
+publish c t m r = void $ publishq c t m r QoS0 mempty
 
--- | Publish a message with the specified QoS.
+-- | Publish a message with the specified QoS and Properties list.
 publishq :: MQTTClient
          -> Topic         -- ^ Topic
          -> BL.ByteString -- ^ Message body
          -> Bool          -- ^ Retain flag
          -> QoS           -- ^ QoS
+         -> Properties    -- ^ Properties
          -> IO ()
-publishq c t m r q = do
+publishq c t m r q props = do
   (ch,pid) <- atomically $ reservePktID c types
   E.finally (publishAndWait ch pid q) (atomically $ releasePktIDs c [(t',pid) | t' <- types])
 
@@ -382,7 +383,8 @@ publishq c t m r q = do
                         _pubPktID = pid,
                         _pubRetain = r,
                         _pubTopic = textToBL t,
-                        _pubBody = m})
+                        _pubBody = m,
+                        _pubProps = props})
 
       satisfyQoS p ch pid
         | q == QoS0 = pure ()
