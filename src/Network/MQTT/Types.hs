@@ -136,7 +136,7 @@ instance ByteMe ConnectRequest where
           clean = boolBit _cleanSession ≪ 1
           willBits = case _lastWill of
                        Nothing -> 0
-                       Just LastWill{..} -> 4 .|. ((qosW _willQoS .&. 0x3) ≪ 4) .|. (boolBit _willRetain ≪ 5)
+                       Just LastWill{..} -> 4 .|. ((qosW _willQoS .&. 0x3) ≪ 3) .|. (boolBit _willRetain ≪ 5)
 
       lwt :: Maybe LastWill -> BL.ByteString
       lwt Nothing = mempty

@@ -48,6 +48,9 @@ testPacketRT = mapM_ tryParse [
         f@(A.Fail _ _ _) -> assertFailure (show f)
         (A.Done _ x')    -> assertEqual (show s) x x'
 
+instance Arbitrary LastWill where
+  arbitrary = LastWill <$> arbitrary <*> arbitrary <*> astr <*> astr
+
 instance Arbitrary ConnectRequest where
   arbitrary = do
     u <- mastr
@@ -55,8 +58,9 @@ instance Arbitrary ConnectRequest where
     cid <- astr
     cs <- arbitrary
     ka <- arbitrary
+    lw <- arbitrary
 
-    pure ConnectRequest{_username=u, _password=p, _lastWill=Nothing,
+    pure ConnectRequest{_username=u, _password=p, _lastWill=lw,
                         _cleanSession=cs, _keepAlive=ka, _connID=cid}
 
 mastr :: Gen (Maybe L.ByteString)
