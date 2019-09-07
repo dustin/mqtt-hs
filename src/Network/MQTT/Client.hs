@@ -412,5 +412,6 @@ mkLWT t m r = T.LastWill{
   T._willRetain=r,
   T._willQoS=QoS0,
   T._willTopic = textToBL t,
-  T._willMsg=m
+  T._willMsg=m,
+  T._willProps=mempty
   }

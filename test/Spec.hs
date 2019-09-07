@@ -49,9 +49,8 @@ testPacketRT = mapM_ tryParse [
         f@(A.Fail _ _ _) -> assertFailure (show f)
         (A.Done _ x')    -> assertEqual (show s) x x'
 
-
 instance Arbitrary LastWill where
-  arbitrary = LastWill <$> arbitrary <*> arbitrary <*> astr <*> astr
+  arbitrary = LastWill <$> arbitrary <*> arbitrary <*> astr <*> astr <*> arbitrary
 
 instance Arbitrary ProtocolLevel where arbitrary = arbitraryBoundedEnum
 
@@ -210,8 +209,9 @@ prop_PacketRT311 p =
   where
     lab x = let (s,_) = break (== ' ') . show $ x in s
     v311mask :: MQTTPkt -> MQTTPkt
-    v311mask (ConnPkt c) = ConnPkt (c{_properties=Properties []})
-    v311mask (ConnACKPkt (ConnACKFlags a b _)) = ConnACKPkt (ConnACKFlags a b (Properties []))
+    v311mask (ConnPkt c) = ConnPkt (c{_properties=mempty, _lastWill=cl <$> _lastWill c})
+      where cl lw = lw{_willProps=mempty}
+    v311mask (ConnACKPkt (ConnACKFlags a b _)) = ConnACKPkt (ConnACKFlags a b mempty)
     v311mask (SubscribePkt (SubscribeRequest p s _)) = SubscribePkt (SubscribeRequest p c mempty)
       where c = map (\(k,SubOptions{..}) -> (k,defaultSubOptions{_subQoS=_subQoS})) s
     v311mask (SubACKPkt (SubscribeResponse p s _)) = SubACKPkt (SubscribeResponse p s mempty)

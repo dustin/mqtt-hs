@@ -292,6 +292,7 @@ data LastWill = LastWill {
   , _willQoS   :: QoS
   , _willTopic :: BL.ByteString
   , _willMsg   :: BL.ByteString
+  , _willProps :: Properties
   } deriving(Eq, Show)
 
 data ConnectRequest = ConnectRequest {
@@ -342,7 +343,9 @@ instance ByteMe ConnectRequest where
 
       lwt :: Maybe LastWill -> BL.ByteString
       lwt Nothing = mempty
-      lwt (Just LastWill{..}) = toByteString prot _willTopic <> toByteString prot _willMsg
+      lwt (Just LastWill{..}) = toByteString prot _willProps
+                                <> toByteString prot _willTopic
+                                <> toByteString prot _willMsg
 
       perhaps :: Maybe BL.ByteString -> BL.ByteString
       perhaps Nothing  = ""
@@ -351,7 +354,7 @@ instance ByteMe ConnectRequest where
 
 -- TODO:  AUTH
 
-data MQTTPkt = ConnPkt ConnectRequest            -- TODO: will props
+data MQTTPkt = ConnPkt ConnectRequest
              | ConnACKPkt ConnACKFlags           -- TODO: capture props
              | PublishPkt PublishRequest
              | PubACKPkt PubACK                  -- TODO: props
@@ -415,7 +418,7 @@ parseConnect = do
   keepAlive <- aWord16
   props <- parseProperties pl
   cid <- aString
-  lwt <- parseLwt connFlagBits
+  lwt <- parseLwt pl connFlagBits
   u <- mstr (testBit connFlagBits 7)
   p <- mstr (testBit connFlagBits 6)
 
@@ -432,13 +435,15 @@ parseConnect = do
     parseLevel = A.string "\EOT" $> Protocol311
                  <|> A.string "\ENQ" $> Protocol50
 
-    parseLwt bits
+    parseLwt pl bits
       | testBit bits 2 = do
+          props <- parseProperties pl
           top <- aString
           msg <- aString
           pure $ Just LastWill{_willTopic=top, _willMsg=msg,
                                _willRetain=testBit bits 5,
-                               _willQoS=wQos $ (bits ≫ 3) .&. 0x3}
+                               _willQoS=wQos $ (bits ≫ 3) .&. 0x3,
+                               _willProps = props}
       | otherwise = pure Nothing
 
 data ConnACKRC = ConnAccepted | UnacceptableProtocol

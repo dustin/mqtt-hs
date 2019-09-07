@@ -12,7 +12,8 @@ main :: IO ()
 main = do
   mc <- runClient mqttConfig{_hostname="localhost", _port=1883, _connID="hasq",
                              -- _cleanSession=False,
-                             -- _lwt=Just $ mkLWT "tmp/haskquit" "bye for now" False,
+                             _lwt=Just $ (mkLWT "tmp/haskquit" "bye for now" False){
+                                _willProps=Properties [PropUserProperty "lwt" "prop"]},
                              _msgCB=Just showme, _protLvl=Protocol50,
                              _connProps=Properties [PropReceiveMaximum 20]}
   putStrLn "connected!"
