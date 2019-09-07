@@ -16,7 +16,7 @@ module Network.MQTT.Types (
   LastWill(..), MQTTPkt(..), QoS(..),
   ConnectRequest(..), connectRequest, ConnACKFlags(..), ConnACKRC(..),
   PublishRequest(..), PubACK(..), PubREC(..), PubREL(..), PubCOMP(..),
-  ProtocolLevel(..), Property(..), Properties(..),
+  ProtocolLevel(..), Property(..), Properties(..), AuthRequest(..),
   SubscribeRequest(..), SubOptions(..), defaultSubOptions, SubscribeResponse(..),
   RetainHandling(..),
   UnsubscribeRequest(..), UnsubscribeResponse(..),
@@ -352,8 +352,6 @@ instance ByteMe ConnectRequest where
       perhaps (Just s) = toByteString prot s
 
 
--- TODO:  AUTH
-
 data MQTTPkt = ConnPkt ConnectRequest
              | ConnACKPkt ConnACKFlags           -- TODO: capture props
              | PublishPkt PublishRequest
@@ -368,6 +366,7 @@ data MQTTPkt = ConnPkt ConnectRequest
              | PingPkt
              | PongPkt
              | DisconnectPkt                     -- TODO: props
+             | AuthPkt AuthRequest
   deriving (Eq, Show)
 
 instance ByteMe MQTTPkt where
@@ -385,6 +384,7 @@ instance ByteMe MQTTPkt where
   toByteString _ PingPkt            = "\192\NUL"
   toByteString _ PongPkt            = "\208\NUL"
   toByteString _ DisconnectPkt      = "\224\NUL"
+  toByteString p (AuthPkt x)        = toByteString p x
 
 parsePacket :: ProtocolLevel -> A.Parser MQTTPkt
 parsePacket p = parseConnect <|> parseConnectACK
@@ -394,6 +394,7 @@ parsePacket p = parseConnect <|> parseConnectACK
                 <|> parseUnsubscribe <|> parseUnsubACK
                 <|> PingPkt <$ A.string "\192\NUL" <|> PongPkt <$ A.string "\208\NUL"
                 <|> DisconnectPkt <$ A.string "\224\NUL"
+                <|> parseAuth
 
 aWord16 :: A.Parser Word16
 aWord16 = anyWord16be
@@ -699,3 +700,16 @@ parseUnsubACK = do
   _ <- A.word8 0xb0
   _ <- parseHdrLen
   UnsubACKPkt . UnsubscribeResponse <$> aWord16
+
+data AuthRequest = AuthRequest Word8 Properties deriving (Eq, Show)
+
+instance ByteMe AuthRequest where
+  toByteString prot (AuthRequest i props) = BL.singleton 0xf0
+                                            <> withLength (BL.singleton i <> toByteString prot props)
+
+parseAuth :: A.Parser MQTTPkt
+parseAuth = do
+  _ <- A.word8 0xf0
+  _ <- parseHdrLen
+  r <- AuthRequest <$> A.anyWord8 <*> parseProperties Protocol50
+  pure $ AuthPkt r

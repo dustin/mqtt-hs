@@ -169,6 +169,9 @@ instance Arbitrary Properties where
     | length l == 1 = []
     | otherwise = [Properties sl | sl <- shrinkList (:[]) l, length sl > 0]
 
+instance Arbitrary AuthRequest where
+  arbitrary = AuthRequest <$> arbitrary <*> arbitrary
+
 instance Arbitrary MQTTPkt where
   arbitrary = oneof [
     ConnPkt <$> arbitrary,
@@ -182,7 +185,8 @@ instance Arbitrary MQTTPkt where
     SubACKPkt <$> arbitrary,
     UnsubscribePkt <$> arbitrary,
     UnsubACKPkt <$> arbitrary,
-    pure PingPkt, pure PongPkt, pure DisconnectPkt
+    pure PingPkt, pure PongPkt, pure DisconnectPkt,
+    AuthPkt <$> arbitrary
     ]
   shrink (SubACKPkt x)      = SubACKPkt <$> shrink x
   shrink (ConnACKPkt x)     = ConnACKPkt <$> shrink x
@@ -198,7 +202,7 @@ prop_PacketRT50 p = label (lab p) $ case A.parse (parsePacket Protocol50) (toByt
   where lab x = let (s,_) = break (== ' ') . show $ x in s
 
 prop_PacketRT311 :: MQTTPkt -> QC.Property
-prop_PacketRT311 p =
+prop_PacketRT311 p = available p ==>
   let p' = v311mask p in
     label (lab p') $ case A.parse (parsePacket Protocol311) (toByteString Protocol311 p') of
                       (A.Fail _ _ _) -> False
@@ -215,6 +219,9 @@ prop_PacketRT311 p =
     v311mask (SubACKPkt (SubscribeResponse p s _)) = SubACKPkt (SubscribeResponse p s mempty)
     v311mask (PublishPkt req) = PublishPkt req{_pubProps=mempty}
     v311mask x = x
+
+    available (AuthPkt _) = False
+    available _           = True
 
 prop_PropertyRT :: MT.Property -> QC.Property
 prop_PropertyRT p = label (lab p) $ case A.parse parseProperty (toByteString Protocol50 p) of
