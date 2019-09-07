@@ -56,17 +56,15 @@ instance Arbitrary ProtocolLevel where arbitrary = arbitraryBoundedEnum
 
 instance Arbitrary ConnectRequest where
   arbitrary = do
-    u <- mastr
-    p <- mastr
-    cid <- astr
-    cs <- arbitrary
-    ka <- arbitrary
-    lw <- arbitrary
-    props <- arbitrary
+    _username <- mastr
+    _password <- mastr
+    _connID <- astr
+    _cleanSession <- arbitrary
+    _keepAlive <- arbitrary
+    _lastWill <- arbitrary
+    _properties <- arbitrary
 
-    pure ConnectRequest{_username=u, _password=p, _lastWill=lw,
-                        _cleanSession=cs, _keepAlive=ka, _connID=cid,
-                        _properties=props}
+    pure ConnectRequest{..}
 
 mastr :: Gen (Maybe L.ByteString)
 mastr = fmap (L.fromStrict . BC.pack . getUnicodeString) <$> arbitrary
