@@ -18,7 +18,7 @@ module Network.MQTT.Types (
   PublishRequest(..), PubACK(..), PubREC(..), PubREL(..), PubCOMP(..),
   ProtocolLevel(..), Property(..), Properties(..), AuthRequest(..),
   SubscribeRequest(..), SubOptions(..), defaultSubOptions, SubscribeResponse(..),
-  RetainHandling(..),
+  RetainHandling(..), DisconnectRequest(..),
   UnsubscribeRequest(..), UnsubscribeResponse(..), DiscoReason(..),
   parsePacket, ByteMe(toByteString),
   -- for testing
@@ -370,7 +370,7 @@ data MQTTPkt = ConnPkt ConnectRequest
              | UnsubACKPkt UnsubscribeResponse   -- TODO: props
              | PingPkt
              | PongPkt
-             | DisconnectPkt                     -- TODO: props
+             | DisconnectPkt DisconnectRequest
              | AuthPkt AuthRequest
   deriving (Eq, Show)
 
@@ -388,7 +388,7 @@ instance ByteMe MQTTPkt where
   toByteString p (UnsubACKPkt x)    = toByteString p x
   toByteString _ PingPkt            = "\192\NUL"
   toByteString _ PongPkt            = "\208\NUL"
-  toByteString _ DisconnectPkt      = "\224\NUL"
+  toByteString p (DisconnectPkt x)  = toByteString p x
   toByteString p (AuthPkt x)        = toByteString p x
 
 parsePacket :: ProtocolLevel -> A.Parser MQTTPkt
@@ -398,7 +398,7 @@ parsePacket p = parseConnect <|> parseConnectACK
                 <|> parseSubscribe p <|> parseSubACK p
                 <|> parseUnsubscribe <|> parseUnsubACK
                 <|> PingPkt <$ A.string "\192\NUL" <|> PongPkt <$ A.string "\208\NUL"
-                <|> DisconnectPkt <$ A.string "\224\NUL"
+                <|> parseDisconnect p
                 <|> parseAuth
 
 aWord16 :: A.Parser Word16
@@ -830,3 +830,25 @@ instance ByteSize DiscoReason where
 
 discoReasonRev :: [(Word8, DiscoReason)]
 discoReasonRev = map (\w -> (toByte w, w)) [minBound..]
+
+data DisconnectRequest = DisconnectRequest DiscoReason Properties deriving (Eq, Show)
+
+instance ByteMe DisconnectRequest where
+  toByteString Protocol311 _ = "\224\NUL"
+
+  toByteString Protocol50 (DisconnectRequest r props) = BL.singleton 0x14
+                                                        <> withLength (BL.singleton (toByte r)
+                                                                       <> toByteString Protocol50 props)
+
+parseDisconnect :: ProtocolLevel -> A.Parser MQTTPkt
+parseDisconnect Protocol311 = do
+  req <- DisconnectRequest DiscoNormalDisconnection mempty <$ A.string "\224\NUL"
+  pure $ DisconnectPkt req
+
+parseDisconnect Protocol50 = do
+  _ <- A.word8 0x14
+  _ <- parseHdrLen
+  r <- A.anyWord8
+  props <- parseProperties Protocol50
+
+  pure $ DisconnectPkt (DisconnectRequest (fromByte r) props)

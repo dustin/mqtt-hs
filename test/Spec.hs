@@ -176,6 +176,9 @@ instance Arbitrary ConnACKRC where arbitrary = arbitraryBoundedEnum
 
 instance Arbitrary DiscoReason where arbitrary = arbitraryBoundedEnum
 
+instance Arbitrary DisconnectRequest where
+  arbitrary = DisconnectRequest <$> arbitrary <*> arbitrary
+
 instance Arbitrary MQTTPkt where
   arbitrary = oneof [
     ConnPkt <$> arbitrary,
@@ -189,7 +192,8 @@ instance Arbitrary MQTTPkt where
     SubACKPkt <$> arbitrary,
     UnsubscribePkt <$> arbitrary,
     UnsubACKPkt <$> arbitrary,
-    pure PingPkt, pure PongPkt, pure DisconnectPkt,
+    pure PingPkt, pure PongPkt,
+    DisconnectPkt <$> arbitrary,
     AuthPkt <$> arbitrary
     ]
   shrink (SubACKPkt x)      = SubACKPkt <$> shrink x
@@ -222,6 +226,7 @@ prop_PacketRT311 p = available p ==>
       where c = map (\(k,SubOptions{..}) -> (k,defaultSubOptions{_subQoS=_subQoS})) s
     v311mask (SubACKPkt (SubscribeResponse p s _)) = SubACKPkt (SubscribeResponse p s mempty)
     v311mask (PublishPkt req) = PublishPkt req{_pubProps=mempty}
+    v311mask (DisconnectPkt _) = DisconnectPkt (DisconnectRequest DiscoNormalDisconnection mempty)
     v311mask x = x
 
     available (AuthPkt _) = False

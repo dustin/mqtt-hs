@@ -403,7 +403,7 @@ publishq c t m r q props = do
 disconnect :: MQTTClient -> IO ()
 disconnect c@MQTTClient{..} = race_ getDisconnected orDieTrying
   where
-    getDisconnected = sendPacketIO c DisconnectPkt >> waitForClient c
+    getDisconnected = sendPacketIO c (DisconnectPkt $ DisconnectRequest DiscoNormalDisconnection mempty) >> waitForClient c
     orDieTrying = threadDelay 10000000 >> killConn c Timeout
 
 -- | A convenience method for creating a LastWill.
