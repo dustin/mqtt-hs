@@ -76,7 +76,7 @@ instance Arbitrary QoS where
   arbitrary = arbitraryBoundedEnum
 
 instance Arbitrary ConnACKFlags where
-  arbitrary = ConnACKFlags <$> arbitrary <*> (connACKRC <$> choose (0,5)) <*> arbitrary
+  arbitrary = ConnACKFlags <$> arbitrary <*> arbitrary <*> arbitrary
   shrink (ConnACKFlags b c p@(Properties pl))
     | length pl == 0 = []
     | otherwise = ConnACKFlags b c <$> shrink p
@@ -172,6 +172,10 @@ instance Arbitrary Properties where
 instance Arbitrary AuthRequest where
   arbitrary = AuthRequest <$> arbitrary <*> arbitrary
 
+instance Arbitrary ConnACKRC where arbitrary = arbitraryBoundedEnum
+
+instance Arbitrary DiscoReason where arbitrary = arbitraryBoundedEnum
+
 instance Arbitrary MQTTPkt where
   arbitrary = oneof [
     ConnPkt <$> arbitrary,
@@ -253,6 +257,9 @@ testTopicMatching = let allTopics = ["a", "a/b", "a/b/c/d", "b/a/c/d",
                                 ("#/b", [])] in
     map (\(p,want) -> testCase (show p) $ assertEqual "" want (filter (match p) allTopics)) tsts
 
+byteRT :: (ByteSize a, Show a, Eq a) => a -> Bool
+byteRT x = x == (fromByte . toByte) x
+
 tests :: [TestTree]
 tests = [
   localOption (QC.QuickCheckTests 10000) $ testProperty "header length rt (parser)" prop_rtLengthParser,
@@ -263,6 +270,9 @@ tests = [
   localOption (QC.QuickCheckTests 1000) $ testProperty "rt property" prop_PropertyRT,
   testProperty "rt properties" prop_PropertiesRT,
   testProperty "sub options" prop_SubOptionsRT,
+
+  testProperty "conn reasons" (byteRT :: ConnACKRC -> Bool),
+  testProperty "disco reasons" (byteRT :: DiscoReason -> Bool),
 
   testGroup "topic matching" testTopicMatching
   ]

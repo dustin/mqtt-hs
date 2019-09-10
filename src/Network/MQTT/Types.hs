@@ -19,11 +19,11 @@ module Network.MQTT.Types (
   ProtocolLevel(..), Property(..), Properties(..), AuthRequest(..),
   SubscribeRequest(..), SubOptions(..), defaultSubOptions, SubscribeResponse(..),
   RetainHandling(..),
-  UnsubscribeRequest(..), UnsubscribeResponse(..),
+  UnsubscribeRequest(..), UnsubscribeResponse(..), DiscoReason(..),
   parsePacket, ByteMe(toByteString),
   -- for testing
-  encodeLength, parseHdrLen, connACKRC, parseProperty, parseProperties,
-  parseSubOptions
+  encodeLength, parseHdrLen, parseProperty, parseProperties,
+  parseSubOptions, ByteSize(..)
   ) where
 
 import           Control.Applicative             (liftA2, (<|>))
@@ -35,7 +35,8 @@ import           Data.Bits                       (Bits (..), shiftL, testBit,
                                                   (.&.), (.|.))
 import qualified Data.ByteString.Lazy            as BL
 import           Data.Functor                    (($>))
-import           Data.Maybe                      (isJust)
+import           Data.List                       (lookup)
+import           Data.Maybe                      (fromMaybe, isJust)
 import           Data.Word                       (Word16, Word32, Word8)
 
 -- | QoS values for publishing and subscribing.
@@ -59,6 +60,10 @@ class ByteMe a where
 
   toByteString :: ProtocolLevel -> a -> BL.ByteString
   toByteString p = BL.pack . toBytes p
+
+class ByteSize a where
+  toByte :: a -> Word8
+  fromByte :: Word8 -> a
 
 boolBit :: Bool -> Word8
 boolBit False = 0
@@ -447,28 +452,72 @@ parseConnect = do
                                _willProps = props}
       | otherwise = pure Nothing
 
-data ConnACKRC = ConnAccepted | UnacceptableProtocol
-               | IdentifierRejected | ServerUnavailable
-               | BadCredentials | NotAuthorized
-               | InvalidConnACKRC Word8 deriving(Eq, Show)
+data ConnACKRC = ConnAccepted
+  -- 3.1.1 codes
+  | UnacceptableProtocol
+  | IdentifierRejected
+  | ServerUnavailable
+  | BadCredentials
+  | NotAuthorized
+  -- 5.0 codes
+  | ConnUnspecifiedError
+  | ConnMalformedPacket
+  | ConnProtocolError
+  | ConnImplementationSpecificError
+  | ConnUnsupportedProtocolVersion
+  | ConnClientIdentifierNotValid
+  | ConnBadUserNameOrPassword
+  | ConnNotAuthorized
+  | ConnServerUnavailable
+  | ConnServerBusy
+  | ConnBanned
+  | ConnBadAuthenticationMethod
+  | ConnTopicNameInvalid
+  | ConnPacketTooLarge
+  | ConnQuotaExceeded
+  | ConnPayloadFormatInvalid
+  | ConnRetainNotSupported
+  | ConnQosNotSupported
+  | ConnUseAnotherServer
+  | ConnServerMoved
+  | ConnConnectionRateExceeded
+  deriving(Eq, Show, Bounded, Enum)
 
-connACKRC :: Word8 -> ConnACKRC
-connACKRC 0 = ConnAccepted
-connACKRC 1 = UnacceptableProtocol
-connACKRC 2 = IdentifierRejected
-connACKRC 3 = ServerUnavailable
-connACKRC 4 = BadCredentials
-connACKRC 5 = NotAuthorized
-connACKRC x = InvalidConnACKRC x
+instance ByteSize ConnACKRC where
 
-connACKVal :: ConnACKRC -> Word8
-connACKVal ConnAccepted         = 0
-connACKVal UnacceptableProtocol = 1
-connACKVal IdentifierRejected   = 2
-connACKVal ServerUnavailable    = 3
-connACKVal BadCredentials       = 4
-connACKVal NotAuthorized        = 5
-connACKVal (InvalidConnACKRC x) = x
+  toByte ConnAccepted                    = 0
+  toByte UnacceptableProtocol            = 1
+  toByte IdentifierRejected              = 2
+  toByte ServerUnavailable               = 3
+  toByte BadCredentials                  = 4
+  toByte NotAuthorized                   = 5
+  toByte ConnUnspecifiedError            = 0x80
+  toByte ConnMalformedPacket             = 0x81
+  toByte ConnProtocolError               = 0x82
+  toByte ConnImplementationSpecificError = 0x83
+  toByte ConnUnsupportedProtocolVersion  = 0x84
+  toByte ConnClientIdentifierNotValid    = 0x85
+  toByte ConnBadUserNameOrPassword       = 0x86
+  toByte ConnNotAuthorized               = 0x87
+  toByte ConnServerUnavailable           = 0x88
+  toByte ConnServerBusy                  = 0x89
+  toByte ConnBanned                      = 0x8a
+  toByte ConnBadAuthenticationMethod     = 0x8c
+  toByte ConnTopicNameInvalid            = 0x90
+  toByte ConnPacketTooLarge              = 0x95
+  toByte ConnQuotaExceeded               = 0x97
+  toByte ConnPayloadFormatInvalid        = 0x99
+  toByte ConnRetainNotSupported          = 0x9a
+  toByte ConnQosNotSupported             = 0x9b
+  toByte ConnUseAnotherServer            = 0x9c
+  toByte ConnServerMoved                 = 0x9d
+  toByte ConnConnectionRateExceeded      = 0x9f
+
+  fromByte b = fromMaybe ConnUnspecifiedError $ lookup b connACKRev
+
+connACKRev :: [(Word8, ConnACKRC)]
+connACKRev = map (\w -> (toByte w, w)) [minBound..]
+
 
 data ConnACKFlags = ConnACKFlags Bool ConnACKRC Properties deriving (Eq, Show)
 
@@ -476,7 +525,7 @@ instance ByteMe ConnACKFlags where
   toBytes prot (ConnACKFlags sp rc props) = let pbytes = toBytes prot props in
                                               [0x20]
                                               <> encodeVarInt (2 + length pbytes)
-                                              <>[ boolBit sp, connACKVal rc] <> pbytes
+                                              <>[ boolBit sp, toByte rc] <> pbytes
 
 parseConnectACK :: A.Parser MQTTPkt
 parseConnectACK = do
@@ -486,7 +535,7 @@ parseConnectACK = do
   ackFlags <- A.anyWord8
   rc <- A.anyWord8
   p <- parseProperties (if rl == 2 then Protocol311 else Protocol50)
-  pure $ ConnACKPkt $ ConnACKFlags (testBit ackFlags 0) (connACKRC rc) p
+  pure $ ConnACKPkt $ ConnACKFlags (testBit ackFlags 0) (fromByte rc) p
 
 data PublishRequest = PublishRequest{
   _pubDup      :: Bool
@@ -713,3 +762,71 @@ parseAuth = do
   _ <- parseHdrLen
   r <- AuthRequest <$> A.anyWord8 <*> parseProperties Protocol50
   pure $ AuthPkt r
+
+data DiscoReason = DiscoNormalDisconnection
+  | DiscoDisconnectWithWill
+  | DiscoUnspecifiedError
+  | DiscoMalformedPacket
+  | DiscoProtocolError
+  | DiscoImplementationSpecificError
+  | DiscoNotAuthorized
+  | DiscoServerBusy
+  | DiscoServershuttingDown
+  | DiscoKeepAliveTimeout
+  | DiscoSessiontakenOver
+  | DiscoTopicFilterInvalid
+  | DiscoTopicNameInvalid
+  | DiscoReceiveMaximumExceeded
+  | DiscoTopicAliasInvalid
+  | DiscoPacketTooLarge
+  | DiscoMessageRateTooHigh
+  | DiscoQuotaExceeded
+  | DiscoAdministrativeAction
+  | DiscoPayloadFormatInvalid
+  | DiscoRetainNotSupported
+  | DiscoQoSNotSupported
+  | DiscoUseAnotherServer
+  | DiscoServerMoved
+  | DiscoSharedSubscriptionsNotSupported
+  | DiscoConnectionRateExceeded
+  | DiscoMaximumConnectTime
+  | DiscoSubscriptionIdentifiersNotSupported
+  | DiscoWildcardSubscriptionsNotSupported
+  deriving (Show, Eq, Bounded, Enum)
+
+instance ByteSize DiscoReason where
+
+  toByte DiscoNormalDisconnection                 = 0x00
+  toByte DiscoDisconnectWithWill                  = 0x04
+  toByte DiscoUnspecifiedError                    = 0x80
+  toByte DiscoMalformedPacket                     = 0x81
+  toByte DiscoProtocolError                       = 0x82
+  toByte DiscoImplementationSpecificError         = 0x83
+  toByte DiscoNotAuthorized                       = 0x87
+  toByte DiscoServerBusy                          = 0x89
+  toByte DiscoServershuttingDown                  = 0x8B
+  toByte DiscoKeepAliveTimeout                    = 0x8D
+  toByte DiscoSessiontakenOver                    = 0x8e
+  toByte DiscoTopicFilterInvalid                  = 0x8f
+  toByte DiscoTopicNameInvalid                    = 0x90
+  toByte DiscoReceiveMaximumExceeded              = 0x93
+  toByte DiscoTopicAliasInvalid                   = 0x94
+  toByte DiscoPacketTooLarge                      = 0x95
+  toByte DiscoMessageRateTooHigh                  = 0x96
+  toByte DiscoQuotaExceeded                       = 0x97
+  toByte DiscoAdministrativeAction                = 0x98
+  toByte DiscoPayloadFormatInvalid                = 0x99
+  toByte DiscoRetainNotSupported                  = 0x9a
+  toByte DiscoQoSNotSupported                     = 0x9b
+  toByte DiscoUseAnotherServer                    = 0x9c
+  toByte DiscoServerMoved                         = 0x9d
+  toByte DiscoSharedSubscriptionsNotSupported     = 0x9e
+  toByte DiscoConnectionRateExceeded              = 0x9f
+  toByte DiscoMaximumConnectTime                  = 0xa0
+  toByte DiscoSubscriptionIdentifiersNotSupported = 0xa1
+  toByte DiscoWildcardSubscriptionsNotSupported   = 0xa2
+
+  fromByte w = fromMaybe DiscoMalformedPacket $ lookup w discoReasonRev
+
+discoReasonRev :: [(Word8, DiscoReason)]
+discoReasonRev = map (\w -> (toByte w, w)) [minBound..]
