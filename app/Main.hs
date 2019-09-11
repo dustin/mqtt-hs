@@ -23,7 +23,8 @@ main = do
   print =<< svrProps mc
   print =<< subscribe mc [("oro/#", defaultSubOptions), ("tmp/#", defaultSubOptions{_subQoS=QoS2})]
 
-  p <- async $ forever $ pubAliased mc "tmp/hi/from/haskell" "hi from haskell" False QoS1 mempty >> threadDelay 10000000
+  let pprops = Properties [PropUserProperty "hello" "mqttv5"]
+  p <- async $ forever $ pubAliased mc "tmp/hi/from/haskell" "hi from haskell" False QoS1 pprops >> threadDelay 10000000
 
   putStrLn "Publishing at QoS > 0"
   publishq mc "tmp/q" "this message is at QoS 2" True QoS2 (Properties [
