@@ -151,24 +151,16 @@ pingPeriod = 30000000 -- 30 seconds
 -- | Set up and run a client from the given conduit AppData function.
 runClientAppData :: ((AppData -> IO ()) -> IO ()) -> MQTTConfig -> IO MQTTClient
 runClientAppData mkconn MQTTConfig{..} = do
-  ch <- newTChanIO
-  pid <- newTVarIO 1
-  thr <- newTVarIO []
-  acks <- newTVarIO mempty
-  st <- newTVarIO Starting
-  ct <- newTVarIO undefined
-  outA <- newTVarIO mempty
-  sprop <- newTVarIO mempty
-
-  let cli = MQTTClient{_ch=ch,
-                       _cb=_msgCB,
-                       _pktID=pid,
-                       _ts=thr,
-                       _acks=acks,
-                       _st=st,
-                       _ct=ct,
-                       _outA=outA,
-                       _svrProps=sprop}
+  _ch <- newTChanIO
+  _pktID <- newTVarIO 1
+  _ts <- newTVarIO []
+  _acks <- newTVarIO mempty
+  _st <- newTVarIO Starting
+  _ct <- newTVarIO undefined
+  _outA <- newTVarIO mempty
+  _svrProps <- newTVarIO mempty
+  let _cb = _msgCB
+      cli = MQTTClient{..}
 
   t <- async $ clientThread cli
   s <- atomically (waitForLaunch cli t)
