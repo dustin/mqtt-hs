@@ -22,7 +22,7 @@ module Network.MQTT.Client (
   connectURI,
   disconnect,
   -- * General client interactions.
-  subscribe, unsubscribe, publish, publishq
+  subscribe, unsubscribe, publish, publishq, pubAliased
   ) where
 
 import           Control.Concurrent         (threadDelay)
@@ -48,6 +48,7 @@ import           Data.Conduit.Network       (AppData, appSink, appSource,
 import           Data.Conduit.Network.TLS   (runTLSClient, tlsClientConfig)
 import           Data.Map.Strict            (Map)
 import qualified Data.Map.Strict            as Map
+import           Data.Maybe                 (isJust)
 import           Data.Text                  (Text)
 import qualified Data.Text.Encoding         as TE
 import           Data.Word                  (Word16)
@@ -74,13 +75,15 @@ data DispatchType = DSubACK | DUnsubACK | DPubACK | DPubREC | DPubREL | DPubCOMP
 -- @
 --
 data MQTTClient = MQTTClient {
-  _ch      :: TChan MQTTPkt
-  , _pktID :: TVar Word16
-  , _cb    :: Maybe (MQTTClient -> Topic -> BL.ByteString -> IO ())
-  , _ts    :: TVar [Async ()]
-  , _acks  :: TVar (Map (DispatchType,Word16) (TChan MQTTPkt))
-  , _st    :: TVar ConnState
-  , _ct    :: TVar (Async ())
+  _ch         :: TChan MQTTPkt
+  , _pktID    :: TVar Word16
+  , _cb       :: Maybe (MQTTClient -> Topic -> BL.ByteString -> IO ())
+  , _ts       :: TVar [Async ()]
+  , _acks     :: TVar (Map (DispatchType,Word16) (TChan MQTTPkt))
+  , _st       :: TVar ConnState
+  , _ct       :: TVar (Async ())
+  , _outA     :: TVar (Map Topic Int)
+  , _svrProps :: TVar Properties
   }
 
 -- | Configuration for setting up an MQTT client.
@@ -104,7 +107,7 @@ mqttConfig = MQTTConfig{_hostname="localhost", _port=1883, _connID="haskell-mqtt
                         _username=Nothing, _password=Nothing,
                         _cleanSession=True, _lwt=Nothing,
                         _msgCB=Nothing,
-                        _protLvl=Protocol311, _connProps=Properties []}
+                        _protLvl=Protocol311, _connProps=mempty}
 
 
 -- | Connect to an MQTT server by URI.  Currently only mqtt and mqtts
@@ -154,6 +157,8 @@ runClientAppData mkconn MQTTConfig{..} = do
   acks <- newTVarIO mempty
   st <- newTVarIO Starting
   ct <- newTVarIO undefined
+  outA <- newTVarIO mempty
+  sprop <- newTVarIO mempty
 
   let cli = MQTTClient{_ch=ch,
                        _cb=_msgCB,
@@ -161,7 +166,9 @@ runClientAppData mkconn MQTTConfig{..} = do
                        _ts=thr,
                        _acks=acks,
                        _st=st,
-                       _ct=ct}
+                       _ct=ct,
+                       _outA=outA,
+                       _svrProps=sprop}
 
   t <- async $ clientThread cli
   s <- atomically (waitForLaunch cli t)
@@ -186,9 +193,9 @@ runClientAppData mkconn MQTTConfig{..} = do
                                  T._cleanSession=_cleanSession,
                                  T._properties=_connProps}
         yield (BL.toStrict $ toByteString _protLvl req) .| appSink ad
-        (ConnACKPkt (ConnACKFlags _ val _)) <- appSource ad .| sinkParser (parsePacket _protLvl)
+        (ConnACKPkt (ConnACKFlags _ val props)) <- appSource ad .| sinkParser (parsePacket _protLvl)
         case val of
-          ConnAccepted -> pure ()
+          ConnAccepted -> liftIO $ atomically $ writeTVar _svrProps props
           x            -> fail (show x)
 
       pure c
@@ -415,3 +422,39 @@ mkLWT t m r = T.LastWill{
   T._willMsg=m,
   T._willProps=mempty
   }
+
+maxAliases :: MQTTClient -> IO Int
+maxAliases MQTTClient{..} = readTVarIO _svrProps >>= pure . go . l
+  where
+    l (Properties x) = x
+    go []                          = 0
+    go (PropTopicAliasMaximum n:_) = fromEnum n
+    go (_:xs)                      = go xs
+
+-- | Publish a message with the specified QoS and Properties list.  If
+-- possible, use an alias to shorten the message length.
+pubAliased :: MQTTClient
+         -> Topic         -- ^ Topic
+         -> BL.ByteString -- ^ Message body
+         -> Bool          -- ^ Retain flag
+         -> QoS           -- ^ QoS
+         -> Properties    -- ^ Properties
+         -> IO ()
+pubAliased c@MQTTClient{..} t m r q props = do
+  x <- maxAliases c
+  (t', n) <- alias x
+  let np = props <> case n of
+                      0 -> mempty
+                      _ -> Properties [PropTopicAlias (toEnum n)]
+  publishq c t' m r q np
+
+  where
+    alias mv = atomically $ do
+      as <- readTVar _outA
+      let n = length as + 1
+      let cur = Map.lookup t as
+      let v = case Map.lookup t as of
+                Just x  -> x
+                Nothing -> if n > mv then 0 else n
+      when (v > 0) $ writeTVar _outA (Map.insert t v as)
+      pure (if isJust cur then "" else t, v)
