@@ -82,7 +82,7 @@ data MQTTClient = MQTTClient {
   , _acks     :: TVar (Map (DispatchType,Word16) (TChan MQTTPkt))
   , _st       :: TVar ConnState
   , _ct       :: TVar (Async ())
-  , _outA     :: TVar (Map Topic Int)
+  , _outA     :: TVar (Map Topic Word16)
   , _inA      :: TVar (Map Word16 Topic)
   , _svrProps :: TVar Properties
   }
@@ -432,12 +432,11 @@ mkLWT t m r = T.LastWill{
 svrProps :: MQTTClient -> IO Properties
 svrProps MQTTClient{..} = readTVarIO _svrProps
 
-maxAliases :: MQTTClient -> IO Int
-maxAliases MQTTClient{..} = readTVarIO _svrProps >>= pure . go . propList
+maxAliases :: MQTTClient -> IO Word16
+maxAliases MQTTClient{..} = readTVarIO _svrProps >>= pure . foldr f 0 . propList
   where
-    go []                          = 0
-    go (PropTopicAliasMaximum n:_) = fromEnum n
-    go (_:xs)                      = go xs
+    f (PropTopicAliasMaximum n) _ = n
+    f _ o = o
 
 -- | Publish a message with the specified QoS and Properties list.  If
 -- possible, use an alias to shorten the message length.
@@ -453,13 +452,13 @@ pubAliased c@MQTTClient{..} t m r q props = do
   (t', n) <- alias x
   let np = props <> case n of
                       0 -> mempty
-                      _ -> Properties [PropTopicAlias (toEnum n)]
+                      _ -> Properties [PropTopicAlias n]
   publishq c t' m r q np
 
   where
     alias mv = atomically $ do
       as <- readTVar _outA
-      let n = length as + 1
+      let n = toEnum (length as + 1)
           cur = Map.lookup t as
           v = fromMaybe (if n > mv then 0 else n) cur
       when (v > 0) $ writeTVar _outA (Map.insert t v as)
