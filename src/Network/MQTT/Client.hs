@@ -341,11 +341,11 @@ sendAndWait c@MQTTClient{..} dt f = do
 
 -- | Subscribe to a list of topic filters with their respective QoSes.
 -- The accepted QoSes are returned in the same order as requested.
-subscribe :: MQTTClient -> [(Filter, SubOptions)] -> IO [Maybe QoS]
+subscribe :: MQTTClient -> [(Filter, SubOptions)] -> IO ([Either SubErr QoS], Properties)
 subscribe c@MQTTClient{..} ls = do
   r <- sendAndWait c DSubACK (\pid -> SubscribePkt $ SubscribeRequest pid ls' mempty)
   let (SubACKPkt (SubscribeResponse _ rs props)) = r
-  pure rs
+  pure (rs, props)
 
     where ls' = map (\(s, i) -> (textToBL s, i)) ls
 

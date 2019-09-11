@@ -17,7 +17,7 @@ module Network.MQTT.Types (
   ConnectRequest(..), connectRequest, ConnACKFlags(..), ConnACKRC(..),
   PublishRequest(..), PubACK(..), PubREC(..), PubREL(..), PubCOMP(..),
   ProtocolLevel(..), Property(..), Properties(..), AuthRequest(..),
-  SubscribeRequest(..), SubOptions(..), defaultSubOptions, SubscribeResponse(..),
+  SubscribeRequest(..), SubOptions(..), defaultSubOptions, SubscribeResponse(..), SubErr(..),
   RetainHandling(..), DisconnectRequest(..),
   UnsubscribeRequest(..), UnsubscribeResponse(..), DiscoReason(..),
   parsePacket, ByteMe(toByteString),
@@ -365,7 +365,7 @@ data MQTTPkt = ConnPkt ConnectRequest
              | PubRELPkt PubREL                  -- TODO: props
              | PubCOMPPkt PubCOMP                -- TODO: props
              | SubscribePkt SubscribeRequest
-             | SubACKPkt SubscribeResponse       -- TODO: return props
+             | SubACKPkt SubscribeResponse
              | UnsubscribePkt UnsubscribeRequest -- TODO: props
              | UnsubACKPkt UnsubscribeResponse   -- TODO: props
              | PingPkt
@@ -692,19 +692,38 @@ parseSubscribe prot = do
                       Right x -> pure x
       parseSub = liftA2 (,) aString parseSubOptions
 
-data SubscribeResponse = SubscribeResponse Word16 [Maybe QoS] Properties deriving (Eq, Show)
+data SubscribeResponse = SubscribeResponse Word16 [Either SubErr QoS] Properties deriving (Eq, Show)
 
 instance ByteMe SubscribeResponse where
   toByteString prot (SubscribeResponse pid sres props) =
     BL.singleton 0x90 <> withLength (encodeWord16 pid <> toByteString prot props <> BL.pack (b <$> sres))
 
     where
-      b Nothing  = 0x80
-      b (Just q) = qosW q
+      b (Left SubErrUnspecifiedError)                    =  0x80
+      b (Left SubErrImplementationSpecificError)         =  0x83
+      b (Left SubErrNotAuthorized)                       =  0x87
+      b (Left SubErrTopicFilterInvalid)                  =  0x8F
+      b (Left SubErrPacketIdentifierInUse)               =  0x91
+      b (Left SubErrQuotaExceeded)                       =  0x97
+      b (Left SubErrSharedSubscriptionsNotSupported)     =  0x9E
+      b (Left SubErrSubscriptionIdentifiersNotSupported) =  0xA1
+      b (Left SubErrWildcardSubscriptionsNotSupported)   =  0xA2
+      b (Right q)                                        = qosW q
 
 propLen :: ProtocolLevel -> Properties -> Int
 propLen Protocol311 _ = 0
 propLen prot props    = fromEnum $ BL.length (toByteString prot props)
+
+data SubErr = SubErrUnspecifiedError
+  | SubErrImplementationSpecificError
+  | SubErrNotAuthorized
+  | SubErrTopicFilterInvalid
+  | SubErrPacketIdentifierInUse
+  | SubErrQuotaExceeded
+  | SubErrSharedSubscriptionsNotSupported
+  | SubErrSubscriptionIdentifiersNotSupported
+  | SubErrWildcardSubscriptionsNotSupported
+  deriving (Eq, Show, Bounded, Enum)
 
 parseSubACK :: ProtocolLevel -> A.Parser MQTTPkt
 parseSubACK prot = do
@@ -716,8 +735,16 @@ parseSubACK prot = do
   pure $ SubACKPkt (SubscribeResponse pid res props)
 
   where
-    p 0x80 = Nothing
-    p x    = Just (wQos x)
+    p 0x80 = Left SubErrUnspecifiedError
+    p 0x83 = Left SubErrImplementationSpecificError
+    p 0x87 = Left SubErrNotAuthorized
+    p 0x8F = Left SubErrTopicFilterInvalid
+    p 0x91 = Left SubErrPacketIdentifierInUse
+    p 0x97 = Left SubErrQuotaExceeded
+    p 0x9E = Left SubErrSharedSubscriptionsNotSupported
+    p 0xA1 = Left SubErrSubscriptionIdentifiersNotSupported
+    p 0xA2 = Left SubErrWildcardSubscriptionsNotSupported
+    p x    = Right (wQos x)
 
 data UnsubscribeRequest = UnsubscribeRequest Word16 [BL.ByteString]
                         deriving(Eq, Show)

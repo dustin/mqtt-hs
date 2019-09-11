@@ -115,9 +115,11 @@ instance Arbitrary SubscribeRequest where
 instance Arbitrary SubOptions where
   arbitrary = SubOptions <$> arbitraryBoundedEnum <*> arbitrary <*> arbitrary <*> arbitrary
 
+instance Arbitrary SubErr where arbitrary = arbitraryBoundedEnum
+
 instance Arbitrary SubscribeResponse where
-  arbitrary = arbitrary >>= \pid -> choose (1,11) >>= \n -> SubscribeResponse pid <$> vectorOf n sub <*> arbitrary
-    where sub = oneof (pure <$> [Just QoS0, Just QoS1, Just QoS2, Nothing])
+  arbitrary = arbitrary >>= \pid -> choose (1,11) >>= \n -> SubscribeResponse pid <$> vectorOf n arbitrary <*> arbitrary
+
   shrink (SubscribeResponse pid l props)
     | length l == 1 = []
     | otherwise = [SubscribeResponse pid sl props | sl <- shrinkList (:[]) l, length sl > 0]
