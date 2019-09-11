@@ -48,7 +48,7 @@ import           Data.Conduit.Network       (AppData, appSink, appSource,
 import           Data.Conduit.Network.TLS   (runTLSClient, tlsClientConfig)
 import           Data.Map.Strict            (Map)
 import qualified Data.Map.Strict            as Map
-import           Data.Maybe                 (isJust)
+import           Data.Maybe                 (fromMaybe)
 import           Data.Text                  (Text)
 import qualified Data.Text.Encoding         as TE
 import           Data.Word                  (Word16)
@@ -455,9 +455,7 @@ pubAliased c@MQTTClient{..} t m r q props = do
     alias mv = atomically $ do
       as <- readTVar _outA
       let n = length as + 1
-      let cur = Map.lookup t as
-      let v = case Map.lookup t as of
-                Just x  -> x
-                Nothing -> if n > mv then 0 else n
+          cur = Map.lookup t as
+          v = fromMaybe (if n > mv then 0 else n) cur
       when (v > 0) $ writeTVar _outA (Map.insert t v as)
-      pure (if isJust cur then "" else t, v)
+      pure (maybe t (const "") cur, v)
