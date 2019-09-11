@@ -19,7 +19,7 @@ module Network.MQTT.Client (
   ProtocolLevel(..), Properties(..), Property(..), SubOptions(..), defaultSubOptions,
   -- * Running and waiting for the client.
   runClient, runClientTLS, waitForClient,
-  connectURI,
+  connectURI, svrProps,
   disconnect,
   -- * General client interactions.
   subscribe, unsubscribe, publish, publishq, pubAliased
@@ -422,6 +422,9 @@ mkLWT t m r = T.LastWill{
   T._willMsg=m,
   T._willProps=mempty
   }
+
+svrProps :: MQTTClient -> IO Properties
+svrProps MQTTClient{..} = readTVarIO _svrProps
 
 maxAliases :: MQTTClient -> IO Int
 maxAliases MQTTClient{..} = readTVarIO _svrProps >>= pure . go . l
