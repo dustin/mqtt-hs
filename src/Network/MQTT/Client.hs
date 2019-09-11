@@ -83,6 +83,7 @@ data MQTTClient = MQTTClient {
   , _st       :: TVar ConnState
   , _ct       :: TVar (Async ())
   , _outA     :: TVar (Map Topic Int)
+  , _inA      :: TVar (Map Word16 Topic)
   , _svrProps :: TVar Properties
   }
 
@@ -158,6 +159,7 @@ runClientAppData mkconn MQTTConfig{..} = do
   _st <- newTVarIO Starting
   _ct <- newTVarIO undefined
   _outA <- newTVarIO mempty
+  _inA <- newTVarIO mempty
   _svrProps <- newTVarIO mempty
   let _cb = _msgCB
       cli = MQTTClient{..}
@@ -264,9 +266,21 @@ dispatch c@MQTTClient{..} pch pkt =
           | otherwise = notify
 
           where
-            notify = case _cb of
-                       Nothing -> pure ()
-                       Just x  -> x c (blToText _pubTopic) _pubBody _pubProps
+            notify = do
+              topic <- resolveTopic (aliasID ((\(Properties x) -> x) _pubProps))
+              case _cb of
+                Nothing -> pure ()
+                Just x  -> x c topic _pubBody _pubProps
+
+            resolveTopic Nothing = pure (blToText _pubTopic)
+            resolveTopic (Just x) = do
+              when (_pubTopic /= "") $ atomically $ modifyTVar' _inA (Map.insert x (blToText _pubTopic))
+              m <- readTVarIO _inA
+              pure (m Map.! x)
+
+            aliasID []                   = Nothing
+            aliasID (PropTopicAlias x:_) = Just x
+            aliasID (_:xs)               = aliasID xs
 
             manageQoS2 = do
               ch <- newTChanIO
