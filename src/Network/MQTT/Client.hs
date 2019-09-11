@@ -267,7 +267,7 @@ dispatch c@MQTTClient{..} pch pkt =
 
           where
             notify = do
-              topic <- resolveTopic (aliasID (propList _pubProps))
+              topic <- resolveTopic (foldr aliasID Nothing (propList _pubProps))
               case _cb of
                 Nothing -> pure ()
                 Just x  -> x c topic _pubBody _pubProps
@@ -278,9 +278,8 @@ dispatch c@MQTTClient{..} pch pkt =
               m <- readTVarIO _inA
               pure (m Map.! x)
 
-            aliasID []                   = Nothing
-            aliasID (PropTopicAlias x:_) = Just x
-            aliasID (_:xs)               = aliasID xs
+            aliasID (PropTopicAlias x) _ = Just x
+            aliasID _ o                  = o
 
             manageQoS2 = do
               ch <- newTChanIO
@@ -436,7 +435,7 @@ maxAliases :: MQTTClient -> IO Word16
 maxAliases MQTTClient{..} = readTVarIO _svrProps >>= pure . foldr f 0 . propList
   where
     f (PropTopicAliasMaximum n) _ = n
-    f _ o = o
+    f _ o                         = o
 
 -- | Publish a message with the specified QoS and Properties list.  If
 -- possible, use an alias to shorten the message length.
