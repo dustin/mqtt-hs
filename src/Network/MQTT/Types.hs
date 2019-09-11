@@ -866,8 +866,8 @@ parseDisconnect Protocol311 = do
 
 parseDisconnect Protocol50 = do
   _ <- A.word8 0x14
-  _ <- parseHdrLen
+  rl <- parseHdrLen
   r <- A.anyWord8
-  props <- parseProperties Protocol50
+  props <- if rl > 1 then parseProperties Protocol50 else pure mempty
 
   pure $ DisconnectPkt (DisconnectRequest (fromByte r) props)
