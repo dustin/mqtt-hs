@@ -77,9 +77,9 @@ instance Arbitrary QoS where
 
 instance Arbitrary ConnACKFlags where
   arbitrary = ConnACKFlags <$> arbitrary <*> arbitrary <*> arbitrary
-  shrink (ConnACKFlags b c p@(Properties pl))
+  shrink (ConnACKFlags b c pl)
     | length pl == 0 = []
-    | otherwise = ConnACKFlags b c <$> shrink p
+    | otherwise = ConnACKFlags b c <$> shrink pl
 
 instance Arbitrary PublishRequest where
   arbitrary = do
@@ -108,9 +108,9 @@ instance Arbitrary SubscribeRequest where
   arbitrary = arbitrary >>= \pid -> choose (1,11) >>= \n -> SubscribeRequest pid <$> vectorOf n sub <*> arbitrary
     where sub = liftA2 (,) astr arbitrary
 
-  shrink (SubscribeRequest w s (Properties p)) =
+  shrink (SubscribeRequest w s p) =
     if length s < 2 then []
-    else [SubscribeRequest w (take 1 s) (Properties p') | p' <- shrinkList (:[]) p, length p > 1]
+    else [SubscribeRequest w (take 1 s) p' | p' <- shrinkList (:[]) p, length p > 1]
 
 instance Arbitrary SubOptions where
   arbitrary = SubOptions <$> arbitraryBoundedEnum <*> arbitrary <*> arbitrary <*> arbitrary
@@ -164,12 +164,6 @@ instance Arbitrary MT.Property where
     PropSubscriptionIdentifierAvailable <$> arbitrary,
     PropSharedSubscriptionAvailable <$> arbitrary
     ]
-
-instance Arbitrary Properties where
-  arbitrary = Properties <$> arbitrary
-  shrink (Properties l)
-    | length l == 1 = []
-    | otherwise = [Properties sl | sl <- shrinkList (:[]) l, length sl > 0]
 
 instance Arbitrary AuthRequest where
   arbitrary = AuthRequest <$> arbitrary <*> arbitrary
@@ -246,8 +240,8 @@ prop_SubOptionsRT o = case A.parse parseSubOptions (toByteString Protocol50 o) o
                       (A.Fail _ _ _) -> False
                       (A.Done _ r)   -> r == o
 
-prop_PropertiesRT :: Properties -> Bool
-prop_PropertiesRT p = case A.parse (parseProperties Protocol50) (toByteString Protocol50 p) of
+prop_PropertiesRT :: [MT.Property] -> Bool
+prop_PropertiesRT p = case A.parse (parseProperties Protocol50) (bsProps Protocol50 p) of
                         (A.Fail _ _ _) -> False
                         (A.Done _ r)   -> r == p
 

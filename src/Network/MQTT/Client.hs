@@ -16,7 +16,7 @@ An MQTT protocol client, based on the 3.1.1 specification:
 module Network.MQTT.Client (
   -- * Configuring the client.
   MQTTConfig(..), MQTTClient, QoS(..), Topic, mqttConfig,  mkLWT, LastWill(..),
-  ProtocolLevel(..), Properties(..), Property(..), SubOptions(..), defaultSubOptions,
+  ProtocolLevel(..), Property(..), SubOptions(..), defaultSubOptions,
   -- * Running and waiting for the client.
   runClient, runClientTLS, waitForClient,
   connectURI, svrProps,
@@ -77,14 +77,14 @@ data DispatchType = DSubACK | DUnsubACK | DPubACK | DPubREC | DPubREL | DPubCOMP
 data MQTTClient = MQTTClient {
   _ch         :: TChan MQTTPkt
   , _pktID    :: TVar Word16
-  , _cb       :: Maybe (MQTTClient -> Topic -> BL.ByteString -> Properties -> IO ())
+  , _cb       :: Maybe (MQTTClient -> Topic -> BL.ByteString -> [Property] -> IO ())
   , _ts       :: TVar [Async ()]
   , _acks     :: TVar (Map (DispatchType,Word16) (TChan MQTTPkt))
   , _st       :: TVar ConnState
   , _ct       :: TVar (Async ())
   , _outA     :: TVar (Map Topic Word16)
   , _inA      :: TVar (Map Word16 Topic)
-  , _svrProps :: TVar Properties
+  , _svrProps :: TVar [Property]
   }
 
 -- | Configuration for setting up an MQTT client.
@@ -96,9 +96,9 @@ data MQTTConfig = MQTTConfig{
   , _password     :: Maybe String -- ^ Optional password.
   , _cleanSession :: Bool -- ^ False if a session should be reused.
   , _lwt          :: Maybe LastWill -- ^ LastWill message to be sent on client disconnect.
-  , _msgCB        :: Maybe (MQTTClient -> Topic -> BL.ByteString -> Properties -> IO ()) -- ^ Callback for incoming messages.
+  , _msgCB        :: Maybe (MQTTClient -> Topic -> BL.ByteString -> [Property] -> IO ()) -- ^ Callback for incoming messages.
   , _protLvl      :: ProtocolLevel
-  , _connProps    :: Properties
+  , _connProps    :: [Property]
   }
 
 -- | A default MQTTConfig.  A _connID /should/ be provided by the client in the returned config,
@@ -267,7 +267,7 @@ dispatch c@MQTTClient{..} pch pkt =
 
           where
             notify = do
-              topic <- resolveTopic (foldr aliasID Nothing (propList _pubProps))
+              topic <- resolveTopic (foldr aliasID Nothing _pubProps)
               case _cb of
                 Nothing -> pure ()
                 Just x  -> x c topic _pubBody _pubProps
@@ -346,7 +346,7 @@ sendAndWait c@MQTTClient{..} dt f = do
 
 -- | Subscribe to a list of topic filters with their respective QoSes.
 -- The accepted QoSes are returned in the same order as requested.
-subscribe :: MQTTClient -> [(Filter, SubOptions)] -> IO ([Either SubErr QoS], Properties)
+subscribe :: MQTTClient -> [(Filter, SubOptions)] -> IO ([Either SubErr QoS], [Property])
 subscribe c@MQTTClient{..} ls = do
   r <- sendAndWait c DSubACK (\pid -> SubscribePkt $ SubscribeRequest pid ls' mempty)
   let (SubACKPkt (SubscribeResponse _ rs props)) = r
@@ -373,7 +373,7 @@ publishq :: MQTTClient
          -> BL.ByteString -- ^ Message body
          -> Bool          -- ^ Retain flag
          -> QoS           -- ^ QoS
-         -> Properties    -- ^ Properties
+         -> [Property]    -- ^ Properties
          -> IO ()
 publishq c t m r q props = do
   (ch,pid) <- atomically $ reservePktID c types
@@ -428,11 +428,11 @@ mkLWT t m r = T.LastWill{
   T._willProps=mempty
   }
 
-svrProps :: MQTTClient -> IO Properties
+svrProps :: MQTTClient -> IO [Property]
 svrProps MQTTClient{..} = readTVarIO _svrProps
 
 maxAliases :: MQTTClient -> IO Word16
-maxAliases MQTTClient{..} = readTVarIO _svrProps >>= pure . foldr f 0 . propList
+maxAliases MQTTClient{..} = readTVarIO _svrProps >>= pure . foldr f 0
   where
     f (PropTopicAliasMaximum n) _ = n
     f _ o                         = o
@@ -444,14 +444,14 @@ pubAliased :: MQTTClient
          -> BL.ByteString -- ^ Message body
          -> Bool          -- ^ Retain flag
          -> QoS           -- ^ QoS
-         -> Properties    -- ^ Properties
+         -> [Property]    -- ^ Properties
          -> IO ()
 pubAliased c@MQTTClient{..} t m r q props = do
   x <- maxAliases c
   (t', n) <- alias x
   let np = props <> case n of
                       0 -> mempty
-                      _ -> Properties [PropTopicAlias n]
+                      _ -> [PropTopicAlias n]
   publishq c t' m r q np
 
   where

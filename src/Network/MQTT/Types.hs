@@ -16,13 +16,13 @@ module Network.MQTT.Types (
   LastWill(..), MQTTPkt(..), QoS(..),
   ConnectRequest(..), connectRequest, ConnACKFlags(..), ConnACKRC(..),
   PublishRequest(..), PubACK(..), PubREC(..), PubREL(..), PubCOMP(..),
-  ProtocolLevel(..), Property(..), Properties(..), AuthRequest(..),
+  ProtocolLevel(..), Property(..), AuthRequest(..),
   SubscribeRequest(..), SubOptions(..), defaultSubOptions, SubscribeResponse(..), SubErr(..),
   RetainHandling(..), DisconnectRequest(..),
   UnsubscribeRequest(..), UnsubscribeResponse(..), DiscoReason(..),
-  parsePacket, ByteMe(toByteString), propList,
+  parsePacket, ByteMe(toByteString),
   -- for testing
-  encodeLength, parseHdrLen, parseProperty, parseProperties,
+  encodeLength, parseHdrLen, parseProperty, parseProperties, bsProps,
   parseSubOptions, ByteSize(..)
   ) where
 
@@ -259,28 +259,17 @@ parseProperty = do
   <|> (A.word8 0x29 >> PropSubscriptionIdentifierAvailable <$> A.anyWord8)
   <|> (A.word8 0x2a >> PropSharedSubscriptionAvailable <$> A.anyWord8)
 
-newtype Properties = Properties [Property] deriving(Eq, Show)
+bsProps :: ProtocolLevel -> [Property] -> BL.ByteString
+bsProps Protocol311 _ = mempty
+bsProps p l = let b = (mconcat . map (toByteString p)) l in
+                (BL.pack . encodeLength . fromEnum . BL.length) b <> b
 
-instance Monoid Properties where
-  mempty = Properties []
-
-instance Semigroup Properties where
-  (Properties a) <> (Properties b) = Properties (a <> b)
-
-instance ByteMe Properties where
-  toByteString Protocol311 _ = mempty
-  toByteString p (Properties l) = let b = (mconcat . map (toByteString p)) l in
-                                    (BL.pack . encodeLength . fromEnum . BL.length) b <> b
-
-propList :: Properties -> [Property]
-propList (Properties l) = l
-
-parseProperties :: ProtocolLevel -> A.Parser Properties
+parseProperties :: ProtocolLevel -> A.Parser [Property]
 parseProperties Protocol311 = pure mempty
 parseProperties Protocol50 = do
   len <- decodeVarInt
   props <- A.take len
-  Properties <$> subs props
+  subs props
 
   where
     subs d = case A.parseOnly (A.many' parseProperty) d of
@@ -300,7 +289,7 @@ data LastWill = LastWill {
   , _willQoS   :: QoS
   , _willTopic :: BL.ByteString
   , _willMsg   :: BL.ByteString
-  , _willProps :: Properties
+  , _willProps :: [Property]
   } deriving(Eq, Show)
 
 data ConnectRequest = ConnectRequest {
@@ -310,7 +299,7 @@ data ConnectRequest = ConnectRequest {
   , _cleanSession :: Bool
   , _keepAlive    :: Word16
   , _connID       :: BL.ByteString
-  , _properties   :: Properties
+  , _properties   :: [Property]
   } deriving (Eq, Show)
 
 connectRequest :: ConnectRequest
@@ -334,7 +323,7 @@ instance ByteMe ConnectRequest where
       val Protocol50 = "\NUL\EOTMQTT\ENQ" -- MQTT + Protocol50
                        <> BL.singleton connBits
                        <> encodeWord16 _keepAlive
-                       <> toByteString prot _properties
+                       <> bsProps prot _properties
                        <> toByteString prot _connID
                        <> lwt _lastWill
                        <> perhaps _username
@@ -351,7 +340,7 @@ instance ByteMe ConnectRequest where
 
       lwt :: Maybe LastWill -> BL.ByteString
       lwt Nothing = mempty
-      lwt (Just LastWill{..}) = toByteString prot _willProps
+      lwt (Just LastWill{..}) = bsProps prot _willProps
                                 <> toByteString prot _willTopic
                                 <> toByteString prot _willMsg
 
@@ -522,10 +511,10 @@ connACKRev :: [(Word8, ConnACKRC)]
 connACKRev = map (\w -> (toByte w, w)) [minBound..]
 
 
-data ConnACKFlags = ConnACKFlags Bool ConnACKRC Properties deriving (Eq, Show)
+data ConnACKFlags = ConnACKFlags Bool ConnACKRC [Property] deriving (Eq, Show)
 
 instance ByteMe ConnACKFlags where
-  toBytes prot (ConnACKFlags sp rc props) = let pbytes = toBytes prot props in
+  toBytes prot (ConnACKFlags sp rc props) = let pbytes = BL.unpack $ bsProps prot props in
                                               [0x20]
                                               <> encodeVarInt (2 + length pbytes)
                                               <>[ boolBit sp, toByte rc] <> pbytes
@@ -547,7 +536,7 @@ data PublishRequest = PublishRequest{
   , _pubTopic  :: BL.ByteString
   , _pubPktID  :: Word16
   , _pubBody   :: BL.ByteString
-  , _pubProps  :: Properties
+  , _pubProps  :: [Property]
   } deriving(Eq, Show)
 
 instance ByteMe PublishRequest where
@@ -560,7 +549,7 @@ instance ByteMe PublishRequest where
           pktid
             | _pubQoS == QoS0 = mempty
             | otherwise = encodeWord16 _pubPktID
-          val = toByteString prot _pubTopic <> pktid <> toByteString prot _pubProps <> _pubBody
+          val = toByteString prot _pubTopic <> pktid <> bsProps prot _pubProps <> _pubBody
 
 parsePublish :: ProtocolLevel -> A.Parser MQTTPkt
 parsePublish prot = do
@@ -628,12 +617,12 @@ parseSubOptions = do
 subOptionsBytes :: ProtocolLevel -> [(BL.ByteString, SubOptions)] -> BL.ByteString
 subOptionsBytes prot = (BL.concat . map (\(bs,so) -> toByteString prot bs <> toByteString prot so))
 
-data SubscribeRequest = SubscribeRequest Word16 [(BL.ByteString, SubOptions)] Properties
+data SubscribeRequest = SubscribeRequest Word16 [(BL.ByteString, SubOptions)] [Property]
                       deriving(Eq, Show)
 
 instance ByteMe SubscribeRequest where
   toByteString prot (SubscribeRequest pid sreq props) =
-    BL.singleton 0x82 <> withLength (encodeWord16 pid <> toByteString prot props <> subOptionsBytes prot sreq)
+    BL.singleton 0x82 <> withLength (encodeWord16 pid <> bsProps prot props <> subOptionsBytes prot sreq)
 
 newtype PubACK = PubACK Word16 deriving(Eq, Show)
 
@@ -695,11 +684,11 @@ parseSubscribe prot = do
                       Right x -> pure x
       parseSub = liftA2 (,) aString parseSubOptions
 
-data SubscribeResponse = SubscribeResponse Word16 [Either SubErr QoS] Properties deriving (Eq, Show)
+data SubscribeResponse = SubscribeResponse Word16 [Either SubErr QoS] [Property] deriving (Eq, Show)
 
 instance ByteMe SubscribeResponse where
   toByteString prot (SubscribeResponse pid sres props) =
-    BL.singleton 0x90 <> withLength (encodeWord16 pid <> toByteString prot props <> BL.pack (b <$> sres))
+    BL.singleton 0x90 <> withLength (encodeWord16 pid <> bsProps prot props <> BL.pack (b <$> sres))
 
     where
       b (Left SubErrUnspecifiedError)                    =  0x80
@@ -713,9 +702,9 @@ instance ByteMe SubscribeResponse where
       b (Left SubErrWildcardSubscriptionsNotSupported)   =  0xA2
       b (Right q)                                        = qosW q
 
-propLen :: ProtocolLevel -> Properties -> Int
+propLen :: ProtocolLevel -> [Property] -> Int
 propLen Protocol311 _ = 0
-propLen prot props    = fromEnum $ BL.length (toByteString prot props)
+propLen prot props    = fromEnum $ BL.length (bsProps prot props)
 
 data SubErr = SubErrUnspecifiedError
   | SubErrImplementationSpecificError
@@ -780,11 +769,11 @@ parseUnsubACK = do
   _ <- parseHdrLen
   UnsubACKPkt . UnsubscribeResponse <$> aWord16
 
-data AuthRequest = AuthRequest Word8 Properties deriving (Eq, Show)
+data AuthRequest = AuthRequest Word8 [Property] deriving (Eq, Show)
 
 instance ByteMe AuthRequest where
   toByteString prot (AuthRequest i props) = BL.singleton 0xf0
-                                            <> withLength (BL.singleton i <> toByteString prot props)
+                                            <> withLength (BL.singleton i <> bsProps prot props)
 
 parseAuth :: A.Parser MQTTPkt
 parseAuth = do
@@ -861,14 +850,14 @@ instance ByteSize DiscoReason where
 discoReasonRev :: [(Word8, DiscoReason)]
 discoReasonRev = map (\w -> (toByte w, w)) [minBound..]
 
-data DisconnectRequest = DisconnectRequest DiscoReason Properties deriving (Eq, Show)
+data DisconnectRequest = DisconnectRequest DiscoReason [Property] deriving (Eq, Show)
 
 instance ByteMe DisconnectRequest where
   toByteString Protocol311 _ = "\224\NUL"
 
   toByteString Protocol50 (DisconnectRequest r props) = BL.singleton 0x14
                                                         <> withLength (BL.singleton (toByte r)
-                                                                       <> toByteString Protocol50 props)
+                                                                       <> bsProps Protocol50 props)
 
 parseDisconnect :: ProtocolLevel -> A.Parser MQTTPkt
 parseDisconnect Protocol311 = do
