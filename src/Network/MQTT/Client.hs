@@ -77,7 +77,7 @@ data DispatchType = DSubACK | DUnsubACK | DPubACK | DPubREC | DPubREL | DPubCOMP
 data MQTTClient = MQTTClient {
   _ch         :: TChan MQTTPkt
   , _pktID    :: TVar Word16
-  , _cb       :: Maybe (MQTTClient -> Topic -> BL.ByteString -> IO ())
+  , _cb       :: Maybe (MQTTClient -> Topic -> BL.ByteString -> Properties -> IO ())
   , _ts       :: TVar [Async ()]
   , _acks     :: TVar (Map (DispatchType,Word16) (TChan MQTTPkt))
   , _st       :: TVar ConnState
@@ -95,7 +95,7 @@ data MQTTConfig = MQTTConfig{
   , _password     :: Maybe String -- ^ Optional password.
   , _cleanSession :: Bool -- ^ False if a session should be reused.
   , _lwt          :: Maybe LastWill -- ^ LastWill message to be sent on client disconnect.
-  , _msgCB        :: Maybe (MQTTClient -> Topic -> BL.ByteString -> IO ()) -- ^ Callback for incoming messages.
+  , _msgCB        :: Maybe (MQTTClient -> Topic -> BL.ByteString -> Properties -> IO ()) -- ^ Callback for incoming messages.
   , _protLvl      :: ProtocolLevel
   , _connProps    :: Properties
   }
@@ -274,7 +274,7 @@ dispatch c@MQTTClient{..} pch pkt =
           where
             notify = case _cb of
                        Nothing -> pure ()
-                       Just x  -> x c (blToText _pubTopic) _pubBody
+                       Just x  -> x c (blToText _pubTopic) _pubBody _pubProps
 
             manageQoS2 = do
               ch <- newTChanIO
