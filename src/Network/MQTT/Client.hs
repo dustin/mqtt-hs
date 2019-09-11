@@ -267,7 +267,7 @@ dispatch c@MQTTClient{..} pch pkt =
 
           where
             notify = do
-              topic <- resolveTopic (aliasID ((\(Properties x) -> x) _pubProps))
+              topic <- resolveTopic (aliasID (propList _pubProps))
               case _cb of
                 Nothing -> pure ()
                 Just x  -> x c topic _pubBody _pubProps
@@ -433,9 +433,8 @@ svrProps :: MQTTClient -> IO Properties
 svrProps MQTTClient{..} = readTVarIO _svrProps
 
 maxAliases :: MQTTClient -> IO Int
-maxAliases MQTTClient{..} = readTVarIO _svrProps >>= pure . go . l
+maxAliases MQTTClient{..} = readTVarIO _svrProps >>= pure . go . propList
   where
-    l (Properties x) = x
     go []                          = 0
     go (PropTopicAliasMaximum n:_) = fromEnum n
     go (_:xs)                      = go xs

@@ -20,7 +20,7 @@ module Network.MQTT.Types (
   SubscribeRequest(..), SubOptions(..), defaultSubOptions, SubscribeResponse(..), SubErr(..),
   RetainHandling(..), DisconnectRequest(..),
   UnsubscribeRequest(..), UnsubscribeResponse(..), DiscoReason(..),
-  parsePacket, ByteMe(toByteString),
+  parsePacket, ByteMe(toByteString), propList,
   -- for testing
   encodeLength, parseHdrLen, parseProperty, parseProperties,
   parseSubOptions, ByteSize(..)
@@ -271,6 +271,9 @@ instance ByteMe Properties where
   toByteString Protocol311 _ = mempty
   toByteString p (Properties l) = let b = (mconcat . map (toByteString p)) l in
                                     (BL.pack . encodeLength . fromEnum . BL.length) b <> b
+
+propList :: Properties -> [Property]
+propList (Properties l) = l
 
 parseProperties :: ProtocolLevel -> A.Parser Properties
 parseProperties Protocol311 = pure mempty
