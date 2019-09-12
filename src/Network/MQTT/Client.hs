@@ -211,7 +211,10 @@ runClientAppData mkconn MQTTConfig{..} = do
 
       where
         processOut = runConduit $
-          C.repeatM (liftIO (atomically $ readTChan _ch))
+          C.repeatM (liftIO (atomically $ do
+                                s <- readTVar _st
+                                when (s /= Connected) $ fail "not connected"
+                                readTChan _ch))
           .| C.map (BL.toStrict . toByteString _protLvl)
           .| appSink ad
 
