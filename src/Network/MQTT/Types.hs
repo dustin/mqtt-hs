@@ -855,7 +855,7 @@ data DisconnectRequest = DisconnectRequest DiscoReason [Property] deriving (Eq, 
 instance ByteMe DisconnectRequest where
   toByteString Protocol311 _ = "\224\NUL"
 
-  toByteString Protocol50 (DisconnectRequest r props) = BL.singleton 0x14
+  toByteString Protocol50 (DisconnectRequest r props) = BL.singleton 0xe0
                                                         <> withLength (BL.singleton (toByte r)
                                                                        <> bsProps Protocol50 props)
 
@@ -865,7 +865,7 @@ parseDisconnect Protocol311 = do
   pure $ DisconnectPkt req
 
 parseDisconnect Protocol50 = do
-  _ <- A.word8 0x14
+  _ <- A.word8 0xe0
   rl <- parseHdrLen
   r <- A.anyWord8
   props <- if rl > 1 then parseProperties Protocol50 else pure mempty
