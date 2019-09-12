@@ -211,10 +211,7 @@ runClientAppData mkconn MQTTConfig{..} = do
 
       where
         processOut = runConduit $
-          C.repeatM (liftIO (atomically $ do
-                                s <- readTVar _st
-                                when (s /= Connected) $ fail "not connected"
-                                readTChan _ch))
+          C.repeatM (liftIO (atomically $ checkConnected c >> readTChan _ch))
           .| C.map (BL.toStrict . toByteString _protLvl)
           .| appSink ad
 
@@ -304,11 +301,14 @@ dispatch c@MQTTClient{..} pch pkt =
 killConn :: E.Exception e => MQTTClient -> e -> IO ()
 killConn MQTTClient{..} e = readTVarIO _ct >>= \t -> cancelWith t e
 
-sendPacket :: MQTTClient -> MQTTPkt -> STM ()
-sendPacket MQTTClient{..} p = do
+checkConnected :: MQTTClient -> STM ()
+checkConnected MQTTClient{..} = do
   st <- readTVar _st
   when (st /= Connected) $ fail "not connected"
-  writeTChan _ch p
+  pure ()
+
+sendPacket :: MQTTClient -> MQTTPkt -> STM ()
+sendPacket c@MQTTClient{..} p = checkConnected c >> writeTChan _ch p
 
 sendPacketIO :: MQTTClient -> MQTTPkt -> IO ()
 sendPacketIO c = atomically . sendPacket c
@@ -320,7 +320,8 @@ blToText :: BL.ByteString -> Text
 blToText = TE.decodeUtf8 . BL.toStrict
 
 reservePktID :: MQTTClient -> [DispatchType] -> STM (TChan MQTTPkt, Word16)
-reservePktID MQTTClient{..} dts = do
+reservePktID c@MQTTClient{..} dts = do
+  checkConnected c
   ch <- newTChan
   pid <- readTVar _pktID
   modifyTVar' _pktID (\x -> case succ x of 0 -> 1; x' -> x')
