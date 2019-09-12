@@ -329,10 +329,10 @@ reservePktID c@MQTTClient{..} dts = do
   pure (ch,pid)
 
 releasePktID :: MQTTClient -> (DispatchType,Word16) -> STM ()
-releasePktID MQTTClient{..} k = modifyTVar' _acks (Map.delete k)
+releasePktID c@MQTTClient{..} k = checkConnected c >> modifyTVar' _acks (Map.delete k)
 
 releasePktIDs :: MQTTClient -> [(DispatchType,Word16)] -> STM ()
-releasePktIDs MQTTClient{..} ks = modifyTVar' _acks deleteMany
+releasePktIDs c@MQTTClient{..} ks = checkConnected c >> modifyTVar' _acks deleteMany
   where deleteMany m = foldr Map.delete m ks
 
 sendAndWait :: MQTTClient -> DispatchType -> (Word16 -> MQTTPkt) -> IO MQTTPkt
