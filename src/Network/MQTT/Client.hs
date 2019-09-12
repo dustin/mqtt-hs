@@ -370,9 +370,9 @@ subscribe c@MQTTClient{..} ls = do
     where ls' = map (\(s, i) -> (textToBL s, i)) ls
 
 -- | Unsubscribe from a list of topic filters.
-unsubscribe :: MQTTClient -> [Filter] -> IO ()
-unsubscribe c@MQTTClient{..} ls =
-  void $ sendAndWait c DUnsubACK (\pid -> UnsubscribePkt $ UnsubscribeRequest pid (map textToBL ls))
+unsubscribe :: MQTTClient -> [Filter] -> [Property] -> IO ()
+unsubscribe c@MQTTClient{..} ls props =
+  void $ sendAndWait c DUnsubACK (\pid -> UnsubscribePkt $ UnsubscribeRequest pid (map textToBL ls) props)
 
 -- | Publish a message (QoS 0).
 publish :: MQTTClient

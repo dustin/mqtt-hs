@@ -125,10 +125,10 @@ instance Arbitrary SubscribeResponse where
     | otherwise = [SubscribeResponse pid sl props | sl <- shrinkList (:[]) l, length sl > 0]
 
 instance Arbitrary UnsubscribeRequest where
-  arbitrary = arbitrary >>= \pid -> choose (1,11) >>= \n -> UnsubscribeRequest pid <$> vectorOf n astr
-  shrink (UnsubscribeRequest p l)
+  arbitrary = arbitrary >>= \pid -> choose (1,11) >>= \n -> UnsubscribeRequest pid <$> vectorOf n astr <*> arbitrary
+  shrink (UnsubscribeRequest p l props)
     | length l == 1 = []
-    | otherwise = [UnsubscribeRequest p sl | sl <- shrinkList (:[]) l, length sl > 0]
+    | otherwise = [UnsubscribeRequest p sl props | sl <- shrinkList (:[]) l, length sl > 0]
 
 instance Arbitrary UnsubscribeResponse where
   arbitrary = UnsubscribeResponse <$> arbitrary
@@ -221,6 +221,7 @@ prop_PacketRT311 p = available p ==>
     v311mask (SubscribePkt (SubscribeRequest p s _)) = SubscribePkt (SubscribeRequest p c mempty)
       where c = map (\(k,SubOptions{..}) -> (k,defaultSubOptions{_subQoS=_subQoS})) s
     v311mask (SubACKPkt (SubscribeResponse p s _)) = SubACKPkt (SubscribeResponse p s mempty)
+    v311mask (UnsubscribePkt (UnsubscribeRequest p l _)) = UnsubscribePkt (UnsubscribeRequest p l mempty)
     v311mask (PublishPkt req) = PublishPkt req{_pubProps=mempty}
     v311mask (DisconnectPkt _) = DisconnectPkt (DisconnectRequest DiscoNormalDisconnection mempty)
     v311mask x = x

@@ -350,7 +350,7 @@ instance ByteMe ConnectRequest where
 
 
 data MQTTPkt = ConnPkt ConnectRequest
-             | ConnACKPkt ConnACKFlags           -- TODO: capture props
+             | ConnACKPkt ConnACKFlags
              | PublishPkt PublishRequest
              | PubACKPkt PubACK                  -- TODO: props
              | PubRECPkt PubREC                  -- TODO: props
@@ -358,7 +358,7 @@ data MQTTPkt = ConnPkt ConnectRequest
              | PubCOMPPkt PubCOMP                -- TODO: props
              | SubscribePkt SubscribeRequest
              | SubACKPkt SubscribeResponse
-             | UnsubscribePkt UnsubscribeRequest -- TODO: props
+             | UnsubscribePkt UnsubscribeRequest
              | UnsubACKPkt UnsubscribeResponse   -- TODO: props
              | PingPkt
              | PongPkt
@@ -388,7 +388,7 @@ parsePacket p = parseConnect <|> parseConnectACK
                 <|> parsePublish p <|> parsePubACK
                 <|> parsePubREC <|> parsePubREL <|> parsePubCOMP
                 <|> parseSubscribe p <|> parseSubACK p
-                <|> parseUnsubscribe <|> parseUnsubACK
+                <|> parseUnsubscribe p <|> parseUnsubACK
                 <|> PingPkt <$ A.string "\192\NUL" <|> PongPkt <$ A.string "\208\NUL"
                 <|> parseDisconnect p
                 <|> parseAuth
@@ -738,21 +738,23 @@ parseSubACK prot = do
     p 0xA2 = Left SubErrWildcardSubscriptionsNotSupported
     p x    = Right (wQos x)
 
-data UnsubscribeRequest = UnsubscribeRequest Word16 [BL.ByteString]
+data UnsubscribeRequest = UnsubscribeRequest Word16 [BL.ByteString] [Property]
                         deriving(Eq, Show)
 
 instance ByteMe UnsubscribeRequest where
-  toByteString prot (UnsubscribeRequest pid sreq) =
+  toByteString prot (UnsubscribeRequest pid sreq props) =
     BL.singleton 0xa2
-    <> withLength (encodeWord16 pid <> mconcat (toByteString prot <$> sreq))
+    <> withLength (encodeWord16 pid <> bsProps prot props <> mconcat (toByteString prot <$> sreq))
 
-parseUnsubscribe :: A.Parser MQTTPkt
-parseUnsubscribe = do
+parseUnsubscribe :: ProtocolLevel -> A.Parser MQTTPkt
+parseUnsubscribe prot = do
   _ <- A.word8 0xa2
   hl <- parseHdrLen
   pid <- aWord16
-  content <- A.take (fromEnum hl - 2)
-  UnsubscribePkt . UnsubscribeRequest pid <$> parseSubs content
+  props <- parseProperties prot
+  content <- A.take (fromEnum hl - 2 - propLen prot props)
+  subs <- parseSubs content
+  pure $ UnsubscribePkt (UnsubscribeRequest pid subs props)
     where
       parseSubs l = case A.parseOnly (A.many1 aString) l of
                       Left x  -> fail x
