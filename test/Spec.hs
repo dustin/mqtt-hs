@@ -33,8 +33,8 @@ prop_rtLengthParser (SizeT x) =
   where e = encodeLength x
         d :: [Word8] -> Int
         d l = case A.parse parseHdrLen (L.pack l) of
-                (A.Fail _ _ _) -> undefined
-                (A.Done _ v)   -> v
+                A.Fail{}     -> undefined
+                (A.Done _ v) -> v
 
 testPacketRT :: Assertion
 testPacketRT = mapM_ tryParse [
@@ -46,8 +46,8 @@ testPacketRT = mapM_ tryParse [
     tryParse s = do
       let (A.Done _ x) = A.parse (parsePacket Protocol311) s
       case A.parse (parsePacket Protocol311) (toByteString Protocol311 x) of
-        f@(A.Fail _ _ _) -> assertFailure (show f)
-        (A.Done _ x')    -> assertEqual (show s) x x'
+        f@A.Fail{}    -> assertFailure (show f)
+        (A.Done _ x') -> assertEqual (show s) x x'
 
 instance Arbitrary LastWill where
   arbitrary = LastWill <$> arbitrary <*> arbitrary <*> astr <*> astr <*> arbitrary
@@ -78,7 +78,7 @@ instance Arbitrary QoS where
 instance Arbitrary ConnACKFlags where
   arbitrary = ConnACKFlags <$> arbitrary <*> arbitrary <*> arbitrary
   shrink (ConnACKFlags b c pl)
-    | length pl == 0 = []
+    | null pl = []
     | otherwise = ConnACKFlags b c <$> shrink pl
 
 instance Arbitrary PublishRequest where
@@ -122,13 +122,13 @@ instance Arbitrary SubscribeResponse where
 
   shrink (SubscribeResponse pid l props)
     | length l == 1 = []
-    | otherwise = [SubscribeResponse pid sl props | sl <- shrinkList (:[]) l, length sl > 0]
+    | otherwise = [SubscribeResponse pid sl props | sl <- shrinkList (:[]) l, not (null sl)]
 
 instance Arbitrary UnsubscribeRequest where
   arbitrary = arbitrary >>= \pid -> choose (1,11) >>= \n -> UnsubscribeRequest pid <$> vectorOf n astr <*> arbitrary
   shrink (UnsubscribeRequest p l props)
     | length l == 1 = []
-    | otherwise = [UnsubscribeRequest p sl props | sl <- shrinkList (:[]) l, length sl > 0]
+    | otherwise = [UnsubscribeRequest p sl props | sl <- shrinkList (:[]) l, not (null sl)]
 
 instance Arbitrary UnsubscribeResponse where
   arbitrary = UnsubscribeResponse <$> arbitrary <*> arbitrary
@@ -200,8 +200,8 @@ instance Arbitrary MQTTPkt where
 
 prop_PacketRT50 :: MQTTPkt -> QC.Property
 prop_PacketRT50 p = label (lab p) $ case A.parse (parsePacket Protocol50) (toByteString Protocol50 p) of
-                                         (A.Fail _ _ _) -> False
-                                         (A.Done _ r)   -> r == p
+                                         A.Fail{}     -> False
+                                         (A.Done _ r) -> r == p
 
   where lab x = let (s,_) = break (== ' ') . show $ x in s
 
@@ -209,8 +209,8 @@ prop_PacketRT311 :: MQTTPkt -> QC.Property
 prop_PacketRT311 p = available p ==>
   let p' = v311mask p in
     label (lab p') $ case A.parse (parsePacket Protocol311) (toByteString Protocol311 p') of
-                      (A.Fail _ _ _) -> False
-                      (A.Done _ r)   -> r == p'
+                      A.Fail{}     -> False
+                      (A.Done _ r) -> r == p'
 
   where
     lab x = let (s,_) = break (== ' ') . show $ x in s
@@ -232,20 +232,20 @@ prop_PacketRT311 p = available p ==>
 
 prop_PropertyRT :: MT.Property -> QC.Property
 prop_PropertyRT p = label (lab p) $ case A.parse parseProperty (toByteString Protocol50 p) of
-                                    (A.Fail _ _ _) -> False
-                                    (A.Done _ r)   -> r == p
+                                    A.Fail{}     -> False
+                                    (A.Done _ r) -> r == p
 
   where lab x = let (s,_) = break (== ' ') . show $ x in s
 
 prop_SubOptionsRT :: SubOptions -> Bool
 prop_SubOptionsRT o = case A.parse parseSubOptions (toByteString Protocol50 o) of
-                      (A.Fail _ _ _) -> False
-                      (A.Done _ r)   -> r == o
+                      A.Fail{}     -> False
+                      (A.Done _ r) -> r == o
 
 prop_PropertiesRT :: [MT.Property] -> Bool
 prop_PropertiesRT p = case A.parse (parseProperties Protocol50) (bsProps Protocol50 p) of
-                        (A.Fail _ _ _) -> False
-                        (A.Done _ r)   -> r == p
+                        A.Fail{}     -> False
+                        (A.Done _ r) -> r == p
 
 testTopicMatching :: [TestTree]
 testTopicMatching = let allTopics = ["a", "a/b", "a/b/c/d", "b/a/c/d",
@@ -268,8 +268,8 @@ tests = [
   localOption (QC.QuickCheckTests 10000) $ testProperty "header length rt (parser)" prop_rtLengthParser,
 
   testCase "rt some packets" testPacketRT,
-  localOption (QC.QuickCheckTests 1000) $ testProperty "rt packets 3.11" (prop_PacketRT311),
-  localOption (QC.QuickCheckTests 1000) $ testProperty "rt packets 5.0" (prop_PacketRT50),
+  localOption (QC.QuickCheckTests 1000) $ testProperty "rt packets 3.11" prop_PacketRT311,
+  localOption (QC.QuickCheckTests 1000) $ testProperty "rt packets 5.0" prop_PacketRT50,
   localOption (QC.QuickCheckTests 1000) $ testProperty "rt property" prop_PropertyRT,
   testProperty "rt properties" prop_PropertiesRT,
   testProperty "sub options" prop_SubOptionsRT,

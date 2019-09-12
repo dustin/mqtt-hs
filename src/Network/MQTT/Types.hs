@@ -230,34 +230,33 @@ instance ByteMe Property where
   toByteString _ (PropSharedSubscriptionAvailable x)     = peW8 0x2a x
 
 parseProperty :: A.Parser Property
-parseProperty = do
-  A.word8 0x01 >> PropPayloadFormatIndicator <$> A.anyWord8
-  <|> (A.word8 0x02 >> PropMessageExpiryInterval <$> aWord32)
-  <|> (A.word8 0x03 >> PropContentType <$> aString)
-  <|> (A.word8 0x08 >> PropResponseTopic <$> aString)
-  <|> (A.word8 0x09 >> PropCorrelationData <$> aString)
-  <|> (A.word8 0x0b >> PropSubscriptionIdentifier <$> decodeVarInt)
-  <|> (A.word8 0x11 >> PropSessionExpiryInterval <$> aWord32)
-  <|> (A.word8 0x12 >> PropAssignedClientIdentifier <$> aString)
-  <|> (A.word8 0x13 >> PropServerKeepAlive <$> aWord16)
-  <|> (A.word8 0x15 >> PropAuthenticationMethod <$> aString)
-  <|> (A.word8 0x16 >> PropAuthenticationData <$> aString)
-  <|> (A.word8 0x17 >> PropRequestProblemInformation <$> A.anyWord8)
-  <|> (A.word8 0x18 >> PropWillDelayInterval <$> aWord32)
-  <|> (A.word8 0x19 >> PropRequestResponseInformation <$> A.anyWord8)
-  <|> (A.word8 0x1a >> PropResponseInformation <$> aString)
-  <|> (A.word8 0x1c >> PropServerReference <$> aString)
-  <|> (A.word8 0x1f >> PropReasonString <$> aString)
-  <|> (A.word8 0x21 >> PropReceiveMaximum <$> aWord16)
-  <|> (A.word8 0x22 >> PropTopicAliasMaximum <$> aWord16)
-  <|> (A.word8 0x23 >> PropTopicAlias <$> aWord16)
-  <|> (A.word8 0x24 >> PropMaximumQoS <$> A.anyWord8)
-  <|> (A.word8 0x25 >> PropRetainAvailable <$> A.anyWord8)
-  <|> (A.word8 0x26 >> PropUserProperty <$> aString <*> aString)
-  <|> (A.word8 0x27 >> PropMaximumPacketSize <$> aWord32)
-  <|> (A.word8 0x28 >> PropWildcardSubscriptionAvailable <$> A.anyWord8)
-  <|> (A.word8 0x29 >> PropSubscriptionIdentifierAvailable <$> A.anyWord8)
-  <|> (A.word8 0x2a >> PropSharedSubscriptionAvailable <$> A.anyWord8)
+parseProperty = (A.word8 0x01 >> PropPayloadFormatIndicator <$> A.anyWord8)
+                <|> (A.word8 0x02 >> PropMessageExpiryInterval <$> aWord32)
+                <|> (A.word8 0x03 >> PropContentType <$> aString)
+                <|> (A.word8 0x08 >> PropResponseTopic <$> aString)
+                <|> (A.word8 0x09 >> PropCorrelationData <$> aString)
+                <|> (A.word8 0x0b >> PropSubscriptionIdentifier <$> decodeVarInt)
+                <|> (A.word8 0x11 >> PropSessionExpiryInterval <$> aWord32)
+                <|> (A.word8 0x12 >> PropAssignedClientIdentifier <$> aString)
+                <|> (A.word8 0x13 >> PropServerKeepAlive <$> aWord16)
+                <|> (A.word8 0x15 >> PropAuthenticationMethod <$> aString)
+                <|> (A.word8 0x16 >> PropAuthenticationData <$> aString)
+                <|> (A.word8 0x17 >> PropRequestProblemInformation <$> A.anyWord8)
+                <|> (A.word8 0x18 >> PropWillDelayInterval <$> aWord32)
+                <|> (A.word8 0x19 >> PropRequestResponseInformation <$> A.anyWord8)
+                <|> (A.word8 0x1a >> PropResponseInformation <$> aString)
+                <|> (A.word8 0x1c >> PropServerReference <$> aString)
+                <|> (A.word8 0x1f >> PropReasonString <$> aString)
+                <|> (A.word8 0x21 >> PropReceiveMaximum <$> aWord16)
+                <|> (A.word8 0x22 >> PropTopicAliasMaximum <$> aWord16)
+                <|> (A.word8 0x23 >> PropTopicAlias <$> aWord16)
+                <|> (A.word8 0x24 >> PropMaximumQoS <$> A.anyWord8)
+                <|> (A.word8 0x25 >> PropRetainAvailable <$> A.anyWord8)
+                <|> (A.word8 0x26 >> PropUserProperty <$> aString <*> aString)
+                <|> (A.word8 0x27 >> PropMaximumPacketSize <$> aWord32)
+                <|> (A.word8 0x28 >> PropWildcardSubscriptionAvailable <$> A.anyWord8)
+                <|> (A.word8 0x29 >> PropSubscriptionIdentifierAvailable <$> A.anyWord8)
+                <|> (A.word8 0x2a >> PropSharedSubscriptionAvailable <$> A.anyWord8)
 
 bsProps :: ProtocolLevel -> [Property] -> BL.ByteString
 bsProps Protocol311 _ = mempty
@@ -561,7 +560,7 @@ parsePublish prot = do
   _pubTopic <- aString
   _pubPktID <- if _pubQoS == QoS0 then pure 0 else aWord16
   _pubProps <- parseProperties prot
-  _pubBody <- BL.fromStrict <$> A.take (plen - (fromEnum $ BL.length _pubTopic) - 2
+  _pubBody <- BL.fromStrict <$> A.take (plen - fromEnum (BL.length _pubTopic) - 2
                                         - qlen _pubQoS - propLen prot _pubProps )
   pure $ PublishPkt PublishRequest{..}
 
@@ -615,7 +614,7 @@ parseSubOptions = do
     _subQoS=wQos (w .&. 0x3)}
 
 subOptionsBytes :: ProtocolLevel -> [(BL.ByteString, SubOptions)] -> BL.ByteString
-subOptionsBytes prot = (BL.concat . map (\(bs,so) -> toByteString prot bs <> toByteString prot so))
+subOptionsBytes prot = BL.concat . map (\(bs,so) -> toByteString prot bs <> toByteString prot so)
 
 data SubscribeRequest = SubscribeRequest Word16 [(BL.ByteString, SubOptions)] [Property]
                       deriving(Eq, Show)

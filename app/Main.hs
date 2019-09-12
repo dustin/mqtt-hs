@@ -27,9 +27,9 @@ main = do
   p <- async $ forever $ pubAliased mc "tmp/hi/from/haskell" "hi from haskell" False QoS1 pprops >> threadDelay 10000000
 
   putStrLn "Publishing at QoS > 0"
-  publishq mc "tmp/q" "this message is at QoS 2" True QoS2 ([PropUserProperty "hi" "there",
-                                                             PropMessageExpiryInterval 30,
-                                                             PropContentType "text/plain"])
+  publishq mc "tmp/q" "this message is at QoS 2" True QoS2 [PropUserProperty "hi" "there",
+                                                            PropMessageExpiryInterval 30,
+                                                            PropContentType "text/plain"]
   putStrLn "Published!"
 
   print =<< waitForClient mc

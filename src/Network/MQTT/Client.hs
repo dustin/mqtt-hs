@@ -404,14 +404,13 @@ publishq c t m r q props = do
         threadDelay 5000000
         pub True pid
 
-      pkt dup pid = (PublishPkt $ PublishRequest {
-                        _pubDup = dup,
-                        _pubQoS = q,
-                        _pubPktID = pid,
-                        _pubRetain = r,
-                        _pubTopic = textToBL t,
-                        _pubBody = m,
-                        _pubProps = props})
+      pkt dup pid = PublishPkt $ PublishRequest {_pubDup = dup,
+                                                 _pubQoS = q,
+                                                 _pubPktID = pid,
+                                                 _pubRetain = r,
+                                                 _pubTopic = textToBL t,
+                                                 _pubBody = m,
+                                                 _pubProps = props}
 
       satisfyQoS p ch pid
         | q == QoS0 = pure ()
@@ -447,7 +446,7 @@ svrProps :: MQTTClient -> IO [Property]
 svrProps MQTTClient{..} = readTVarIO _svrProps
 
 maxAliases :: MQTTClient -> IO Word16
-maxAliases MQTTClient{..} = readTVarIO _svrProps >>= pure . foldr f 0
+maxAliases MQTTClient{..} = foldr f 0 <$> readTVarIO _svrProps
   where
     f (PropTopicAliasMaximum n) _ = n
     f _ o                         = o
