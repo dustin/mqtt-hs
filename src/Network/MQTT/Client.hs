@@ -35,7 +35,7 @@ import           Control.Concurrent.STM     (STM, TChan, TVar, atomically,
                                              readTVarIO, retry, writeTChan,
                                              writeTVar)
 import qualified Control.Exception          as E
-import           Control.Monad              (forever, void, when)
+import           Control.Monad              (forever, guard, void, when)
 import           Control.Monad.IO.Class     (liftIO)
 import qualified Data.ByteString.Char8      as BCS
 import qualified Data.ByteString.Lazy       as BL
@@ -61,7 +61,7 @@ import           System.Timeout             (timeout)
 import           Network.MQTT.Topic         (Filter, Topic)
 import           Network.MQTT.Types         as T
 
-data ConnState = Starting | Connected | Disconnected deriving (Eq, Show)
+data ConnState = Starting | Connected | Disconnected | DiscoErr DisconnectRequest deriving (Eq, Show)
 
 data DispatchType = DSubACK | DUnsubACK | DPubACK | DPubREC | DPubREL | DPubCOMP
   deriving (Eq, Show, Ord, Enum, Bounded)
@@ -176,7 +176,10 @@ runClientAppData mkconn MQTTConfig{..} = do
       where
         connectAndRun = mkconn $ \ad ->
           E.bracket (start cli ad) cancelAll (run ad)
-        markDisco = atomically $ writeTVar (_st cli) Disconnected
+        markDisco = atomically $ do
+          st <- readTVar (_st cli)
+          guard $ st == Connected
+          writeTVar (_st cli) Disconnected
 
     start c@MQTTClient{..} ad = do
       runConduit $ do
@@ -251,7 +254,7 @@ dispatch c@MQTTClient{..} pch pkt =
     (PubRECPkt (PubREC i))                -> delegate DPubREC i
     (PubRELPkt (PubREL i))                -> delegate DPubREL i
     (PubCOMPPkt (PubCOMP i))              -> delegate DPubCOMP i
-    (DisconnectPkt req)                   -> readTVarIO _ct >>= \t -> cancelWith t (Discod req)
+    (DisconnectPkt req)                   -> disco req
     PongPkt                               -> atomically . writeTChan pch $ True
     x                                     -> print x
 
@@ -260,6 +263,11 @@ dispatch c@MQTTClient{..} pch pkt =
           case Map.lookup (dt, pid) m of
             Nothing -> pure ()
             Just ch -> writeTChan ch pkt
+
+        disco req = do
+          t <- readTVarIO _ct
+          atomically $ writeTVar _st (DiscoErr req)
+          cancelWith t (Discod req)
 
         pubMachine PublishRequest{..}
           | _pubQoS == QoS2 = void $ async manageQoS2 >>= link
@@ -302,10 +310,12 @@ killConn :: E.Exception e => MQTTClient -> e -> IO ()
 killConn MQTTClient{..} e = readTVarIO _ct >>= \t -> cancelWith t e
 
 checkConnected :: MQTTClient -> STM ()
-checkConnected MQTTClient{..} = do
-  st <- readTVar _st
-  when (st /= Connected) $ fail "not connected"
-  pure ()
+checkConnected MQTTClient{..} = readTVar _st >>= check
+  where
+    check Starting       = fail "not yet connected"
+    check Connected      = pure ()
+    check Disconnected   = fail "disconnected"
+    check (DiscoErr req) = fail (show req)
 
 sendPacket :: MQTTClient -> MQTTPkt -> STM ()
 sendPacket c@MQTTClient{..} p = checkConnected c >> writeTChan _ch p
