@@ -237,7 +237,7 @@ runClientAppData mkconn MQTTConfig{..} = do
 waitForClient :: MQTTClient -> IO (Either E.SomeException ())
 waitForClient MQTTClient{..} = waitCatch =<< readTVarIO _ct
 
-data MQTTException = Timeout | BadData deriving(Eq, Show)
+data MQTTException = Timeout | BadData | Discod DisconnectRequest deriving(Eq, Show)
 
 instance E.Exception MQTTException
 
@@ -251,6 +251,7 @@ dispatch c@MQTTClient{..} pch pkt =
     (PubRECPkt (PubREC i))                -> delegate DPubREC i
     (PubRELPkt (PubREL i))                -> delegate DPubREL i
     (PubCOMPPkt (PubCOMP i))              -> delegate DPubCOMP i
+    (DisconnectPkt req)                   -> readTVarIO _ct >>= \t -> cancelWith t (Discod req)
     PongPkt                               -> atomically . writeTChan pch $ True
     x                                     -> print x
 
