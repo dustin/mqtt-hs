@@ -275,8 +275,10 @@ parseProperties Protocol50 = do
                Left x  -> fail x
                Right x -> pure x
 
-data ProtocolLevel = Protocol311
-                   | Protocol50 deriving(Bounded, Enum, Eq, Show)
+-- | MQTT Protocol Levels
+data ProtocolLevel = Protocol311 -- ^ MQTT 3.1.1
+                   | Protocol50  -- ^ MQTT 5.0
+                   deriving(Bounded, Enum, Eq, Show)
 
 instance ByteMe ProtocolLevel where
   toByteString _ Protocol311 = BL.singleton 4

@@ -448,6 +448,7 @@ mkLWT t m r = T.LastWill{
   T._willProps=mempty
   }
 
+-- | Get the list of properties that were sent from the broker at connect time.
 svrProps :: MQTTClient -> IO [Property]
 svrProps MQTTClient{..} = readTVarIO _svrProps
 
@@ -458,7 +459,15 @@ maxAliases MQTTClient{..} = foldr f 0 <$> readTVarIO _svrProps
     f _ o                         = o
 
 -- | Publish a message with the specified QoS and Properties list.  If
--- possible, use an alias to shorten the message length.
+-- possible, use an alias to shorten the message length.  The alias
+-- list is managed by the client in a first-come, first-served basis,
+-- so if you use this with more properties than the broker allows,
+-- only the first N (up to TopicAliasMaximum, as specified by the
+-- broker at connect time) will be aliased.
+--
+-- This is safe to use as a general publish mechanism, as it will
+-- default to not aliasing whenver there's not already an alias and we
+-- can't create any more.
 pubAliased :: MQTTClient
          -> Topic         -- ^ Topic
          -> BL.ByteString -- ^ Message body
