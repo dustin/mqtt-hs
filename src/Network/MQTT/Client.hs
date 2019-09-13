@@ -97,7 +97,7 @@ data MQTTConfig = MQTTConfig{
   , _cleanSession :: Bool -- ^ False if a session should be reused.
   , _lwt          :: Maybe LastWill -- ^ LastWill message to be sent on client disconnect.
   , _msgCB        :: Maybe (MQTTClient -> Topic -> BL.ByteString -> [Property] -> IO ()) -- ^ Callback for incoming messages.
-  , _protLvl      :: ProtocolLevel
+  , _protocol     :: ProtocolLevel
   , _connProps    :: [Property]
   }
 
@@ -108,7 +108,7 @@ mqttConfig = MQTTConfig{_hostname="localhost", _port=1883, _connID="haskell-mqtt
                         _username=Nothing, _password=Nothing,
                         _cleanSession=True, _lwt=Nothing,
                         _msgCB=Nothing,
-                        _protLvl=Protocol311, _connProps=mempty}
+                        _protocol=Protocol311, _connProps=mempty}
 
 
 -- | Connect to an MQTT server by URI.  Currently only mqtt and mqtts
@@ -189,8 +189,8 @@ runClientAppData mkconn MQTTConfig{..} = do
                                  T._password=BC.pack <$> _password,
                                  T._cleanSession=_cleanSession,
                                  T._properties=_connProps}
-        yield (BL.toStrict $ toByteString _protLvl req) .| appSink ad
-        (ConnACKPkt (ConnACKFlags _ val props)) <- appSource ad .| sinkParser (parsePacket _protLvl)
+        yield (BL.toStrict $ toByteString _protocol req) .| appSink ad
+        (ConnACKPkt (ConnACKFlags _ val props)) <- appSource ad .| sinkParser (parsePacket _protocol)
         case val of
           ConnAccepted -> liftIO $ atomically $ writeTVar _svrProps props
           x            -> fail (show x)
@@ -209,13 +209,13 @@ runClientAppData mkconn MQTTConfig{..} = do
         writeTVar _st Connected
 
       runConduit $ appSource ad
-        .| conduitParser (parsePacket _protLvl)
+        .| conduitParser (parsePacket _protocol)
         .| C.mapM_ (\(_,x) -> liftIO (dispatch c pch x))
 
       where
         processOut = runConduit $
           C.repeatM (liftIO (atomically $ checkConnected c >> readTChan _ch))
-          .| C.map (BL.toStrict . toByteString _protLvl)
+          .| C.map (BL.toStrict . toByteString _protocol)
           .| appSink ad
 
         doPing = forever $ threadDelay pingPeriod >> sendPacketIO c PingPkt
