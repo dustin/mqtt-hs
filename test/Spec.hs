@@ -96,13 +96,13 @@ instance Arbitrary PubACK where
   arbitrary = PubACK <$> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary PubREL where
-  arbitrary = PubREL <$> arbitrary
+  arbitrary = PubREL <$> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary PubREC where
-  arbitrary = PubREC <$> arbitrary
+  arbitrary = PubREC <$> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary PubCOMP where
-  arbitrary = PubCOMP <$> arbitrary
+  arbitrary = PubCOMP <$> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary SubscribeRequest where
   arbitrary = arbitrary >>= \pid -> choose (1,11) >>= \n -> SubscribeRequest pid <$> vectorOf n sub <*> arbitrary
@@ -226,6 +226,9 @@ prop_PacketRT311 p = available p ==>
     v311mask (PublishPkt req) = PublishPkt req{_pubProps=mempty}
     v311mask (DisconnectPkt _) = DisconnectPkt (DisconnectRequest DiscoNormalDisconnection mempty)
     v311mask (PubACKPkt (PubACK x _ _)) = PubACKPkt (PubACK x 0 mempty)
+    v311mask (PubRECPkt (PubREC x _ _)) = PubRECPkt (PubREC x 0 mempty)
+    v311mask (PubRELPkt (PubREL x _ _)) = PubRELPkt (PubREL x 0 mempty)
+    v311mask (PubCOMPPkt (PubCOMP x _ _)) = PubCOMPPkt (PubCOMP x 0 mempty)
     v311mask x = x
 
     available (AuthPkt _) = False

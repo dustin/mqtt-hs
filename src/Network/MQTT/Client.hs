@@ -251,9 +251,9 @@ dispatch c@MQTTClient{..} pch pkt =
     (SubACKPkt (SubscribeResponse i _ _))   -> delegate DSubACK i
     (UnsubACKPkt (UnsubscribeResponse i _)) -> delegate DUnsubACK i
     (PubACKPkt (PubACK i _ _))              -> delegate DPubACK i
-    (PubRECPkt (PubREC i))                  -> delegate DPubREC i
-    (PubRELPkt (PubREL i))                  -> delegate DPubREL i
-    (PubCOMPPkt (PubCOMP i))                -> delegate DPubCOMP i
+    (PubRECPkt (PubREC i _ _))              -> delegate DPubREC i
+    (PubRELPkt (PubREL i _ _))              -> delegate DPubREL i
+    (PubCOMPPkt (PubCOMP i _ _))            -> delegate DPubCOMP i
     (DisconnectPkt req)                     -> disco req
     PongPkt                                 -> atomically . writeTChan pch $ True
     x                                       -> print x
@@ -296,7 +296,7 @@ dispatch c@MQTTClient{..} pch pkt =
               E.finally (manageQoS2' ch) (atomically $ releasePktID c (DPubREL, _pubPktID))
                 where
                   sendREC ch = do
-                    sendPacketIO c (PubRECPkt (PubREC _pubPktID))
+                    sendPacketIO c (PubRECPkt (PubREC _pubPktID 0 mempty))
                     (PubRELPkt _) <- atomically $ readTChan ch
                     pure ()
 
@@ -304,7 +304,7 @@ dispatch c@MQTTClient{..} pch pkt =
                     v <- timeout 10000000 (sendREC ch)
                     case v of
                       Nothing -> killConn c Timeout
-                      _ ->  notify >> sendPacketIO c (PubCOMPPkt (PubCOMP _pubPktID))
+                      _ ->  notify >> sendPacketIO c (PubCOMPPkt (PubCOMP _pubPktID 0 mempty))
 
 killConn :: E.Exception e => MQTTClient -> e -> IO ()
 killConn MQTTClient{..} e = readTVarIO _ct >>= \t -> cancelWith t e
@@ -423,10 +423,13 @@ publishq c t m r q props = do
 
         where
           waitRec = do
-            (PubRECPkt _) <- atomically $ readTChan ch
-            sendPacketIO c (PubRELPkt $ PubREL pid)
+            (PubRECPkt (PubREC _ st recprops)) <- atomically $ readTChan ch
+            when (st /= 0) $ fail ("qos 2 REC publish error: " <> show st <> " " <> show recprops)
+            sendPacketIO c (PubRELPkt $ PubREL pid 0 mempty)
             cancel p -- must not publish after rel
-            void $ atomically $ readTChan ch
+            (PubCOMPPkt (PubCOMP _ st' compprops)) <- atomically $ readTChan ch
+            when (st' /= 0) $ fail ("qos 2 COMP publish error: " <> show st' <> " " <> show compprops)
+            pure ()
 
 -- | Disconnect from the MQTT server.
 disconnect :: MQTTClient -> IO ()

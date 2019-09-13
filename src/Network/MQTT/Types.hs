@@ -352,9 +352,9 @@ data MQTTPkt = ConnPkt ConnectRequest
              | ConnACKPkt ConnACKFlags
              | PublishPkt PublishRequest
              | PubACKPkt PubACK
-             | PubRECPkt PubREC                  -- TODO: props
-             | PubRELPkt PubREL                  -- TODO: props
-             | PubCOMPPkt PubCOMP                -- TODO: props
+             | PubRECPkt PubREC
+             | PubRELPkt PubREL
+             | PubCOMPPkt PubCOMP
              | SubscribePkt SubscribeRequest
              | SubACKPkt SubscribeResponse
              | UnsubscribePkt UnsubscribeRequest
@@ -652,38 +652,38 @@ parsePubACK = do
   (mid, st, props) <- parsePubSeg
   pure $ PubACKPkt (PubACK mid st props)
 
-newtype PubREC = PubREC Word16 deriving(Eq, Show)
+data PubREC = PubREC Word16 Word8 [Property] deriving(Eq, Show)
 
 instance ByteMe PubREC where
-  toByteString _ (PubREC pid) = BL.singleton 0x50 <> withLength (encodeWord16 pid)
+  toByteString prot (PubREC pid st props) = bsPubSeg prot 0x50 pid st props
 
 parsePubREC :: A.Parser MQTTPkt
 parsePubREC = do
   _ <- A.word8 0x50
-  _ <- parseHdrLen
-  PubRECPkt . PubREC <$> aWord16
+  (mid, st, props) <- parsePubSeg
+  pure $ PubRECPkt (PubREC mid st props)
 
-newtype PubREL = PubREL Word16 deriving(Eq, Show)
+data PubREL = PubREL Word16 Word8 [Property] deriving(Eq, Show)
 
 instance ByteMe PubREL where
-  toByteString _ (PubREL pid) = BL.singleton 0x62 <> withLength (encodeWord16 pid)
+  toByteString prot (PubREL pid st props) = bsPubSeg prot 0x62 pid st props
 
 parsePubREL :: A.Parser MQTTPkt
 parsePubREL = do
   _ <- A.word8 0x62
-  _ <- parseHdrLen
-  PubRELPkt . PubREL <$> aWord16
+  (mid, st, props) <- parsePubSeg
+  pure $ PubRELPkt (PubREL mid st props)
 
-newtype PubCOMP = PubCOMP Word16 deriving(Eq, Show)
+data PubCOMP = PubCOMP Word16 Word8 [Property] deriving(Eq, Show)
 
 instance ByteMe PubCOMP where
-  toByteString _ (PubCOMP pid) = BL.singleton 0x70 <> withLength (encodeWord16 pid)
+  toByteString prot (PubCOMP pid st props) = bsPubSeg prot 0x70 pid st props
 
 parsePubCOMP :: A.Parser MQTTPkt
 parsePubCOMP = do
   _ <- A.word8 0x70
-  _ <- parseHdrLen
-  PubCOMPPkt . PubCOMP <$> aWord16
+  (mid, st, props) <- parsePubSeg
+  pure $ PubCOMPPkt (PubCOMP mid st props)
 
 parseSubscribe :: ProtocolLevel -> A.Parser MQTTPkt
 parseSubscribe prot = do
