@@ -93,7 +93,7 @@ instance Arbitrary PublishRequest where
     pure PublishRequest{..}
 
 instance Arbitrary PubACK where
-  arbitrary = PubACK <$> arbitrary
+  arbitrary = PubACK <$> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary PubREL where
   arbitrary = PubREL <$> arbitrary
@@ -225,6 +225,7 @@ prop_PacketRT311 p = available p ==>
     v311mask (UnsubACKPkt (UnsubscribeResponse p _)) = UnsubACKPkt (UnsubscribeResponse p mempty)
     v311mask (PublishPkt req) = PublishPkt req{_pubProps=mempty}
     v311mask (DisconnectPkt _) = DisconnectPkt (DisconnectRequest DiscoNormalDisconnection mempty)
+    v311mask (PubACKPkt (PubACK x _ _)) = PubACKPkt (PubACK x 0 mempty)
     v311mask x = x
 
     available (AuthPkt _) = False

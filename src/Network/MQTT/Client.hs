@@ -250,7 +250,7 @@ dispatch c@MQTTClient{..} pch pkt =
     (PublishPkt p)                          -> pubMachine p
     (SubACKPkt (SubscribeResponse i _ _))   -> delegate DSubACK i
     (UnsubACKPkt (UnsubscribeResponse i _)) -> delegate DUnsubACK i
-    (PubACKPkt (PubACK i))                  -> delegate DPubACK i
+    (PubACKPkt (PubACK i _ _))              -> delegate DPubACK i
     (PubRECPkt (PubREC i))                  -> delegate DPubREC i
     (PubRELPkt (PubREL i))                  -> delegate DPubREL i
     (PubCOMPPkt (PubCOMP i))                -> delegate DPubCOMP i
@@ -271,7 +271,7 @@ dispatch c@MQTTClient{..} pch pkt =
 
         pubMachine PublishRequest{..}
           | _pubQoS == QoS2 = void $ async manageQoS2 >>= link
-          | _pubQoS == QoS1 = notify >> sendPacketIO c (PubACKPkt (PubACK _pubPktID))
+          | _pubQoS == QoS1 = notify >> sendPacketIO c (PubACKPkt (PubACK _pubPktID 0 mempty))
           | otherwise = notify
 
           where
@@ -414,7 +414,10 @@ publishq c t m r q props = do
 
       satisfyQoS p ch pid
         | q == QoS0 = pure ()
-        | q == QoS1 = void $ atomically $ readTChan ch
+        | q == QoS1 = void $ do
+            (PubACKPkt (PubACK _ st pprops)) <- atomically $ readTChan ch
+            when (st /= 0) $ fail ("qos 1 publish error: " <> show st <> " " <> show pprops)
+            pure ()
         | q == QoS2 = waitRec
         | otherwise = error "invalid QoS"
 

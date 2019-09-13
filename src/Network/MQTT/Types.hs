@@ -351,7 +351,7 @@ instance ByteMe ConnectRequest where
 data MQTTPkt = ConnPkt ConnectRequest
              | ConnACKPkt ConnACKFlags
              | PublishPkt PublishRequest
-             | PubACKPkt PubACK                  -- TODO: props
+             | PubACKPkt PubACK
              | PubRECPkt PubREC                  -- TODO: props
              | PubRELPkt PubREL                  -- TODO: props
              | PubCOMPPkt PubCOMP                -- TODO: props
@@ -623,16 +623,27 @@ instance ByteMe SubscribeRequest where
   toByteString prot (SubscribeRequest pid sreq props) =
     BL.singleton 0x82 <> withLength (encodeWord16 pid <> bsProps prot props <> subOptionsBytes prot sreq)
 
-newtype PubACK = PubACK Word16 deriving(Eq, Show)
+data PubACK = PubACK Word16 Word8 [Property] deriving(Eq, Show)
 
 instance ByteMe PubACK where
-  toByteString _ (PubACK pid) = BL.singleton 0x40 <> withLength (encodeWord16 pid)
+  toByteString Protocol311 (PubACK pid _ _) = BL.singleton 0x40 <> withLength (encodeWord16 pid)
+
+  toByteString Protocol50 (PubACK pid st props) = BL.singleton 0x40
+                                                  <> withLength (encodeWord16 pid
+                                                                 <> BL.singleton st
+                                                                 <> mprop props)
+    where
+      mprop [] = mempty
+      mprop p  = bsProps Protocol50 p
 
 parsePubACK :: A.Parser MQTTPkt
 parsePubACK = do
   _ <- A.word8 0x40
-  _ <- parseHdrLen
-  PubACKPkt . PubACK <$> aWord16
+  rl <- parseHdrLen
+  mid <- aWord16
+  st <- if rl > 2 then A.anyWord8 else pure 0
+  props <- if rl > 4 then parseProperties Protocol50 else pure mempty
+  pure $ PubACKPkt (PubACK mid st props)
 
 newtype PubREC = PubREC Word16 deriving(Eq, Show)
 
