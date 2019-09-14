@@ -20,7 +20,7 @@ module Network.MQTT.Client (
   -- * Running and waiting for the client.
   runClient, runClientTLS, waitForClient,
   connectURI, svrProps,
-  disconnect,
+  disconnect, normalDisconnect,
   -- * General client interactions.
   subscribe, unsubscribe, publish, publishq, pubAliased
   ) where
@@ -432,11 +432,15 @@ publishq c t m r q props = do
             pure ()
 
 -- | Disconnect from the MQTT server.
-disconnect :: MQTTClient -> IO ()
-disconnect c@MQTTClient{..} = race_ getDisconnected orDieTrying
+disconnect :: MQTTClient -> DiscoReason -> [Property] -> IO ()
+disconnect c@MQTTClient{..} reason props = race_ getDisconnected orDieTrying
   where
-    getDisconnected = sendPacketIO c (DisconnectPkt $ DisconnectRequest DiscoNormalDisconnection mempty) >> waitForClient c
+    getDisconnected = sendPacketIO c (DisconnectPkt $ DisconnectRequest reason props) >> waitForClient c
     orDieTrying = threadDelay 10000000 >> killConn c Timeout
+
+-- | Disconnect with 'DiscoNormalDisconnection' and no properties.
+normalDisconnect :: MQTTClient -> IO ()
+normalDisconnect c = disconnect c DiscoNormalDisconnection mempty
 
 -- | A convenience method for creating a LastWill.
 mkLWT :: Topic -> BL.ByteString -> Bool -> T.LastWill
