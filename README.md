@@ -23,7 +23,7 @@ main = do
   print =<< waitForClient mc   -- wait for the the client to disconnect
 
   where
-    msgReceived _ t m = print (t,m)
+    msgReceived _ t m p = print (t,m,p)
 ```
 
 [mqtt]: http://mqtt.org/
