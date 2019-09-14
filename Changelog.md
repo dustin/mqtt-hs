@@ -8,6 +8,12 @@ Now with no known issues.
 were two open bugs -- one had already been fixed in the development of
 0.5, but another was still present.
 
+0.5.0.0 named the default subscription options `defaultSubOptions`,
+but that's inconsistent with other defaults, so it was renamed to
+`subOptions`.  This is technically an API incompatibility being
+introduced and I wouldn't normally do that, but the API's been out for
+a few hours, so I'm preeptively asking for forgiveness.
+
 ## 0.5.0.0
 
 Major release for MQTT version 5.
