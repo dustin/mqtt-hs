@@ -1,5 +1,24 @@
 # Changelog for net-mqtt
 
+## 0.5.0.0
+
+Major release for MQTT version 5.
+
+The API is mostly the same, but a list of Property values is passed in
+and returned from a few different fields.
+
+Subscribe responses are now more detailed in the error case, and also
+return a `[Property]`.
+
+Connections default to `Protocol311` (3.1.1), and all behavior should
+be backwards compatible in these cases.  i.e., you can write code as
+if it were destined for a v5 broker, but properties won't be sent and
+responses will be inferred.  If you specify your `_protocol` as
+`Protocol50` in your `MQTTConfig`, the new features should all work.
+
+Various bugs were fixed along the path of making v5 compatibility, but
+I'm pretty sure there's one left somewhere.
+
 ## 0.2.4.2
 
 Don't set a message ID of 0.
