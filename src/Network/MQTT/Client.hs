@@ -342,7 +342,7 @@ reservePktID c@MQTTClient{..} dts = do
   checkConnected c
   ch <- newTChan
   pid <- readTVar _pktID
-  modifyTVar' _pktID (\x -> case succ x of 0 -> 1; x' -> x')
+  modifyTVar' _pktID $ if pid == maxBound then const 1 else succ
   modifyTVar' _acks (Map.union (Map.fromList [((t, pid), ch) | t <- dts]))
   pure (ch,pid)
 
