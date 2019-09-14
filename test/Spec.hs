@@ -219,7 +219,7 @@ prop_PacketRT311 p = available p ==>
       where cl lw = lw{_willProps=mempty}
     v311mask (ConnACKPkt (ConnACKFlags a b _)) = ConnACKPkt (ConnACKFlags a b mempty)
     v311mask (SubscribePkt (SubscribeRequest p s _)) = SubscribePkt (SubscribeRequest p c mempty)
-      where c = map (\(k,SubOptions{..}) -> (k,defaultSubOptions{_subQoS=_subQoS})) s
+      where c = map (\(k,SubOptions{..}) -> (k,subOptions{_subQoS=_subQoS})) s
     v311mask (SubACKPkt (SubscribeResponse p s _)) = SubACKPkt (SubscribeResponse p s mempty)
     v311mask (UnsubscribePkt (UnsubscribeRequest p l _)) = UnsubscribePkt (UnsubscribeRequest p l mempty)
     v311mask (UnsubACKPkt (UnsubscribeResponse p _)) = UnsubACKPkt (UnsubscribeResponse p mempty)

@@ -21,7 +21,7 @@ main = do
                                          PropRequestProblemInformation 1]}
   putStrLn "connected!"
   print =<< svrProps mc
-  print =<< subscribe mc [("oro/#", defaultSubOptions), ("tmp/#", defaultSubOptions{_subQoS=QoS2})]
+  print =<< subscribe mc [("oro/#", subOptions), ("tmp/#", subOptions{_subQoS=QoS2})]
 
   let pprops = [PropUserProperty "hello" "mqttv5"]
   p <- async $ forever $ pubAliased mc "tmp/hi/from/haskell" "hi from haskell" False QoS1 pprops >> threadDelay 10000000

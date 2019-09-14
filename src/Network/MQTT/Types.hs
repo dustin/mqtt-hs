@@ -17,7 +17,7 @@ module Network.MQTT.Types (
   ConnectRequest(..), connectRequest, ConnACKFlags(..), ConnACKRC(..),
   PublishRequest(..), PubACK(..), PubREC(..), PubREL(..), PubCOMP(..),
   ProtocolLevel(..), Property(..), AuthRequest(..),
-  SubscribeRequest(..), SubOptions(..), defaultSubOptions, SubscribeResponse(..), SubErr(..),
+  SubscribeRequest(..), SubOptions(..), subOptions, SubscribeResponse(..), SubErr(..),
   RetainHandling(..), DisconnectRequest(..),
   UnsubscribeRequest(..), UnsubscribeResponse(..), DiscoReason(..),
   parsePacket, ByteMe(toByteString),
@@ -569,21 +569,26 @@ parsePublish prot = do
   where qlen QoS0 = 0
         qlen _    = 2
 
-data RetainHandling = SendOnSubscribe | SendOnSubscribeNew | DoNotSendOnSubscribe
+-- | How to process retained messages on subscriptions.
+data RetainHandling = SendOnSubscribe       -- ^ Send existing retained messages to a new client.
+                    | SendOnSubscribeNew    -- ^ Send existing retained messages that have not yet been sent.
+                    | DoNotSendOnSubscribe  -- ^ Don't send existing retained messages.
   deriving (Eq, Show, Bounded, Enum)
 
+-- | Options used at subscribe time to define how to handle incoming messages.
 data SubOptions = SubOptions{
-  _retainHandling      :: RetainHandling
-  , _retainAsPublished :: Bool
-  , _noLocal           :: Bool
-  , _subQoS            :: QoS
+  _retainHandling      :: RetainHandling  -- ^ How to handle existing retained messages.
+  , _retainAsPublished :: Bool            -- ^ If true, retain is propagated on subscribe.
+  , _noLocal           :: Bool            -- ^ If true, do not send messages initiated from this client back.
+  , _subQoS            :: QoS             -- ^ Maximum QoS to use for this subscription.
   } deriving(Eq, Show)
 
-defaultSubOptions :: SubOptions
-defaultSubOptions = SubOptions{_retainHandling=SendOnSubscribe,
-                               _retainAsPublished=False,
-                               _noLocal=False,
-                               _subQoS=QoS0}
+-- | Reasonable subscription option defaults at QoS0.
+subOptions :: SubOptions
+subOptions = SubOptions{_retainHandling=SendOnSubscribe,
+                         _retainAsPublished=False,
+                         _noLocal=False,
+                         _subQoS=QoS0}
 
 instance ByteMe SubOptions where
   toByteString _ SubOptions{..} = BL.singleton (rh .|. rap .|. nl .|. q)

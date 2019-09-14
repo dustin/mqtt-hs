@@ -21,13 +21,14 @@ are supported.
 module Network.MQTT.Client (
   -- * Configuring the client.
   MQTTConfig(..), MQTTClient, QoS(..), Topic, mqttConfig,  mkLWT, LastWill(..),
-  ProtocolLevel(..), Property(..), SubOptions(..), defaultSubOptions,
+  ProtocolLevel(..), Property(..), SubOptions(..), subOptions,
   -- * Running and waiting for the client.
   runClient, runClientTLS, waitForClient,
-  connectURI, svrProps,
+  connectURI,
   disconnect, normalDisconnect,
   -- * General client interactions.
-  subscribe, unsubscribe, publish, publishq, pubAliased
+  subscribe, unsubscribe, publish, publishq, pubAliased,
+  svrProps
   ) where
 
 import           Control.Concurrent         (threadDelay)
