@@ -23,6 +23,8 @@ main = do
   print =<< svrProps mc
   print =<< subscribe mc [("oro/#", subOptions), ("tmp/#", subOptions{_subQoS=QoS2})] mempty
 
+  print =<< unsubscribe mc ["oro/#"] mempty
+
   let pprops = [PropUserProperty "hello" "mqttv5"]
   p <- async $ forever $ pubAliased mc "tmp/hi/from/haskell" "hi from haskell" False QoS1 pprops >> threadDelay 10000000
 

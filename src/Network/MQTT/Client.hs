@@ -256,16 +256,16 @@ instance E.Exception MQTTException
 dispatch :: MQTTClient -> TChan Bool -> MQTTPkt -> IO ()
 dispatch c@MQTTClient{..} pch pkt =
   case pkt of
-    (PublishPkt p)                          -> pubMachine p
-    (SubACKPkt (SubscribeResponse i _ _))   -> delegate DSubACK i
-    (UnsubACKPkt (UnsubscribeResponse i _)) -> delegate DUnsubACK i
-    (PubACKPkt (PubACK i _ _))              -> delegate DPubACK i
-    (PubRECPkt (PubREC i _ _))              -> delegate DPubREC i
-    (PubRELPkt (PubREL i _ _))              -> delegate DPubREL i
-    (PubCOMPPkt (PubCOMP i _ _))            -> delegate DPubCOMP i
-    (DisconnectPkt req)                     -> disco req
-    PongPkt                                 -> atomically . writeTChan pch $ True
-    x                                       -> print x
+    (PublishPkt p)                            -> pubMachine p
+    (SubACKPkt (SubscribeResponse i _ _))     -> delegate DSubACK i
+    (UnsubACKPkt (UnsubscribeResponse i _ _)) -> delegate DUnsubACK i
+    (PubACKPkt (PubACK i _ _))                -> delegate DPubACK i
+    (PubRECPkt (PubREC i _ _))                -> delegate DPubREC i
+    (PubRELPkt (PubREL i _ _))                -> delegate DPubREL i
+    (PubCOMPPkt (PubCOMP i _ _))              -> delegate DPubCOMP i
+    (DisconnectPkt req)                       -> disco req
+    PongPkt                                   -> atomically . writeTChan pch $ True
+    x                                         -> print x
 
   where delegate dt pid = atomically $ do
           m <- readTVar _acks

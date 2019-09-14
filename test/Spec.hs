@@ -131,7 +131,7 @@ instance Arbitrary UnsubscribeRequest where
     | otherwise = [UnsubscribeRequest p sl props | sl <- shrinkList (:[]) l, not (null sl)]
 
 instance Arbitrary UnsubscribeResponse where
-  arbitrary = UnsubscribeResponse <$> arbitrary <*> arbitrary
+  arbitrary = UnsubscribeResponse <$> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary MT.Property where
   arbitrary = oneof [
@@ -222,7 +222,7 @@ prop_PacketRT311 p = available p ==>
       where c = map (\(k,SubOptions{..}) -> (k,subOptions{_subQoS=_subQoS})) s
     v311mask (SubACKPkt (SubscribeResponse p s _)) = SubACKPkt (SubscribeResponse p s mempty)
     v311mask (UnsubscribePkt (UnsubscribeRequest p l _)) = UnsubscribePkt (UnsubscribeRequest p l mempty)
-    v311mask (UnsubACKPkt (UnsubscribeResponse p _)) = UnsubACKPkt (UnsubscribeResponse p mempty)
+    v311mask (UnsubACKPkt (UnsubscribeResponse p _ _)) = UnsubACKPkt (UnsubscribeResponse p mempty mempty)
     v311mask (PublishPkt req) = PublishPkt req{_pubProps=mempty}
     v311mask (DisconnectPkt _) = DisconnectPkt (DisconnectRequest DiscoNormalDisconnection mempty)
     v311mask (PubACKPkt (PubACK x _ _)) = PubACKPkt (PubACK x 0 mempty)

@@ -784,19 +784,31 @@ parseUnsubscribe prot = do
                       Left x  -> fail x
                       Right x -> pure x
 
-data UnsubscribeResponse = UnsubscribeResponse Word16 [Property] deriving(Eq, Show)
+data UnsubscribeResponse = UnsubscribeResponse Word16 [Property] [Word8] deriving(Eq, Show)
 
 instance ByteMe UnsubscribeResponse where
-  toByteString prot (UnsubscribeResponse pid props) = BL.singleton 0xb0
-                                                      <> withLength (encodeWord16 pid <> bsProps prot props)
+  toByteString Protocol311 (UnsubscribeResponse pid _ _) = BL.singleton 0xb0
+                                                           <> withLength (encodeWord16 pid)
+
+  toByteString Protocol50 (UnsubscribeResponse pid props res) = BL.singleton 0xb0
+                                                                <> withLength (encodeWord16 pid
+                                                                               <> bsProps Protocol50 props
+                                                                               <> BL.pack res)
 
 parseUnsubACK :: ProtocolLevel -> A.Parser MQTTPkt
-parseUnsubACK prot = do
+parseUnsubACK Protocol311 = do
   _ <- A.word8 0xb0
   _ <- parseHdrLen
   pid <- aWord16
-  props <- parseProperties prot
-  pure $ UnsubACKPkt (UnsubscribeResponse pid props)
+  pure $ UnsubACKPkt (UnsubscribeResponse pid mempty mempty)
+
+parseUnsubACK Protocol50 = do
+  _ <- A.word8 0xb0
+  rl <- parseHdrLen
+  pid <- aWord16
+  props <- parseProperties Protocol50
+  res <- replicateM (rl - propLen Protocol50 props - 2) A.anyWord8
+  pure $ UnsubACKPkt (UnsubscribeResponse pid props res)
 
 data AuthRequest = AuthRequest Word8 [Property] deriving (Eq, Show)
 
