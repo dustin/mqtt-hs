@@ -1,5 +1,13 @@
 # Changelog for net-mqtt
 
+## 0.5.0.1
+
+Now with no known issues.
+
+0.5.0.0 was released without consulting the github issues page.  There
+were two open bugs -- one had already been fixed in the development of
+0.5, but another was still present.
+
 ## 0.5.0.0
 
 Major release for MQTT version 5.
