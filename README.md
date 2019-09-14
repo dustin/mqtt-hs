@@ -19,7 +19,7 @@ main = do
 main :: IO
 main = do
   mc <- runClient mqttConfig{_msgCB=Just msgReceived}
-  print =<< subscribe mc [("tmp/topic1", QoS0), ("tmp/topic2", QoS0)]
+  print =<< subscribe mc [("tmp/topic1", defaultSubOptions), ("tmp/topic2", defaultSubOptions)]
   print =<< waitForClient mc   -- wait for the the client to disconnect
 
   where
