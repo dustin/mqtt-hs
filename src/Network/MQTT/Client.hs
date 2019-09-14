@@ -6,8 +6,13 @@ License     : BSD3
 Maintainer  : dustin@spy.net
 Stability   : experimental
 
-An MQTT protocol client, based on the 3.1.1 specification:
-<http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html>
+An MQTT protocol client
+
+Both
+<http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html MQTT 3.1.1>
+and
+<https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html MQTT 5.0>
+are supported.
 -}
 
 {-# LANGUAGE OverloadedStrings #-}
@@ -97,12 +102,15 @@ data MQTTConfig = MQTTConfig{
   , _cleanSession :: Bool -- ^ False if a session should be reused.
   , _lwt          :: Maybe LastWill -- ^ LastWill message to be sent on client disconnect.
   , _msgCB        :: Maybe (MQTTClient -> Topic -> BL.ByteString -> [Property] -> IO ()) -- ^ Callback for incoming messages.
-  , _protocol     :: ProtocolLevel
-  , _connProps    :: [Property]
+  , _protocol     :: ProtocolLevel -- ^ Protocol to use for the connection.
+  , _connProps    :: [Property] -- ^ Properties to send to the broker in the CONNECT packet.
   }
 
--- | A default MQTTConfig.  A _connID /should/ be provided by the client in the returned config,
--- but the defaults should work for testing.
+-- | A default MQTTConfig.  A _connID /should/ be provided by the
+-- client in the returned config, but the defaults should work for
+-- testing.  In MQTTv5, an empty connection ID may be sent and the
+-- server may assign an identifier for you and return it in the
+-- 'PropAssignedClientIdentifier' property.
 mqttConfig :: MQTTConfig
 mqttConfig = MQTTConfig{_hostname="localhost", _port=1883, _connID="haskell-mqtt",
                         _username=Nothing, _password=Nothing,
