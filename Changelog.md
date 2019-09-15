@@ -1,5 +1,18 @@
 # Changelog for net-mqtt
 
+## 0.5.0.2
+
+With a few attempts to misuse the library, I found some places where
+error messages weren't useful enough.  There were still two cases
+where failures turned into indefinite STM errors instead of more
+informative errors.  1) when the broker declined your connection and
+2) when the broker refused your connection.  These are errors at
+differnet layers, so were addressed differently, but should be
+informative in both cases now.
+
+Unsubscribe was apparently broken in MQTT 5 as well.  I'd never tried
+to use it, and just happened to notice it wasn't quite right.
+
 ## 0.5.0.1
 
 Now with no known issues.
