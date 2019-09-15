@@ -379,9 +379,16 @@ subscribe c@MQTTClient{..} ls props = do
     where ls' = map (\(s, i) -> (textToBL s, i)) ls
 
 -- | Unsubscribe from a list of topic filters.
-unsubscribe :: MQTTClient -> [Filter] -> [Property] -> IO ()
-unsubscribe c@MQTTClient{..} ls props =
-  void $ sendAndWait c DUnsubACK (\pid -> UnsubscribePkt $ UnsubscribeRequest pid (map textToBL ls) props)
+--
+-- In MQTT 3.1.1, there is no body to an unsubscribe response, so it
+-- can be ignored.  If this returns, you were unsubscribed.  In MQTT
+-- 5, you'll get a list of unsub status values corresponding to your
+-- request filters, and whatever properties the server thought you
+-- should know about.
+unsubscribe :: MQTTClient -> [Filter] -> [Property] -> IO ([UnsubStatus], [Property])
+unsubscribe c@MQTTClient{..} ls props = do
+  (UnsubACKPkt (UnsubscribeResponse _ rsn rprop)) <- sendAndWait c DUnsubACK (\pid -> UnsubscribePkt $ UnsubscribeRequest pid (map textToBL ls) props)
+  pure (rprop, rsn)
 
 -- | Publish a message (QoS 0).
 publish :: MQTTClient
