@@ -30,14 +30,14 @@ main = do
 
   putStrLn "Publishing at QoS > 0"
   publishq mc "tmp/q1" "this message is at QoS 1" True QoS1 [PropUserProperty "hi" "there 1",
-                                                            PropMessageExpiryInterval 30,
-                                                            PropContentType "text/plain"]
+                                                             PropMessageExpiryInterval 30,
+                                                             PropContentType "text/plain"]
   putStrLn "Published!"
 
   putStrLn "Publishing at QoS > 1"
   publishq mc "tmp/q2" "this message is at QoS 2" True QoS2 [PropUserProperty "hi" "there 2",
-                                                            PropMessageExpiryInterval 30,
-                                                            PropContentType "text/plain"]
+                                                             PropMessageExpiryInterval 30,
+                                                             PropContentType "text/plain"]
   putStrLn "Published!"
 
   print =<< waitForClient mc
