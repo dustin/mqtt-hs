@@ -176,7 +176,7 @@ runClientAppData mkconn MQTTConfig{..} = do
   t <- async $ clientThread cli
   s <- atomically (waitForLaunch cli t)
 
-  when (s == Starting) $ wait t
+  when (s == Disconnected) $ wait t
 
   atomically $ checkConnected cli
 
@@ -189,7 +189,7 @@ runClientAppData mkconn MQTTConfig{..} = do
           E.bracket (start cli ad) cancelAll (run ad)
         markDisco = atomically $ do
           st <- readTVar (_st cli)
-          guard $ st == Connected
+          guard $ st == Starting || st == Connected
           writeTVar (_st cli) Disconnected
 
     start c@MQTTClient{..} ad = do
