@@ -67,7 +67,7 @@ import           System.Timeout             (timeout)
 import           Network.MQTT.Topic         (Filter, Topic)
 import           Network.MQTT.Types         as T
 
-data ConnState = Starting | Connected | Disconnected | DiscoErr DisconnectRequest deriving (Eq, Show)
+data ConnState = Starting | Connected | Disconnected | DiscoErr DisconnectRequest | ConnErr ConnACKFlags deriving (Eq, Show)
 
 data DispatchType = DSubACK | DUnsubACK | DPubACK | DPubREC | DPubREL | DPubCOMP
   deriving (Eq, Show, Ord, Enum, Bounded)
@@ -176,7 +176,9 @@ runClientAppData mkconn MQTTConfig{..} = do
   t <- async $ clientThread cli
   s <- atomically (waitForLaunch cli t)
 
-  when (s /= Connected) $ wait t
+  when (s == Starting) $ wait t
+
+  atomically $ checkConnected cli
 
   pure cli
 
@@ -199,10 +201,12 @@ runClientAppData mkconn MQTTConfig{..} = do
                                  T._cleanSession=_cleanSession,
                                  T._properties=_connProps}
         yield (BL.toStrict $ toByteString _protocol req) .| appSink ad
-        (ConnACKPkt (ConnACKFlags _ val props)) <- appSource ad .| sinkParser (parsePacket _protocol)
-        case val of
-          ConnAccepted -> liftIO $ atomically $ writeTVar _svrProps props
-          x            -> fail (show x)
+        (ConnACKPkt connr@(ConnACKFlags _ val props)) <- appSource ad .| sinkParser (parsePacket _protocol)
+        liftIO $ atomically $ do
+          writeTVar _svrProps props
+          writeTVar _st $ if val == ConnAccepted then Connected else (ConnErr connr)
+
+        when (val /= ConnAccepted) $ fail (show val)
 
       pure c
 
@@ -325,6 +329,7 @@ checkConnected MQTTClient{..} = readTVar _st >>= check
     check Connected      = pure ()
     check Disconnected   = fail "disconnected"
     check (DiscoErr req) = fail (show req)
+    check (ConnErr req)  = fail (show req)
 
 sendPacket :: MQTTClient -> MQTTPkt -> STM ()
 sendPacket c@MQTTClient{..} p = checkConnected c >> writeTChan _ch p
