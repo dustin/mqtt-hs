@@ -433,7 +433,6 @@ publishq c t m r q props = do
         | q == QoS1 = void $ do
             (PubACKPkt (PubACK _ st pprops)) <- atomically $ readTChan ch
             when (st /= 0) $ fail ("qos 1 publish error: " <> show st <> " " <> show pprops)
-            pure ()
         | q == QoS2 = waitRec
         | otherwise = error "invalid QoS"
 
@@ -445,7 +444,6 @@ publishq c t m r q props = do
             cancel p -- must not publish after rel
             (PubCOMPPkt (PubCOMP _ st' compprops)) <- atomically $ readTChan ch
             when (st' /= 0) $ fail ("qos 2 COMP publish error: " <> show st' <> " " <> show compprops)
-            pure ()
 
 -- | Disconnect from the MQTT server.
 disconnect :: MQTTClient -> DiscoReason -> [Property] -> IO ()
