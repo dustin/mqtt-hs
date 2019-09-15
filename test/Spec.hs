@@ -130,6 +130,8 @@ instance Arbitrary UnsubscribeRequest where
     | length l == 1 = []
     | otherwise = [UnsubscribeRequest p sl props | sl <- shrinkList (:[]) l, not (null sl)]
 
+instance Arbitrary UnsubStatus where arbitrary = arbitraryBoundedEnum
+
 instance Arbitrary UnsubscribeResponse where
   arbitrary = UnsubscribeResponse <$> arbitrary <*> arbitrary <*> arbitrary
 

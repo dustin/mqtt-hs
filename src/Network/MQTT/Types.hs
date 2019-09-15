@@ -19,7 +19,7 @@ module Network.MQTT.Types (
   ProtocolLevel(..), Property(..), AuthRequest(..),
   SubscribeRequest(..), SubOptions(..), subOptions, SubscribeResponse(..), SubErr(..),
   RetainHandling(..), DisconnectRequest(..),
-  UnsubscribeRequest(..), UnsubscribeResponse(..), DiscoReason(..),
+  UnsubscribeRequest(..), UnsubscribeResponse(..), UnsubStatus(..), DiscoReason(..),
   parsePacket, ByteMe(toByteString),
   -- for testing
   encodeLength, parseHdrLen, parseProperty, parseProperties, bsProps,
@@ -784,7 +784,25 @@ parseUnsubscribe prot = do
                       Left x  -> fail x
                       Right x -> pure x
 
-data UnsubscribeResponse = UnsubscribeResponse Word16 [Property] [Word8] deriving(Eq, Show)
+data UnsubStatus = UnsubSuccess
+                 | UnsubNoSubscriptionExisted
+                 | UnsubUnspecifiedError
+                 | UnsubImplementationSpecificError
+                 | UnsubNotAuthorized
+                 | UnsubTopicFilterInvalid
+                 | UnsubPacketIdentifierInUse
+                 deriving(Show, Eq, Bounded, Enum)
+
+instance ByteMe UnsubStatus where
+  toByteString _ UnsubSuccess                     = BL.singleton 0x00
+  toByteString _ UnsubNoSubscriptionExisted       = BL.singleton 0x11
+  toByteString _ UnsubUnspecifiedError            = BL.singleton 0x80
+  toByteString _ UnsubImplementationSpecificError = BL.singleton 0x83
+  toByteString _ UnsubNotAuthorized               = BL.singleton 0x87
+  toByteString _ UnsubTopicFilterInvalid          = BL.singleton 0x8F
+  toByteString _ UnsubPacketIdentifierInUse       = BL.singleton 0x91
+
+data UnsubscribeResponse = UnsubscribeResponse Word16 [Property] [UnsubStatus] deriving(Eq, Show)
 
 instance ByteMe UnsubscribeResponse where
   toByteString Protocol311 (UnsubscribeResponse pid _ _) = BL.singleton 0xb0
@@ -793,7 +811,7 @@ instance ByteMe UnsubscribeResponse where
   toByteString Protocol50 (UnsubscribeResponse pid props res) = BL.singleton 0xb0
                                                                 <> withLength (encodeWord16 pid
                                                                                <> bsProps Protocol50 props
-                                                                               <> BL.pack res)
+                                                                               <> mconcat (fmap (toByteString Protocol50) res))
 
 parseUnsubACK :: ProtocolLevel -> A.Parser MQTTPkt
 parseUnsubACK Protocol311 = do
@@ -807,8 +825,18 @@ parseUnsubACK Protocol50 = do
   rl <- parseHdrLen
   pid <- aWord16
   props <- parseProperties Protocol50
-  res <- replicateM (rl - propLen Protocol50 props - 2) A.anyWord8
+  res <- replicateM (rl - propLen Protocol50 props - 2) unsubACK
   pure $ UnsubACKPkt (UnsubscribeResponse pid props res)
+
+  where
+    unsubACK :: A.Parser UnsubStatus
+    unsubACK = (UnsubSuccess <$ A.word8 0x00)
+               <|> (UnsubNoSubscriptionExisted <$ A.word8 0x11)
+               <|> (UnsubUnspecifiedError <$ A.word8 0x80)
+               <|> (UnsubImplementationSpecificError <$ A.word8 0x83)
+               <|> (UnsubNotAuthorized <$ A.word8 0x87)
+               <|> (UnsubTopicFilterInvalid <$ A.word8 0x8F)
+               <|> (UnsubPacketIdentifierInUse <$ A.word8 0x91)
 
 data AuthRequest = AuthRequest Word8 [Property] deriving (Eq, Show)
 
