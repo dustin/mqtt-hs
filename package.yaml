@@ -33,6 +33,7 @@ dependencies:
 - network-conduit-tls  >= 1.3.2 && < 1.4
 - network-uri          >= 2.6.1 && < 2.7
 - attoparsec-binary    >= 0.2   && < 1.0
+- QuickCheck
 
 library:
   source-dirs: src
@@ -60,7 +61,6 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - net-mqtt
-    - QuickCheck
     - HUnit
     - tasty
     - tasty-hunit
