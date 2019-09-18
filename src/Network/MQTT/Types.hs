@@ -319,7 +319,7 @@ instance ByteMe ConnectRequest where
                         <> toByteString prot _connID
                         <> lwt _lastWill
                         <> perhaps _username
-                        <> perhaps _password
+                        <> if isJust _username then perhaps _password else ""
 
       val Protocol50 = "\NUL\EOTMQTT\ENQ" -- MQTT + Protocol50
                        <> BL.singleton connBits
@@ -333,7 +333,7 @@ instance ByteMe ConnectRequest where
       connBits = hasu .|. hasp .|. willBits .|. clean
         where
           hasu = boolBit (isJust _username) ≪ 7
-          hasp = boolBit (isJust _password) ≪ 6
+          hasp = boolBit ((prot == Protocol50 || isJust _username) && isJust _password) ≪ 6
           clean = boolBit _cleanSession ≪ 1
           willBits = case _lastWill of
                        Nothing -> 0

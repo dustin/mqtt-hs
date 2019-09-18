@@ -188,8 +188,12 @@ instance Arbitrary MQTTPkt where
 
 -- | v311mask strips all the v5 specific bits from an MQTTPkt.
 v311mask :: MQTTPkt -> MQTTPkt
-v311mask (ConnPkt c) = ConnPkt (c{_properties=mempty, _lastWill=cl <$> _lastWill c})
+v311mask (ConnPkt c@ConnectRequest{..}) = ConnPkt (c{_properties=mempty,
+                                                     _password=mpw _username _password,
+                                                     _lastWill=cl <$> _lastWill})
   where cl lw = lw{_willProps=mempty}
+        mpw Nothing _ = Nothing
+        mpw _ p       = p
 v311mask (ConnACKPkt (ConnACKFlags a b _)) = ConnACKPkt (ConnACKFlags a b mempty)
 v311mask (SubscribePkt (SubscribeRequest p s _)) = SubscribePkt (SubscribeRequest p c mempty)
   where c = map (\(k,SubOptions{..}) -> (k,subOptions{_subQoS=_subQoS})) s
