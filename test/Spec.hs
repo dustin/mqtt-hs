@@ -53,22 +53,6 @@ prop_PacketRT311 p = available p ==>
 
   where
     lab x = let (s,_) = break (== ' ') . show $ x in s
-    v311mask :: MQTTPkt -> MQTTPkt
-    v311mask (ConnPkt c) = ConnPkt (c{_properties=mempty, _lastWill=cl <$> _lastWill c})
-      where cl lw = lw{_willProps=mempty}
-    v311mask (ConnACKPkt (ConnACKFlags a b _)) = ConnACKPkt (ConnACKFlags a b mempty)
-    v311mask (SubscribePkt (SubscribeRequest p s _)) = SubscribePkt (SubscribeRequest p c mempty)
-      where c = map (\(k,SubOptions{..}) -> (k,subOptions{_subQoS=_subQoS})) s
-    v311mask (SubACKPkt (SubscribeResponse p s _)) = SubACKPkt (SubscribeResponse p s mempty)
-    v311mask (UnsubscribePkt (UnsubscribeRequest p l _)) = UnsubscribePkt (UnsubscribeRequest p l mempty)
-    v311mask (UnsubACKPkt (UnsubscribeResponse p _ _)) = UnsubACKPkt (UnsubscribeResponse p mempty mempty)
-    v311mask (PublishPkt req) = PublishPkt req{_pubProps=mempty}
-    v311mask (DisconnectPkt _) = DisconnectPkt (DisconnectRequest DiscoNormalDisconnection mempty)
-    v311mask (PubACKPkt (PubACK x _ _)) = PubACKPkt (PubACK x 0 mempty)
-    v311mask (PubRECPkt (PubREC x _ _)) = PubRECPkt (PubREC x 0 mempty)
-    v311mask (PubRELPkt (PubREL x _ _)) = PubRELPkt (PubREL x 0 mempty)
-    v311mask (PubCOMPPkt (PubCOMP x _ _)) = PubCOMPPkt (PubCOMP x 0 mempty)
-    v311mask x = x
 
     available (AuthPkt _) = False
     available _           = True
