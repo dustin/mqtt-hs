@@ -1,5 +1,16 @@
 # Changelog for net-mqtt
 
+## 0.5.1.0
+
+The QuickCheck Arbitrary instances are exported in a module now,
+allowing programs to generate useful tests other implementations of
+mqtt.  I've been using this package to test a C implementation.
+
+Also, don't allow 3.1.1 to generate a password without a username.
+That's kind of a weird limitation in the older protocol I'm not sure
+anyone's run into, but the spec says not to encode things on the wire
+that way, so it's useful for interop testing.
+
 ## 0.5.0.2
 
 With a few attempts to misuse the library, I found some places where
