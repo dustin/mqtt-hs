@@ -14,7 +14,7 @@ main = do
                              -- _cleanSession=False,
                              _lwt=Just $ (mkLWT "tmp/haskquit" "bye for now" False){
                                 _willProps=[PropUserProperty "lwt" "prop"]},
-                             _msgCB=Just showme, _protocol=Protocol50,
+                             _msgCB=SimpleCallback showme, _protocol=Protocol50,
                              _connProps=[PropReceiveMaximum 65535,
                                          PropTopicAliasMaximum 10,
                                          PropRequestResponseInformation 1,

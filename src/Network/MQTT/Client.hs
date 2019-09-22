@@ -21,7 +21,7 @@ are supported.
 module Network.MQTT.Client (
   -- * Configuring the client.
   MQTTConfig(..), MQTTClient, QoS(..), Topic, mqttConfig,  mkLWT, LastWill(..),
-  ProtocolLevel(..), Property(..), SubOptions(..), subOptions,
+  ProtocolLevel(..), Property(..), SubOptions(..), subOptions, MessageCallback(..),
   -- * Running and waiting for the client.
   runClient, runClientTLS, waitForClient,
   connectURI,
@@ -72,6 +72,12 @@ data ConnState = Starting | Connected | Disconnected | DiscoErr DisconnectReques
 data DispatchType = DSubACK | DUnsubACK | DPubACK | DPubREC | DPubREL | DPubCOMP
   deriving (Eq, Show, Ord, Enum, Bounded)
 
+
+-- | Callback invoked on each incoming subscribed message.
+data MessageCallback = NoCallback
+  | SimpleCallback (MQTTClient -> Topic -> BL.ByteString -> [Property] -> IO ())
+  | LowLevelCallback (MQTTClient -> PublishRequest -> IO ())
+
 -- | The MQTT client.
 -- A client may be built using either runClient or runClientTLS.  For example:
 --
@@ -83,7 +89,7 @@ data DispatchType = DSubACK | DUnsubACK | DPubACK | DPubREC | DPubREL | DPubCOMP
 data MQTTClient = MQTTClient {
   _ch         :: TChan MQTTPkt
   , _pktID    :: TVar Word16
-  , _cb       :: Maybe (MQTTClient -> Topic -> BL.ByteString -> [Property] -> IO ())
+  , _cb       :: MessageCallback
   , _ts       :: TVar [Async ()]
   , _acks     :: TVar (Map (DispatchType,Word16) (TChan MQTTPkt))
   , _st       :: TVar ConnState
@@ -102,7 +108,7 @@ data MQTTConfig = MQTTConfig{
   , _password     :: Maybe String -- ^ Optional password.
   , _cleanSession :: Bool -- ^ False if a session should be reused.
   , _lwt          :: Maybe LastWill -- ^ LastWill message to be sent on client disconnect.
-  , _msgCB        :: Maybe (MQTTClient -> Topic -> BL.ByteString -> [Property] -> IO ()) -- ^ Callback for incoming messages.
+  , _msgCB        :: MessageCallback -- ^ Callback for incoming messages.
   , _protocol     :: ProtocolLevel -- ^ Protocol to use for the connection.
   , _connProps    :: [Property] -- ^ Properties to send to the broker in the CONNECT packet.
   }
@@ -116,9 +122,8 @@ mqttConfig :: MQTTConfig
 mqttConfig = MQTTConfig{_hostname="localhost", _port=1883, _connID="haskell-mqtt",
                         _username=Nothing, _password=Nothing,
                         _cleanSession=True, _lwt=Nothing,
-                        _msgCB=Nothing,
+                        _msgCB=NoCallback,
                         _protocol=Protocol311, _connProps=mempty}
-
 
 -- | Connect to an MQTT server by URI.  Currently only mqtt and mqtts
 -- URLs are supported.  The host, port, username, and password will be
@@ -282,7 +287,7 @@ dispatch c@MQTTClient{..} pch pkt =
           atomically $ writeTVar _st (DiscoErr req)
           cancelWith t (Discod req)
 
-        pubMachine PublishRequest{..}
+        pubMachine pr@PublishRequest{..}
           | _pubQoS == QoS2 = void $ async manageQoS2 >>= link
           | _pubQoS == QoS1 = notify >> sendPacketIO c (PubACKPkt (PubACK _pubPktID 0 mempty))
           | otherwise = notify
@@ -291,8 +296,9 @@ dispatch c@MQTTClient{..} pch pkt =
             notify = do
               topic <- resolveTopic (foldr aliasID Nothing _pubProps)
               case _cb of
-                Nothing -> pure ()
-                Just x  -> x c topic _pubBody _pubProps
+                NoCallback         -> pure ()
+                SimpleCallback f   -> f c topic _pubBody _pubProps
+                LowLevelCallback f -> f c pr
 
             resolveTopic Nothing = pure (blToText _pubTopic)
             resolveTopic (Just x) = do
