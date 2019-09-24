@@ -40,9 +40,9 @@ library:
   ghc-options: -Wall
 
 executables:
-  mqtt:
+  mqtt-example:
     main:                Main.hs
-    source-dirs:         app
+    source-dirs:         app/example
     ghc-options:
     - -Wall
     - -threaded
