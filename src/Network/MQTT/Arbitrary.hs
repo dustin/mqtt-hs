@@ -9,8 +9,7 @@ Stability    : experimental
 Arbitrary instances for QuickCheck.
 -}
 
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Network.MQTT.Arbitrary (

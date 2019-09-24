@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
 
 import           Control.Monad                   (mapM_)
 import qualified Data.Attoparsec.ByteString.Lazy as A

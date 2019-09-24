@@ -209,7 +209,7 @@ runClientAppData mkconn MQTTConfig{..} = do
         (ConnACKPkt connr@(ConnACKFlags _ val props)) <- appSource ad .| sinkParser (parsePacket _protocol)
         liftIO $ atomically $ do
           writeTVar _svrProps props
-          writeTVar _st $ if val == ConnAccepted then Connected else (ConnErr connr)
+          writeTVar _st $ if val == ConnAccepted then Connected else ConnErr connr
 
         when (val /= ConnAccepted) $ fail (show val)
 
