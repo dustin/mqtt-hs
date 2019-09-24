@@ -51,6 +51,19 @@ executables:
     dependencies:
     - net-mqtt
 
+  mqtt-watch:
+    main:  Main.hs
+    source-dirs: app/mqtt-watch
+    ghc-options:
+    - -Wall
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - net-mqtt
+    - optparse-applicative
+    - bytestring
+
 tests:
   mqtt-test:
     main:                Spec.hs
