@@ -267,13 +267,7 @@ parseProperties :: ProtocolLevel -> A.Parser [Property]
 parseProperties Protocol311 = pure mempty
 parseProperties Protocol50 = do
   len <- decodeVarInt
-  props <- A.take len
-  subs props
-
-  where
-    subs d = case A.parseOnly (A.many' parseProperty) d of
-               Left x  -> fail x
-               Right x -> pure x
+  either fail pure . A.parseOnly (A.many' parseProperty) =<< A.take len
 
 -- | MQTT Protocol Levels
 data ProtocolLevel = Protocol311 -- ^ MQTT 3.1.1
@@ -692,21 +686,23 @@ parsePubCOMP = do
   (mid, st, props) <- parsePubSeg
   pure $ PubCOMPPkt (PubCOMP mid st props)
 
-parseSubscribe :: ProtocolLevel -> A.Parser MQTTPkt
-parseSubscribe prot = do
-  _ <- A.word8 0x82
+-- Common header bits for subscribe, unsubscribe, and the sub acks.
+parseSubHdr :: Word8 -> ProtocolLevel -> A.Parser a -> A.Parser (Word16, [Property], a)
+parseSubHdr b prot p = do
+  _ <- A.word8 b
   hl <- parseHdrLen
   pid <- aWord16
   props <- parseProperties prot
   content <- A.take (fromEnum hl - 2 - propLen prot props)
-  subs <- parseSubs content
-  pure $ SubscribePkt (SubscribeRequest pid subs props)
+  a <- subp content
+  pure (pid, props, a)
 
-    where
-      parseSubs l = case A.parseOnly (A.many1 parseSub) l of
-                      Left x  -> fail x
-                      Right x -> pure x
-      parseSub = liftA2 (,) aString parseSubOptions
+    where subp = either fail pure . A.parseOnly p
+
+parseSubscribe :: ProtocolLevel -> A.Parser MQTTPkt
+parseSubscribe prot = do
+  (pid, props, subs) <- parseSubHdr 0x82 prot $ A.many1 (liftA2 (,) aString parseSubOptions)
+  pure $ SubscribePkt (SubscribeRequest pid subs props)
 
 data SubscribeResponse = SubscribeResponse Word16 [Either SubErr QoS] [Property] deriving (Eq, Show)
 
@@ -743,11 +739,7 @@ data SubErr = SubErrUnspecifiedError
 
 parseSubACK :: ProtocolLevel -> A.Parser MQTTPkt
 parseSubACK prot = do
-  _ <- A.word8 0x90
-  hl <- parseHdrLen
-  pid <- aWord16
-  props <- parseProperties prot
-  res <- replicateM (hl-2 - propLen prot props) (p <$> A.anyWord8)
+  (pid, props, res) <- parseSubHdr 0x90 prot $ A.many1 (p <$> A.anyWord8)
   pure $ SubACKPkt (SubscribeResponse pid res props)
 
   where
@@ -772,17 +764,8 @@ instance ByteMe UnsubscribeRequest where
 
 parseUnsubscribe :: ProtocolLevel -> A.Parser MQTTPkt
 parseUnsubscribe prot = do
-  _ <- A.word8 0xa2
-  hl <- parseHdrLen
-  pid <- aWord16
-  props <- parseProperties prot
-  content <- A.take (fromEnum hl - 2 - propLen prot props)
-  subs <- parseSubs content
+  (pid, props, subs) <- parseSubHdr 0xa2 prot $ A.many1 aString
   pure $ UnsubscribePkt (UnsubscribeRequest pid subs props)
-    where
-      parseSubs l = case A.parseOnly (A.many1 aString) l of
-                      Left x  -> fail x
-                      Right x -> pure x
 
 data UnsubStatus = UnsubSuccess
                  | UnsubNoSubscriptionExisted
