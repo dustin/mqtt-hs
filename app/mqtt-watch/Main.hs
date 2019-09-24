@@ -11,8 +11,8 @@ import           Network.MQTT.Client
 import           Network.URI
 import           Options.Applicative  (Parser, argument, execParser, fullDesc,
                                        help, helper, info, long, maybeReader,
-                                       metavar, option, progDesc, showDefault,
-                                       some, str, value, (<**>))
+                                       metavar, option, progDesc, short,
+                                       showDefault, some, str, value, (<**>))
 import           System.IO            (stdout)
 
 data Options = Options {
@@ -22,7 +22,7 @@ data Options = Options {
 
 options :: Parser Options
 options = Options
-  <$> option (maybeReader parseURI) (long "mqtt-uri" <> showDefault <> value (fromJust $ parseURI "mqtt://localhost/#whatever") <> help "mqtt broker URI")
+  <$> option (maybeReader parseURI) (long "mqtt-uri" <> short 'u' <> showDefault <> value (fromJust $ parseURI "mqtt://localhost/") <> help "mqtt broker URI")
   <*> some (argument str (metavar "topics..."))
 
 run :: Options -> IO ()

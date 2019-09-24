@@ -103,7 +103,7 @@ data MQTTClient = MQTTClient {
 data MQTTConfig = MQTTConfig{
   _hostname       :: String -- ^ Host to connect to.
   , _port         :: Int -- ^ Port number.
-  , _connID       :: String -- ^ Unique connection ID (required).
+  , _connID       :: String -- ^ Unique connection ID (required in protocol 3.1.1).
   , _username     :: Maybe String -- ^ Optional username.
   , _password     :: Maybe String -- ^ Optional password.
   , _cleanSession :: Bool -- ^ False if a session should be reused.
@@ -119,7 +119,7 @@ data MQTTConfig = MQTTConfig{
 -- server may assign an identifier for you and return it in the
 -- 'PropAssignedClientIdentifier' property.
 mqttConfig :: MQTTConfig
-mqttConfig = MQTTConfig{_hostname="localhost", _port=1883, _connID="haskell-mqtt",
+mqttConfig = MQTTConfig{_hostname="localhost", _port=1883, _connID="",
                         _username=Nothing, _password=Nothing,
                         _cleanSession=True, _lwt=Nothing,
                         _msgCB=NoCallback,
@@ -130,7 +130,7 @@ mqttConfig = MQTTConfig{_hostname="localhost", _port=1883, _connID="haskell-mqtt
 -- derived from the URI and the values supplied in the config will be
 -- ignored.
 connectURI :: MQTTConfig -> URI -> IO MQTTClient
-connectURI cfg uri = do
+connectURI cfg@(MQTTConfig{..}) uri = do
   let cf = case uriScheme uri of
              "mqtt:"  -> runClient
              "mqtts:" -> runClientTLS
@@ -139,13 +139,19 @@ connectURI cfg uri = do
       (Just a) = uriAuthority uri
       (u,p) = up (uriUserInfo a)
 
-  cf cfg{_hostname=uriRegName a, _port=port (uriPort a) (uriScheme uri),
-                Network.MQTT.Client._username=u, Network.MQTT.Client._password=p}
+  cf cfg{Network.MQTT.Client._connID=cid _protocol (uriFragment uri),
+         _hostname=uriRegName a, _port=port (uriPort a) (uriScheme uri),
+         Network.MQTT.Client._username=u, Network.MQTT.Client._password=p}
 
   where
     port "" "mqtt:"  = 1883
     port "" "mqtts:" = 8883
     port x _         = read x
+
+    cid Protocol311 ['#'] = "haskell-net-mqtt"
+    cid _ ('#':xs)        = xs
+    cid Protocol311 _     = "haskell-net-mqtt"
+    cid Protocol50 _      = ""
 
     up "" = (Nothing, Nothing)
     up x = let (u,r) = break (== ':') (init x) in
