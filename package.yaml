@@ -33,6 +33,8 @@ dependencies:
 - network-conduit-tls  >= 1.3.2 && < 1.4
 - network-uri          >= 2.6.1 && < 2.7
 - attoparsec-binary    >= 0.2   && < 1.0
+- random
+- uuid
 - QuickCheck
 
 library:

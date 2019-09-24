@@ -57,9 +57,11 @@ import qualified Data.Map.Strict            as Map
 import           Data.Maybe                 (fromMaybe)
 import           Data.Text                  (Text)
 import qualified Data.Text.Encoding         as TE
+import qualified Data.UUID                  as UUID
 import           Data.Word                  (Word16)
 import           Network.URI                (URI (..), unEscapeString, uriPort,
                                              uriRegName, uriUserInfo)
+import           System.Random              (randomIO)
 import           System.Timeout             (timeout)
 
 
@@ -148,10 +150,9 @@ connectURI cfg@(MQTTConfig{..}) uri = do
     port "" "mqtts:" = 8883
     port x _         = read x
 
-    cid Protocol311 ['#'] = "haskell-net-mqtt"
-    cid _ ('#':xs)        = xs
-    cid Protocol311 _     = "haskell-net-mqtt"
-    cid Protocol50 _      = ""
+    cid _ ['#']    = ""
+    cid _ ('#':xs) = xs
+    cid _ _        = ""
 
     up "" = (Nothing, Nothing)
     up x = let (u,r) = break (== ':') (init x) in
@@ -204,8 +205,9 @@ runClientAppData mkconn MQTTConfig{..} = do
           writeTVar (_st cli) Disconnected
 
     start c@MQTTClient{..} ad = do
+      gencid <- cid _protocol _connID
       runConduit $ do
-        let req = connectRequest{T._connID=BC.pack _connID,
+        let req = connectRequest{T._connID=BC.pack gencid,
                                  T._lastWill=_lwt,
                                  T._username=BC.pack <$> _username,
                                  T._password=BC.pack <$> _password,
@@ -220,6 +222,12 @@ runClientAppData mkconn MQTTConfig{..} = do
         when (val /= ConnAccepted) $ fail (show val)
 
       pure c
+
+    cid :: ProtocolLevel -> String -> IO String
+    cid Protocol50 x = pure x
+    cid Protocol311 x
+      | (not.null) x = pure x
+      | otherwise = UUID.toString <$> randomIO
 
     run ad c@MQTTClient{..} = do
       o <- async processOut
