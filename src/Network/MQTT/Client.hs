@@ -24,7 +24,7 @@ module Network.MQTT.Client (
   ProtocolLevel(..), Property(..), SubOptions(..), subOptions, MessageCallback(..),
   -- * Running and waiting for the client.
   runClient, runClientTLS, waitForClient,
-  connectURI,
+  connectURI, isConnected,
   disconnect, normalDisconnect,
   -- * General client interactions.
   subscribe, unsubscribe, publish, publishq, pubAliased,
@@ -341,6 +341,10 @@ checkConnected MQTTClient{..} = readTVar _st >>= check
     check Disconnected   = fail "disconnected"
     check (DiscoErr req) = fail (show req)
     check (ConnErr req)  = fail (show req)
+
+-- | True if we're currently in a normally connect
+isConnected :: MQTTClient -> IO Bool
+isConnected MQTTClient{..} = (Connected ==) <$> readTVarIO _st
 
 sendPacket :: MQTTClient -> MQTTPkt -> STM ()
 sendPacket c@MQTTClient{..} p = checkConnected c >> writeTChan _ch p
