@@ -41,7 +41,7 @@ import           Control.Concurrent.STM     (STM, TChan, TVar, atomically,
                                              readTVarIO, retry, writeTChan,
                                              writeTVar)
 import qualified Control.Exception          as E
-import           Control.Monad              (forever, guard, void, when)
+import           Control.Monad              (forever, guard, mzero, void, when)
 import           Control.Monad.IO.Class     (liftIO)
 import qualified Data.ByteString.Char8      as BCS
 import qualified Data.ByteString.Lazy       as BL
@@ -336,11 +336,8 @@ killConn MQTTClient{..} e = readTVarIO _ct >>= \t -> cancelWith t e
 checkConnected :: MQTTClient -> STM ()
 checkConnected MQTTClient{..} = readTVar _st >>= check
   where
-    check Starting       = fail "not yet connected"
-    check Connected      = pure ()
-    check Disconnected   = fail "disconnected"
-    check (DiscoErr req) = fail (show req)
-    check (ConnErr req)  = fail (show req)
+    check Connected = pure ()
+    check _         = mzero
 
 -- | True if we're currently in a normally connect
 isConnected :: MQTTClient -> IO Bool
