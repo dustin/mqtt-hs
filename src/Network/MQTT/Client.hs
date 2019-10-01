@@ -40,7 +40,7 @@ import           Control.Concurrent.STM     (STM, TChan, TVar, atomically,
                                              readTVarIO, retry, writeTChan,
                                              writeTVar)
 import qualified Control.Exception          as E
-import           Control.Monad              (forever, guard, mzero, void, when)
+import           Control.Monad              (forever, guard, void, when)
 import           Control.Monad.IO.Class     (liftIO)
 import qualified Data.ByteString.Char8      as BCS
 import qualified Data.ByteString.Lazy       as BL
@@ -265,19 +265,26 @@ runClientAppData mkconn MQTTConfig{..} = do
 -- | Wait for a client to terminate its connection.
 -- An exception is thrown if the client didn't terminate expectedly.
 waitForClient :: MQTTClient -> IO ()
-waitForClient MQTTClient{..} = do
+waitForClient c@MQTTClient{..} = do
   wait =<< readTVarIO _ct
-  dostate =<< readTVarIO _st
+  e <- atomically $ stateX c Stopped
+  case e of
+    Nothing -> pure ()
+    Just x  -> E.throwIO x
+
+stateX :: MQTTClient -> ConnState -> STM (Maybe E.SomeException)
+stateX MQTTClient{..} want = f <$> readTVar _st
 
   where
-    mc = E.throwIO . MQTTException
+    je = Just . E.toException . MQTTException
 
-    dostate Stopped      = pure ()
-    dostate Disconnected = mc "disconnected"
-    dostate Starting     = mc "died while starting"
-    dostate Connected    = mc "unexpected state"
-    dostate (DiscoErr x) = E.throwIO (Discod x)
-    dostate (ConnErr f)  = mc (show f)
+    f :: ConnState -> Maybe E.SomeException
+    f Connected    = if want == Connected then Nothing else je "unexpectedly connected"
+    f Stopped      = if want == Stopped then Nothing else je "unexpectedly stopped"
+    f Disconnected = je "disconnected"
+    f Starting     = je "died while starting"
+    f (DiscoErr x) = Just . E.toException . Discod $ x
+    f (ConnErr e)  = je (show e)
 
 data MQTTException = Timeout | BadData | Discod DisconnectRequest | MQTTException String deriving(Eq, Show)
 
@@ -350,10 +357,11 @@ killConn :: E.Exception e => MQTTClient -> e -> IO ()
 killConn MQTTClient{..} e = readTVarIO _ct >>= \t -> cancelWith t e
 
 checkConnected :: MQTTClient -> STM ()
-checkConnected MQTTClient{..} = readTVar _st >>= check
-  where
-    check Connected = pure ()
-    check _         = mzero
+checkConnected mc = do
+  e <- stateX mc Connected
+  case e of
+    Nothing -> pure ()
+    Just x  -> E.throw x
 
 -- | True if we're currently in a normally connect
 isConnected :: MQTTClient -> IO Bool

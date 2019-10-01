@@ -3,7 +3,7 @@
 module Main where
 
 import           Control.Concurrent       (threadDelay)
-import           Control.Concurrent.Async (async, cancel)
+import           Control.Concurrent.Async (async, cancel, link)
 import           Control.Monad            (forever)
 
 import           Network.MQTT.Client
@@ -27,6 +27,7 @@ main = do
 
   let pprops = [PropUserProperty "hello" "mqttv5"]
   p <- async $ forever $ pubAliased mc "tmp/hi/from/haskell" "hi from haskell" False QoS1 pprops >> threadDelay 10000000
+  link p
 
   putStrLn "Publishing at QoS > 0"
   publishq mc "tmp/q1" "this message is at QoS 1" True QoS1 [PropUserProperty "hi" "there 1",
