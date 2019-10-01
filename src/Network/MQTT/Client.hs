@@ -66,7 +66,12 @@ import           System.Timeout             (timeout)
 import           Network.MQTT.Topic         (Filter, Topic)
 import           Network.MQTT.Types         as T
 
-data ConnState = Starting | Connected | Disconnected | DiscoErr DisconnectRequest | ConnErr ConnACKFlags deriving (Eq, Show)
+data ConnState = Starting
+               | Connected
+               | Stopped
+               | Disconnected
+               | DiscoErr DisconnectRequest
+               | ConnErr ConnACKFlags deriving (Eq, Show)
 
 data DispatchType = DSubACK | DUnsubACK | DPubACK | DPubREC | DPubREL | DPubCOMP
   deriving (Eq, Show, Ord, Enum, Bounded)
@@ -267,6 +272,7 @@ waitForClient MQTTClient{..} = do
   where
     mc = E.throwIO . MQTTException
 
+    dostate Stopped      = pure ()
     dostate Disconnected = mc "disconnected"
     dostate Starting     = mc "died while starting"
     dostate Connected    = mc "unexpected state"
@@ -476,7 +482,10 @@ publishq c t m r q props = do
 disconnect :: MQTTClient -> DiscoReason -> [Property] -> IO ()
 disconnect c@MQTTClient{..} reason props = race_ getDisconnected orDieTrying
   where
-    getDisconnected = sendPacketIO c (DisconnectPkt $ DisconnectRequest reason props) >> waitForClient c
+    getDisconnected = do
+      sendPacketIO c (DisconnectPkt $ DisconnectRequest reason props)
+      wait =<< readTVarIO _ct
+      atomically $ writeTVar _st Stopped
     orDieTrying = threadDelay 10000000 >> killConn c Timeout
 
 -- | Disconnect with 'DiscoNormalDisconnection' and no properties.
