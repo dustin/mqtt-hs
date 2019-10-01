@@ -33,8 +33,7 @@ module Network.MQTT.Client (
 
 import           Control.Concurrent         (threadDelay)
 import           Control.Concurrent.Async   (Async, async, cancel, cancelWith,
-                                             link, race_, wait, waitCatch,
-                                             withAsync)
+                                             link, race_, wait, withAsync)
 import           Control.Concurrent.STM     (STM, TChan, TVar, atomically,
                                              modifyTVar', newTChan, newTChanIO,
                                              newTVarIO, readTChan, readTVar,
@@ -243,7 +242,6 @@ runClientAppData mkconn MQTTConfig{..} = do
 
         doPing = forever $ threadDelay pingPeriod >> sendPacketIO c PingPkt
 
-
         watchdog ch = do
           r <- timeout (pingPeriod * 3) w
           case r of
@@ -260,10 +258,22 @@ runClientAppData mkconn MQTTConfig{..} = do
     cancelAll MQTTClient{..} = mapM_ cancel =<< readTVarIO _ts
 
 -- | Wait for a client to terminate its connection.
-waitForClient :: MQTTClient -> IO (Either E.SomeException ())
-waitForClient MQTTClient{..} = waitCatch =<< readTVarIO _ct
+-- An exception is thrown if the client didn't terminate expectedly.
+waitForClient :: MQTTClient -> IO ()
+waitForClient MQTTClient{..} = do
+  wait =<< readTVarIO _ct
+  dostate =<< readTVarIO _st
 
-data MQTTException = Timeout | BadData | Discod DisconnectRequest deriving(Eq, Show)
+  where
+    mc = E.throwIO . MQTTException
+
+    dostate Disconnected = mc "disconnected"
+    dostate Starting     = mc "died while starting"
+    dostate Connected    = mc "unexpected state"
+    dostate (DiscoErr x) = E.throwIO (Discod x)
+    dostate (ConnErr f)  = mc (show f)
+
+data MQTTException = Timeout | BadData | Discod DisconnectRequest | MQTTException String deriving(Eq, Show)
 
 instance E.Exception MQTTException
 
