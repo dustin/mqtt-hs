@@ -42,7 +42,7 @@ run Options{..} = do
             TIO.putStr $ mconcat [t, " → "]
             BL.hPut stdout m
             putStrLn ""
-            mapM_ (putStrLn . ("  " <>) . show) props
+            mapM_ (putStrLn . ("  " <>) . drop 4 . show) props
 
 main :: IO ()
 main = run =<< execParser opts
