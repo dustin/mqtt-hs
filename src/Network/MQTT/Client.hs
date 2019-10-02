@@ -117,9 +117,9 @@ data MQTTConfig = MQTTConfig{
   , _connProps    :: [Property] -- ^ Properties to send to the broker in the CONNECT packet.
   }
 
--- | A default MQTTConfig.  A _connID /should/ be provided by the
--- client in the returned config, but the defaults should work for
--- testing.  In MQTTv5, an empty connection ID may be sent and the
+-- | A default MQTTConfig.  A _connID /may/ be required depending on
+-- your broker (or if you just want an identifiable/resumable
+-- connection).  In MQTTv5, an empty connection ID may be sent and the
 -- server may assign an identifier for you and return it in the
 -- 'PropAssignedClientIdentifier' property.
 mqttConfig :: MQTTConfig
@@ -366,7 +366,7 @@ checkConnected mc = do
     Nothing -> pure ()
     Just x  -> E.throw x
 
--- | True if we're currently in a normally connect
+-- | True if we're currently in a normally connected state.
 isConnected :: MQTTClient -> IO Bool
 isConnected MQTTClient{..} = (Connected ==) <$> readTVarIO _st
 
