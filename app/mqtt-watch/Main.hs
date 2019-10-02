@@ -3,7 +3,7 @@
 
 module Main where
 
-import           Control.Monad        (void)
+import           Control.Monad        (void, when)
 import qualified Data.ByteString.Lazy as BL
 import           Data.Maybe           (fromJust)
 import qualified Data.Text.IO         as TIO
@@ -12,17 +12,20 @@ import           Network.URI
 import           Options.Applicative  (Parser, argument, execParser, fullDesc,
                                        help, helper, info, long, maybeReader,
                                        metavar, option, progDesc, short,
-                                       showDefault, some, str, value, (<**>))
+                                       showDefault, some, str, switch, value,
+                                       (<**>))
 import           System.IO            (stdout)
 
 data Options = Options {
-  optUri      :: URI
-  , optTopics :: [Topic]
+  optUri         :: URI
+  , optHideProps :: Bool
+  , optTopics    :: [Topic]
   }
 
 options :: Parser Options
 options = Options
   <$> option (maybeReader parseURI) (long "mqtt-uri" <> short 'u' <> showDefault <> value (fromJust $ parseURI "mqtt://localhost/") <> help "mqtt broker URI")
+  <*> switch (short 'p' <> help "hide properties")
   <*> some (argument str (metavar "topics..."))
 
 run :: Options -> IO ()
@@ -42,7 +45,7 @@ run Options{..} = do
             TIO.putStr $ mconcat [t, " → "]
             BL.hPut stdout m
             putStrLn ""
-            mapM_ (putStrLn . ("  " <>) . drop 4 . show) props
+            when (not optHideProps) $ mapM_ (putStrLn . ("  " <>) . drop 4 . show) props
 
 main :: IO ()
 main = run =<< execParser opts
