@@ -172,6 +172,9 @@ runClientTLS cfg@MQTTConfig{..} = runClientAppData (runTLSClient (tlsClientConfi
 pingPeriod :: Int
 pingPeriod = 30000000 -- 30 seconds
 
+mqttFail :: String -> a
+mqttFail = E.throw . MQTTException
+
 -- | Set up and run a client from the given conduit AppData function.
 runClientAppData :: ((AppData -> IO ()) -> IO ()) -> MQTTConfig -> IO MQTTClient
 runClientAppData mkconn MQTTConfig{..} = do
@@ -220,7 +223,7 @@ runClientAppData mkconn MQTTConfig{..} = do
           writeTVar _svrProps props
           writeTVar _st $ if val == ConnAccepted then Connected else ConnErr connr
 
-        when (val /= ConnAccepted) $ fail (show val)
+        when (val /= ConnAccepted) $ mqttFail (show val)
 
       pure c
 
@@ -405,7 +408,7 @@ sendAndWait c@MQTTClient{..} dt f = do
   -- Wait for the response in a separate transaction.
   atomically $ do
     st <- readTVar _st
-    when (st /= Connected) $ fail "disconnected waiting for response"
+    when (st /= Connected) $ mqttFail "disconnected waiting for response"
     releasePktID c (dt,pid)
     readTChan ch
 
@@ -473,18 +476,18 @@ publishq c t m r q props = do
         | q == QoS0 = pure ()
         | q == QoS1 = void $ do
             (PubACKPkt (PubACK _ st pprops)) <- atomically $ readTChan ch
-            when (st /= 0) $ fail ("qos 1 publish error: " <> show st <> " " <> show pprops)
+            when (st /= 0) $ mqttFail ("qos 1 publish error: " <> show st <> " " <> show pprops)
         | q == QoS2 = waitRec
         | otherwise = error "invalid QoS"
 
         where
           waitRec = do
             (PubRECPkt (PubREC _ st recprops)) <- atomically $ readTChan ch
-            when (st /= 0) $ fail ("qos 2 REC publish error: " <> show st <> " " <> show recprops)
+            when (st /= 0) $ mqttFail ("qos 2 REC publish error: " <> show st <> " " <> show recprops)
             sendPacketIO c (PubRELPkt $ PubREL pid 0 mempty)
             cancel p -- must not publish after rel
             (PubCOMPPkt (PubCOMP _ st' compprops)) <- atomically $ readTChan ch
-            when (st' /= 0) $ fail ("qos 2 COMP publish error: " <> show st' <> " " <> show compprops)
+            when (st' /= 0) $ mqttFail ("qos 2 COMP publish error: " <> show st' <> " " <> show compprops)
 
 -- | Disconnect from the MQTT server.
 disconnect :: MQTTClient -> DiscoReason -> [Property] -> IO ()
