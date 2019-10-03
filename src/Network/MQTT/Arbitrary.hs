@@ -95,7 +95,7 @@ instance Arbitrary SubscribeRequest where
 
   shrink (SubscribeRequest w s p) =
     if length s < 2 then []
-    else [SubscribeRequest w (take 1 s) p' | p' <- shrinkList (:[]) p, length p > 1]
+    else [SubscribeRequest w (take 1 s) p' | p' <- shrinkList (const []) p, not (null p)]
 
 instance Arbitrary SubOptions where
   arbitrary = SubOptions <$> arbitraryBoundedEnum <*> arbitrary <*> arbitrary <*> arbitrary
@@ -107,13 +107,13 @@ instance Arbitrary SubscribeResponse where
 
   shrink (SubscribeResponse pid l props)
     | length l == 1 = []
-    | otherwise = [SubscribeResponse pid sl props | sl <- shrinkList (:[]) l, not (null sl)]
+    | otherwise = [SubscribeResponse pid sl props | sl <- shrinkList (const []) l, not (null sl)]
 
 instance Arbitrary UnsubscribeRequest where
   arbitrary = arbitrary >>= \pid -> choose (1,11) >>= \n -> UnsubscribeRequest pid <$> vectorOf n astr <*> arbitrary
   shrink (UnsubscribeRequest p l props)
     | length l == 1 = []
-    | otherwise = [UnsubscribeRequest p sl props | sl <- shrinkList (:[]) l, not (null sl)]
+    | otherwise = [UnsubscribeRequest p sl props | sl <- shrinkList (const []) l, not (null sl)]
 
 instance Arbitrary UnsubStatus where arbitrary = arbitraryBoundedEnum
 
