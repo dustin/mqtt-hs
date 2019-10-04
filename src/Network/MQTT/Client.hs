@@ -39,6 +39,7 @@ import           Control.Concurrent.STM     (STM, TChan, TVar, atomically,
                                              newTVarIO, readTChan, readTVar,
                                              readTVarIO, retry, writeTChan,
                                              writeTVar)
+import           Control.DeepSeq            (force)
 import qualified Control.Exception          as E
 import           Control.Monad              (forever, guard, void, when)
 import           Control.Monad.IO.Class     (liftIO)
@@ -326,10 +327,10 @@ dispatch c@MQTTClient{..} pch pkt =
           where
             notify = do
               topic <- resolveTopic (foldr aliasID Nothing _pubProps)
-              case _cb of
-                NoCallback         -> pure ()
-                SimpleCallback f   -> f c topic _pubBody _pubProps
-                LowLevelCallback f -> f c pr
+              E.evaluate . force =<< case _cb of
+                                       NoCallback         -> pure ()
+                                       SimpleCallback f   -> f c topic _pubBody _pubProps
+                                       LowLevelCallback f -> f c pr
 
             resolveTopic Nothing = pure (blToText _pubTopic)
             resolveTopic (Just x) = do
@@ -354,7 +355,7 @@ dispatch c@MQTTClient{..} pch pkt =
                     v <- timeout 10000000 (sendREC ch)
                     case v of
                       Nothing -> killConn c Timeout
-                      _ ->  notify >> sendPacketIO c (PubCOMPPkt (PubCOMP _pubPktID 0 mempty))
+                      _ -> notify >> sendPacketIO c (PubCOMPPkt (PubCOMP _pubPktID 0 mempty))
 
 killConn :: E.Exception e => MQTTClient -> e -> IO ()
 killConn MQTTClient{..} e = readTVarIO _ct >>= \t -> cancelWith t e
