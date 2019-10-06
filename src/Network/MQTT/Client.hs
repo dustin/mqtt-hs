@@ -330,7 +330,7 @@ dispatch c@MQTTClient{..} pch pkt =
               E.evaluate . force =<< case _cb of
                                        NoCallback         -> pure ()
                                        SimpleCallback f   -> f c topic _pubBody _pubProps
-                                       LowLevelCallback f -> f c pr
+                                       LowLevelCallback f -> f c pr{_pubTopic=textToBL topic}
 
             resolveTopic Nothing = pure (blToText _pubTopic)
             resolveTopic (Just x) = do
