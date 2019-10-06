@@ -10,8 +10,7 @@ import           Network.MQTT.Client
 
 main :: IO ()
 main = do
-  mc <- runClient mqttConfig{_hostname="test.mosquitto.org", _port=1883, _connID="hasq",
-                             -- _cleanSession=False,
+  mc <- runClient mqttConfig{_hostname="test.mosquitto.org", _port=1883,
                              _lwt=Just $ (mkLWT "tmp/haskquit" "bye for now" False){
                                 _willProps=[PropUserProperty "lwt" "prop"]},
                              _msgCB=SimpleCallback showme, _protocol=Protocol50,
