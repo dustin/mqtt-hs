@@ -3,18 +3,23 @@
 
 module Main where
 
-import           Control.Monad        (void, when)
-import qualified Data.ByteString.Lazy as BL
-import           Data.Maybe           (fromJust)
-import qualified Data.Text.IO         as TIO
+import           Control.Concurrent.Async (async, link)
+import           Control.Concurrent.STM   (TChan, atomically, newTChanIO,
+                                           readTChan, writeTChan)
+import           Control.Monad            (forever, void, when)
+import qualified Data.ByteString.Lazy     as BL
+import           Data.Maybe               (fromJust)
+import qualified Data.Text.IO             as TIO
 import           Network.MQTT.Client
 import           Network.URI
-import           Options.Applicative  (Parser, argument, execParser, fullDesc,
-                                       help, helper, info, long, maybeReader,
-                                       metavar, option, progDesc, short,
-                                       showDefault, some, str, switch, value,
-                                       (<**>))
-import           System.IO            (stdout)
+import           Options.Applicative      (Parser, argument, execParser,
+                                           fullDesc, help, helper, info, long,
+                                           maybeReader, metavar, option,
+                                           progDesc, short, showDefault, some,
+                                           str, switch, value, (<**>))
+import           System.IO                (stdout)
+
+data Msg = Msg Topic BL.ByteString [Property]
 
 data Options = Options {
   optUri         :: URI
@@ -28,9 +33,20 @@ options = Options
   <*> switch (short 'p' <> help "hide properties")
   <*> some (argument str (metavar "topics..."))
 
+printer :: TChan Msg -> Bool -> IO ()
+printer ch showProps = forever $ do
+  (Msg t m props) <- atomically $ readTChan ch
+  TIO.putStr $ mconcat [t, " → "]
+  BL.hPut stdout m
+  putStrLn ""
+  when showProps $ mapM_ (putStrLn . ("  " <>) . drop 4 . show) props
+
 run :: Options -> IO ()
 run Options{..} = do
-  mc <- connectURI mqttConfig{_msgCB=SimpleCallback showme, _protocol=Protocol50,
+  ch <- newTChanIO
+  async (printer ch (not optHideProps)) >>= link
+
+  mc <- connectURI mqttConfig{_msgCB=SimpleCallback (showme ch), _protocol=Protocol50,
                               _connProps=[PropReceiveMaximum 65535,
                                           PropTopicAliasMaximum 10,
                                           PropRequestResponseInformation 1,
@@ -41,11 +57,7 @@ run Options{..} = do
 
   print =<< waitForClient mc
 
-    where showme _ t m props = do
-            TIO.putStr $ mconcat [t, " → "]
-            BL.hPut stdout m
-            putStrLn ""
-            when (not optHideProps) $ mapM_ (putStrLn . ("  " <>) . drop 4 . show) props
+    where showme ch _ t m props = atomically $ writeTChan ch $ Msg t m props
 
 main :: IO ()
 main = run =<< execParser opts
