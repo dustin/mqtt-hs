@@ -483,12 +483,15 @@ publishq c t m r q props = do
 
         where
           waitRec = do
-            (PubRECPkt (PubREC _ st recprops)) <- atomically $ readTChan ch
-            when (st /= 0) $ mqttFail ("qos 2 REC publish error: " <> show st <> " " <> show recprops)
-            sendPacketIO c (PubRELPkt $ PubREL pid 0 mempty)
-            cancel p -- must not publish after rel
-            (PubCOMPPkt (PubCOMP _ st' compprops)) <- atomically $ readTChan ch
-            when (st' /= 0) $ mqttFail ("qos 2 COMP publish error: " <> show st' <> " " <> show compprops)
+            rpkt <- atomically $ readTChan ch
+            case rpkt of
+              PubRECPkt (PubREC _ st recprops) -> do
+                when (st /= 0) $ mqttFail ("qos 2 REC publish error: " <> show st <> " " <> show recprops)
+                sendPacketIO c (PubRELPkt $ PubREL pid 0 mempty)
+                cancel p -- must not publish after rel
+              PubCOMPPkt (PubCOMP _ st' compprops) -> do
+                when (st' /= 0) $ mqttFail ("qos 2 COMP publish error: " <> show st' <> " " <> show compprops)
+              wtf -> mqttFail ("unexpected packet received in QoS2 publish: " <> show wtf)
 
 -- | Disconnect from the MQTT server.
 disconnect :: MQTTClient -> DiscoReason -> [Property] -> IO ()
