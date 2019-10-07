@@ -297,7 +297,7 @@ instance E.Exception MQTTException
 dispatch :: MQTTClient -> TChan Bool -> MQTTPkt -> IO ()
 dispatch c@MQTTClient{..} pch pkt =
   case pkt of
-    (PublishPkt p)                            -> pubMachine p
+    (PublishPkt p)                            -> void $ async (pubMachine p) >>= link
     (SubACKPkt (SubscribeResponse i _ _))     -> delegate DSubACK i
     (UnsubACKPkt (UnsubscribeResponse i _ _)) -> delegate DUnsubACK i
     (PubACKPkt (PubACK i _ _))                -> delegate DPubACK i
@@ -320,7 +320,7 @@ dispatch c@MQTTClient{..} pch pkt =
           cancelWith t (Discod req)
 
         pubMachine pr@PublishRequest{..}
-          | _pubQoS == QoS2 = void $ async manageQoS2 >>= link
+          | _pubQoS == QoS2 = manageQoS2
           | _pubQoS == QoS1 = notify >> sendPacketIO c (PubACKPkt (PubACK _pubPktID 0 mempty))
           | otherwise = notify
 
