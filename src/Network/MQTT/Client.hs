@@ -317,8 +317,14 @@ dispatch c@MQTTClient{..} pch pkt =
         delegate dt pid = atomically $ do
           m <- readTVar _acks
           case Map.lookup (dt, pid) m of
-            Nothing -> pure ()
+            Nothing -> nak dt
             Just ch -> writeTChan ch pkt
+
+            where
+              nak DPubREC = sendPacket c (PubRELPkt  (PubREL  pid 0x92 mempty))
+              nak DPubREL = sendPacket c (PubCOMPPkt (PubCOMP pid 0x92 mempty))
+              nak _       = pure ()
+
 
         disco req = do
           t <- readTVarIO _ct
