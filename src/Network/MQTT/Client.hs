@@ -47,7 +47,7 @@ import qualified Data.ByteString.Char8      as BCS
 import qualified Data.ByteString.Lazy       as BL
 import qualified Data.ByteString.Lazy.Char8 as BC
 import           Data.Conduit               (runConduit, yield, (.|))
-import           Data.Conduit.Attoparsec    (conduitParser, sinkParser)
+import           Data.Conduit.Attoparsec    (conduitParser)
 import qualified Data.Conduit.Combinators   as C
 import           Data.Conduit.Network       (AppData, appSink, appSource,
                                              clientSettings, runTCPClient)
@@ -219,31 +219,27 @@ runClientAppData mkconn MQTTConfig{..} = do
                                  T._cleanSession=_cleanSession,
                                  T._properties=_connProps}
         yield (BL.toStrict $ toByteString _protocol req) .| appSink ad
-        (ConnACKPkt connr@(ConnACKFlags _ val props)) <- appSource ad .| sinkParser (parsePacket _protocol)
-        liftIO $ atomically $ do
-          writeTVar _svrProps props
-          writeTVar _st $ if val == ConnAccepted then Connected else ConnErr connr
-
-        when (val /= ConnAccepted) $ mqttFail (show val)
 
       pure c
 
     run ad c@MQTTClient{..} = do
-      o <- async processOut
+      o <- async $ whenConnected >> processOut
       pch <- newTChanIO
-      p <- async doPing
+      p <- async $ whenConnected >> doPing
       to <- async (watchdog pch)
       link to
 
-      atomically $ do
-        modifyTVar' _ts (\l -> o:p:to:l)
-        writeTVar _st Connected
+      atomically $ modifyTVar' _ts (\l -> o:p:to:l)
 
       runConduit $ appSource ad
         .| conduitParser (parsePacket _protocol)
         .| C.mapM_ (\(_,x) -> liftIO (dispatch c pch x))
 
       where
+        whenConnected = atomically $ do
+          s <- readTVar _st
+          if s /= Connected then retry else pure ()
+
         processOut = runConduit $
           C.repeatM (liftIO (atomically $ checkConnected c >> readTChan _ch))
           .| C.map (BL.toStrict . toByteString _protocol)
@@ -297,6 +293,7 @@ instance E.Exception MQTTException
 dispatch :: MQTTClient -> TChan Bool -> MQTTPkt -> IO ()
 dispatch c@MQTTClient{..} pch pkt =
   case pkt of
+    (ConnACKPkt p)                            -> connACKd p
     (PublishPkt p)                            -> void $ async (pubMachine p) >>= link
     (SubACKPkt (SubscribeResponse i _ _))     -> delegate DSubACK i
     (UnsubACKPkt (UnsubscribeResponse i _ _)) -> delegate DUnsubACK i
@@ -308,7 +305,16 @@ dispatch c@MQTTClient{..} pch pkt =
     PongPkt                                   -> atomically . writeTChan pch $ True
     x                                         -> print x
 
-  where delegate dt pid = atomically $ do
+  where connACKd connr@(ConnACKFlags _ val props) = case val of
+                                                      ConnAccepted -> atomically $ do
+                                                        writeTVar _svrProps props
+                                                        writeTVar _st Connected
+                                                      _ -> do
+                                                        t <- readTVarIO _ct
+                                                        atomically $ writeTVar _st (ConnErr connr)
+                                                        cancelWith t (MQTTException $ show connr)
+
+        delegate dt pid = atomically $ do
           m <- readTVar _acks
           case Map.lookup (dt, pid) m of
             Nothing -> pure ()
