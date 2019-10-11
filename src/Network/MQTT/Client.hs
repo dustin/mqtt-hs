@@ -250,7 +250,7 @@ runClientAppData mkconn MQTTConfig{..} = do
         watchdog ch = do
           r <- timeout (pingPeriod * 3) w
           case r of
-            Nothing -> E.throwIO Timeout
+            Nothing -> killConn c Timeout
             Just _  -> watchdog ch
 
             where w = atomically . readTChan $ ch
