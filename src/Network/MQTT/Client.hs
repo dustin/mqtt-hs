@@ -12,7 +12,7 @@ Both
 <http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html MQTT 3.1.1>
 and
 <https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html MQTT 5.0>
-are supported.
+are supported over plain TCP, TLS, WebSockets and Secure WebSockets.
 -}
 
 {-# LANGUAGE OverloadedStrings #-}
@@ -23,12 +23,14 @@ module Network.MQTT.Client (
   MQTTConfig(..), MQTTClient, QoS(..), Topic, mqttConfig,  mkLWT, LastWill(..),
   ProtocolLevel(..), Property(..), SubOptions(..), subOptions, MessageCallback(..),
   -- * Running and waiting for the client.
-  runClient, runClientTLS, waitForClient,
+  waitForClient,
   connectURI, isConnected,
   disconnect, normalDisconnect,
   -- * General client interactions.
   subscribe, unsubscribe, publish, publishq, pubAliased,
-  svrProps
+  svrProps,
+  -- * Low-level bits
+  runMQTTConduit, MQTTConduit
   ) where
 
 import           Control.Concurrent         (threadDelay)
@@ -131,10 +133,11 @@ mqttConfig = MQTTConfig{_hostname="localhost", _port=1883, _connID="",
                         _msgCB=NoCallback,
                         _protocol=Protocol311, _connProps=mempty}
 
--- | Connect to an MQTT server by URI.  Currently only mqtt and mqtts
--- URLs are supported.  The host, port, username, and password will be
--- derived from the URI and the values supplied in the config will be
--- ignored.
+-- | Connect to an MQTT server by URI.
+--
+-- mqtt://, mqtts://, ws:// and wss:// URLs are supported.  The host,
+-- port, username, and password will be derived from the URI and the
+-- values supplied in the config will be ignored.
 connectURI :: MQTTConfig -> URI -> IO MQTTClient
 connectURI cfg@(MQTTConfig{..}) uri = do
   let cf = case uriScheme uri of

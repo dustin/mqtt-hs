@@ -9,7 +9,8 @@ An [MQTT][mqtt] protocol implementation for Haskell.
 ```haskell
 main :: IO
 main = do
-  mc <- runClient mqttConfig{}
+  let (Just uri) = parseURI "mqtt://test.mosquitto.org"
+  mc <- connectURI mqttConfig{} uri
   publish mc "tmp/topic" "hello!" False
 ```
 
@@ -18,9 +19,10 @@ main = do
 ```haskell
 main :: IO
 main = do
-  mc <- runClient mqttConfig{_msgCB=Just msgReceived}
+  let (Just uri) = parseURI "mqtt://test.mosquitto.org"
+  mc <- connectURI mqttConfig{_msgCB=Just msgReceived} uri
   print =<< subscribe mc [("tmp/topic1", subOptions), ("tmp/topic2", subOptions)] []
-  print =<< waitForClient mc   -- wait for the the client to disconnect
+  waitForClient mc   -- wait for the the client to disconnect
 
   where
     msgReceived _ t m p = print (t,m,p)

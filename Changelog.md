@@ -1,5 +1,37 @@
 # Changelog for net-mqtt
 
+## 0.6.0.0
+
+Many changes went into this release.
+
+### New Features
+
+* WebSocket support (ws:// and wss://)
+* Added the `mqtt-watch` CLI tool (which I use a lot)
+* Lots of work on correctness WRT connection and callback failures.
+* Low-Level callbacks (providing all the details of the published
+  message)
+* Added `runMQTTConduit` to allow running the client over any Conduit
+  provider.
+
+### Incompatibilities
+
+As part of adding features and improving correctness, I've made a few
+API changes.
+
+* `waitForClient` now throws an exception on failure.  This greatly
+  simplified usage and has made a variety of my applications more
+  reliable when networks and computers fail.
+* Callbacks are now `MessageCallback`.  This primarily allowed me to
+  separate `SimpleCallback` (the thing most apps want) and
+  `LowLevelCallback` (a thing I needed when building an MQTT bridge).
+* Removed `runClient` and `runClientTLS` from the API.  They don't
+  provide any value over `connectURI` or `runMQTTConduit`.
+* All callbacks are now asynchronous.  Before, QoS2 would be by
+  necessity, but a bad callback could cause problems with the
+  machinery, so they're all independent now.  This may not be
+  noticeable in most applications, but it's something to consider.
+
 ## 0.5.1.0
 
 The QuickCheck Arbitrary instances are exported in a module now,

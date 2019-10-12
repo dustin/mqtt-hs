@@ -5,19 +5,23 @@ module Main where
 import           Control.Concurrent       (threadDelay)
 import           Control.Concurrent.Async (async, cancel, link)
 import           Control.Monad            (forever)
+import           Network.URI              (parseURI)
 
 import           Network.MQTT.Client
 
 main :: IO ()
 main = do
-  mc <- runClient mqttConfig{_hostname="test.mosquitto.org", _port=1883,
-                             _lwt=Just $ (mkLWT "tmp/haskquit" "bye for now" False){
+  let (Just uri) = parseURI "mqtt://test.mosquitto.org"
+
+  mc <- connectURI mqttConfig{_lwt=Just $ (mkLWT "tmp/haskquit" "bye for now" False){
                                 _willProps=[PropUserProperty "lwt" "prop"]},
                              _msgCB=SimpleCallback showme, _protocol=Protocol50,
                              _connProps=[PropReceiveMaximum 65535,
                                          PropTopicAliasMaximum 10,
                                          PropRequestResponseInformation 1,
                                          PropRequestProblemInformation 1]}
+    uri
+
   putStrLn "connected!"
   print =<< svrProps mc
   print =<< subscribe mc [("oro/#", subOptions), ("tmp/#", subOptions{_subQoS=QoS2})] mempty
