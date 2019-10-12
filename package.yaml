@@ -35,6 +35,7 @@ dependencies:
 - attoparsec-binary    >= 0.2   && < 1.0
 - deepseq
 - QuickCheck
+- websockets
 
 library:
   source-dirs: src

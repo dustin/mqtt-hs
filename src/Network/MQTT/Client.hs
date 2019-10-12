@@ -46,8 +46,8 @@ import           Control.Monad.IO.Class     (liftIO)
 import qualified Data.ByteString.Char8      as BCS
 import qualified Data.ByteString.Lazy       as BL
 import qualified Data.ByteString.Lazy.Char8 as BC
-import           Data.Conduit               (ConduitT, Void, runConduit, yield,
-                                             (.|))
+import           Data.Conduit               (ConduitT, Void, await, runConduit,
+                                             yield, (.|))
 import           Data.Conduit.Attoparsec    (conduitParser)
 import qualified Data.Conduit.Combinators   as C
 import           Data.Conduit.Network       (AppData, appSink, appSource,
@@ -61,6 +61,7 @@ import qualified Data.Text.Encoding         as TE
 import           Data.Word                  (Word16)
 import           Network.URI                (URI (..), unEscapeString, uriPort,
                                              uriRegName, uriUserInfo)
+import qualified Network.WebSockets         as WS
 import           System.Timeout             (timeout)
 
 
@@ -140,6 +141,7 @@ connectURI cfg@(MQTTConfig{..}) uri = do
   let cf = case uriScheme uri of
              "mqtt:"  -> runClient
              "mqtts:" -> runClientTLS
+             "ws:"    -> runWS uri
              us       -> fail $ "invalid URI scheme: " <> us
 
       (Just a) = uriAuthority uri
@@ -152,7 +154,8 @@ connectURI cfg@(MQTTConfig{..}) uri = do
   where
     port "" "mqtt:"  = 1883
     port "" "mqtts:" = 8883
-    port x _         = read x
+    port "" "ws:"    = 80
+    port x _         = (read . tail) x
 
     cid _ ['#']    = ""
     cid _ ('#':xs) = xs
@@ -176,6 +179,25 @@ tcpCompat :: ((AppData -> IO ()) -> IO ()) -> MQTTConfig -> IO MQTTClient
 tcpCompat mkconn cfg = runMQTTConduit (adapt mkconn) cfg
   where adapt mk f = mk (f . adaptor)
         adaptor ad = (appSource ad, appSink ad)
+
+wsSource :: WS.Connection -> ConduitT () BCS.ByteString IO ()
+wsSource ws = loop
+  where loop = do
+          bs <- liftIO $ WS.receiveData ws
+          if BCS.null bs then pure ()
+            else yield bs >> loop
+
+wsSink :: WS.Connection -> ConduitT BCS.ByteString Void IO ()
+wsSink ws = loop
+  where
+    loop = await >>= maybe (pure ()) (\bs -> liftIO (WS.sendBinaryData ws bs) >> loop)
+
+runWS :: URI -> MQTTConfig -> IO MQTTClient
+runWS uri cfg@MQTTConfig{..} = runMQTTConduit (adapt $ WS.runClientWith _hostname _port (uriPath uri) WS.defaultConnectionOptions hdrs) cfg
+  where
+    hdrs = [("Sec-WebSocket-Protocol", "mqtt")]
+    adapt mk f = mk (f . adaptor)
+    adaptor s = (wsSource s, wsSink s)
 
 pingPeriod :: Int
 pingPeriod = 30000000 -- 30 seconds
