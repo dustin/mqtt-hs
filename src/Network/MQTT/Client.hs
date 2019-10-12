@@ -87,13 +87,8 @@ data MessageCallback = NoCallback
   | LowLevelCallback (MQTTClient -> PublishRequest -> IO ())
 
 -- | The MQTT client.
--- A client may be built using either runClient or runClientTLS.  For example:
 --
--- @
---   mc <- runClient mqttConfig{}
---   publish mc "some/topic" "some message" False
--- @
---
+-- See 'connectURI' for the most straightforward example.
 data MQTTClient = MQTTClient {
   _ch         :: TChan MQTTPkt
   , _pktID    :: TVar Word16
@@ -109,16 +104,16 @@ data MQTTClient = MQTTClient {
 
 -- | Configuration for setting up an MQTT client.
 data MQTTConfig = MQTTConfig{
-  _hostname       :: String -- ^ Host to connect to.
-  , _port         :: Int -- ^ Port number.
-  , _connID       :: String -- ^ Unique connection ID (required in protocol 3.1.1).
-  , _username     :: Maybe String -- ^ Optional username.
-  , _password     :: Maybe String -- ^ Optional password.
-  , _cleanSession :: Bool -- ^ False if a session should be reused.
-  , _lwt          :: Maybe LastWill -- ^ LastWill message to be sent on client disconnect.
-  , _msgCB        :: MessageCallback -- ^ Callback for incoming messages.
-  , _protocol     :: ProtocolLevel -- ^ Protocol to use for the connection.
-  , _connProps    :: [Property] -- ^ Properties to send to the broker in the CONNECT packet.
+  _cleanSession :: Bool -- ^ False if a session should be reused.
+  , _lwt        :: Maybe LastWill -- ^ LastWill message to be sent on client disconnect.
+  , _msgCB      :: MessageCallback -- ^ Callback for incoming messages.
+  , _protocol   :: ProtocolLevel -- ^ Protocol to use for the connection.
+  , _connProps  :: [Property] -- ^ Properties to send to the broker in the CONNECT packet.
+  , _hostname   :: String -- ^ Host to connect to (parsed from the URI)
+  , _port       :: Int -- ^ Port number (parsed from the URI)
+  , _connID     :: String -- ^ Unique connection ID (parsed from the URI)
+  , _username   :: Maybe String -- ^ Optional username (parsed from the URI)
+  , _password   :: Maybe String -- ^ Optional password (parsed from the URI)
   }
 
 -- | A default MQTTConfig.  A _connID /may/ be required depending on
@@ -127,7 +122,7 @@ data MQTTConfig = MQTTConfig{
 -- server may assign an identifier for you and return it in the
 -- 'PropAssignedClientIdentifier' property.
 mqttConfig :: MQTTConfig
-mqttConfig = MQTTConfig{_hostname="localhost", _port=1883, _connID="",
+mqttConfig = MQTTConfig{_hostname="", _port=1883, _connID="",
                         _username=Nothing, _password=Nothing,
                         _cleanSession=True, _lwt=Nothing,
                         _msgCB=NoCallback,
@@ -135,9 +130,15 @@ mqttConfig = MQTTConfig{_hostname="localhost", _port=1883, _connID="",
 
 -- | Connect to an MQTT server by URI.
 --
--- mqtt://, mqtts://, ws:// and wss:// URLs are supported.  The host,
--- port, username, and password will be derived from the URI and the
--- values supplied in the config will be ignored.
+-- @mqtt://@, @mqtts://@, @ws://@, and @wss://@ URLs are supported.
+-- The host, port, username, and password will be derived from the URI
+-- and the values supplied in the config will be ignored.
+--
+-- > main :: IO
+-- > main = do
+-- >   let (Just uri) = parseURI "mqtt://test.mosquitto.org"
+-- >   mc <- connectURI mqttConfig{} uri
+-- >   publish mc "tmp/topic" "hello!" False
 connectURI :: MQTTConfig -> URI -> IO MQTTClient
 connectURI cfg@(MQTTConfig{..}) uri = do
   let cf = case uriScheme uri of
