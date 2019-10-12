@@ -46,7 +46,8 @@ import           Control.Monad.IO.Class     (liftIO)
 import qualified Data.ByteString.Char8      as BCS
 import qualified Data.ByteString.Lazy       as BL
 import qualified Data.ByteString.Lazy.Char8 as BC
-import           Data.Conduit               (runConduit, yield, (.|))
+import           Data.Conduit               (ConduitT, Void, runConduit, yield,
+                                             (.|))
 import           Data.Conduit.Attoparsec    (conduitParser)
 import qualified Data.Conduit.Combinators   as C
 import           Data.Conduit.Network       (AppData, appSink, appSource,
@@ -164,11 +165,17 @@ connectURI cfg@(MQTTConfig{..}) uri = do
 
 -- | Set up and run a client from the given config.
 runClient :: MQTTConfig -> IO MQTTClient
-runClient cfg@MQTTConfig{..} = runClientAppData (runTCPClient (clientSettings _port (BCS.pack _hostname))) cfg
+runClient cfg@MQTTConfig{..} = tcpCompat (runTCPClient (clientSettings _port (BCS.pack _hostname))) cfg
 
 -- | Set up and run a client connected via TLS.
 runClientTLS :: MQTTConfig -> IO MQTTClient
-runClientTLS cfg@MQTTConfig{..} = runClientAppData (runTLSClient (tlsClientConfig _port (BCS.pack _hostname))) cfg
+runClientTLS cfg@MQTTConfig{..} = tcpCompat (runTLSClient (tlsClientConfig _port (BCS.pack _hostname))) cfg
+
+-- Compatibility mechanisms for TCP Conduit bits.
+tcpCompat :: ((AppData -> IO ()) -> IO ()) -> MQTTConfig -> IO MQTTClient
+tcpCompat mkconn cfg = runMQTTConduit (adapt mkconn) cfg
+  where adapt mk f = mk (f . adaptor)
+        adaptor ad = (appSource ad, appSink ad)
 
 pingPeriod :: Int
 pingPeriod = 30000000 -- 30 seconds
@@ -176,9 +183,17 @@ pingPeriod = 30000000 -- 30 seconds
 mqttFail :: String -> a
 mqttFail = E.throw . MQTTException
 
--- | Set up and run a client from the given conduit AppData function.
-runClientAppData :: ((AppData -> IO ()) -> IO ()) -> MQTTConfig -> IO MQTTClient
-runClientAppData mkconn MQTTConfig{..} = do
+-- | MQTTConduit provides a source and sink for data as used by runClientConduit.
+type MQTTConduit = (ConduitT () BCS.ByteString IO (), ConduitT BCS.ByteString Void IO ())
+
+-- | Set up and run a client with a conduit context function.
+--
+-- 'mkconn' is an IO action that calls another IO action with a
+-- MQTTConduit as a parameter.  It is expected that 'mkconn' will
+-- manage the lifecycle of the conduit source/sink on behalf of the
+-- client.
+runMQTTConduit :: ((MQTTConduit -> IO ()) -> IO ()) -> MQTTConfig -> IO MQTTClient
+runMQTTConduit mkconn MQTTConfig{..} = do
   _ch <- newTChanIO
   _pktID <- newTVarIO 1
   _ts <- newTVarIO []
@@ -210,19 +225,19 @@ runClientAppData mkconn MQTTConfig{..} = do
           guard $ st == Starting || st == Connected
           writeTVar (_st cli) Disconnected
 
-    start c@MQTTClient{..} ad = do
-      runConduit $ do
+    start c@MQTTClient{..} (_,sink) = do
+      void . runConduit $ do
         let req = connectRequest{T._connID=BC.pack _connID,
                                  T._lastWill=_lwt,
                                  T._username=BC.pack <$> _username,
                                  T._password=BC.pack <$> _password,
                                  T._cleanSession=_cleanSession,
                                  T._properties=_connProps}
-        yield (BL.toStrict $ toByteString _protocol req) .| appSink ad
+        yield (BL.toStrict $ toByteString _protocol req) .| sink
 
       pure c
 
-    run ad c@MQTTClient{..} = do
+    run (src,sink) c@MQTTClient{..} = do
       o <- async $ whenConnected >> processOut
       pch <- newTChanIO
       p <- async $ whenConnected >> doPing
@@ -231,7 +246,7 @@ runClientAppData mkconn MQTTConfig{..} = do
 
       atomically $ modifyTVar' _ts (\l -> o:p:to:l)
 
-      runConduit $ appSource ad
+      runConduit $ src
         .| conduitParser (parsePacket _protocol)
         .| C.mapM_ (\(_,x) -> liftIO (dispatch c pch x))
 
@@ -243,7 +258,7 @@ runClientAppData mkconn MQTTConfig{..} = do
         processOut = runConduit $
           C.repeatM (liftIO (atomically $ checkConnected c >> readTChan _ch))
           .| C.map (BL.toStrict . toByteString _protocol)
-          .| appSink ad
+          .| sink
 
         doPing = forever $ threadDelay pingPeriod >> sendPacketIO c PingPkt
 
