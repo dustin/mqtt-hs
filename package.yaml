@@ -36,6 +36,7 @@ dependencies:
 - deepseq
 - QuickCheck
 - websockets
+- wuss
 
 library:
   source-dirs: src
