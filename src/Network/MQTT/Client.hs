@@ -218,11 +218,12 @@ type MQTTConduit = (ConduitT () BCS.ByteString IO (), ConduitT BCS.ByteString Vo
 
 -- | Set up and run a client with a conduit context function.
 --
--- 'mkconn' is an IO action that calls another IO action with a
--- MQTTConduit as a parameter.  It is expected that 'mkconn' will
--- manage the lifecycle of the conduit source/sink on behalf of the
--- client.
-runMQTTConduit :: ((MQTTConduit -> IO ()) -> IO ()) -> MQTTConfig -> IO MQTTClient
+-- The provided action calls another IO action with a MQTTConduit as a
+-- parameter.  It is expected that this action will manage the
+-- lifecycle of the conduit source/sink on behalf of the client.
+runMQTTConduit :: ((MQTTConduit -> IO ()) -> IO ()) -- ^ an action providing an 'MQTTConduit' in an execution context
+               -> MQTTConfig -- ^ the MQTTConfig
+               -> IO MQTTClient
 runMQTTConduit mkconn MQTTConfig{..} = do
   _ch <- newTChanIO
   _pktID <- newTVarIO 1
