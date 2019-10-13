@@ -127,6 +127,9 @@ withLength a = blLength a <> a
 instance ByteMe BL.ByteString where
   toByteString _ a = (encodeWord16 . toEnum . fromEnum . BL.length) a <> a
 
+-- | Property represents the various MQTT Properties that may sent or
+-- received along with packets in MQTT 5.  For detailed use on when
+-- and where to use them, consult with the MQTT 5.0 spec.
 data Property = PropPayloadFormatIndicator Word8
               | PropMessageExpiryInterval Word32
               | PropContentType BL.ByteString
@@ -577,7 +580,7 @@ data SubOptions = SubOptions{
   , _subQoS            :: QoS             -- ^ Maximum QoS to use for this subscription.
   } deriving(Eq, Show)
 
--- | Reasonable subscription option defaults at QoS0.
+-- | Reasonable subscription option defaults at 'QoS0'.
 subOptions :: SubOptions
 subOptions = SubOptions{_retainHandling=SendOnSubscribe,
                          _retainAsPublished=False,

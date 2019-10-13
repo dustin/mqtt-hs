@@ -116,11 +116,11 @@ data MQTTConfig = MQTTConfig{
   , _password   :: Maybe String -- ^ Optional password (parsed from the URI)
   }
 
--- | A default MQTTConfig.  A _connID /may/ be required depending on
+-- | A default 'MQTTConfig'.  A '_connID' /may/ be required depending on
 -- your broker (or if you just want an identifiable/resumable
 -- connection).  In MQTTv5, an empty connection ID may be sent and the
 -- server may assign an identifier for you and return it in the
--- 'PropAssignedClientIdentifier' property.
+-- 'PropAssignedClientIdentifier' 'Property'.
 mqttConfig :: MQTTConfig
 mqttConfig = MQTTConfig{_hostname="", _port=1883, _connID="",
                         _username=Nothing, _password=Nothing,
@@ -213,16 +213,16 @@ pingPeriod = 30000000 -- 30 seconds
 mqttFail :: String -> a
 mqttFail = E.throw . MQTTException
 
--- | MQTTConduit provides a source and sink for data as used by runClientConduit.
+-- | MQTTConduit provides a source and sink for data as used by 'runMQTTConduit'.
 type MQTTConduit = (ConduitT () BCS.ByteString IO (), ConduitT BCS.ByteString Void IO ())
 
 -- | Set up and run a client with a conduit context function.
 --
--- The provided action calls another IO action with a MQTTConduit as a
+-- The provided action calls another IO action with a 'MQTTConduit' as a
 -- parameter.  It is expected that this action will manage the
 -- lifecycle of the conduit source/sink on behalf of the client.
 runMQTTConduit :: ((MQTTConduit -> IO ()) -> IO ()) -- ^ an action providing an 'MQTTConduit' in an execution context
-               -> MQTTConfig -- ^ the MQTTConfig
+               -> MQTTConfig -- ^ the 'MQTTConfig'
                -> IO MQTTClient
 runMQTTConduit mkconn MQTTConfig{..} = do
   _ch <- newTChanIO
@@ -471,8 +471,8 @@ sendAndWait c@MQTTClient{..} dt f = do
     releasePktID c (dt,pid)
     readTChan ch
 
--- | Subscribe to a list of topic filters with their respective QoSes.
--- The accepted QoSes are returned in the same order as requested.
+-- | Subscribe to a list of topic filters with their respective 'QoS'es.
+-- The accepted 'QoS'es are returned in the same order as requested.
 subscribe :: MQTTClient -> [(Filter, SubOptions)] -> [Property] -> IO ([Either SubErr QoS], [Property])
 subscribe c@MQTTClient{..} ls props = do
   r <- sendAndWait c DSubACK (\pid -> SubscribePkt $ SubscribeRequest pid ls' props)
@@ -565,7 +565,7 @@ disconnect c@MQTTClient{..} reason props = race_ getDisconnected orDieTrying
 normalDisconnect :: MQTTClient -> IO ()
 normalDisconnect c = disconnect c DiscoNormalDisconnection mempty
 
--- | A convenience method for creating a LastWill.
+-- | A convenience method for creating a 'LastWill'.
 mkLWT :: Topic -> BL.ByteString -> Bool -> T.LastWill
 mkLWT t m r = T.LastWill{
   T._willRetain=r,
@@ -585,7 +585,7 @@ maxAliases MQTTClient{..} = foldr f 0 <$> readTVarIO _svrProps
     f (PropTopicAliasMaximum n) _ = n
     f _ o                         = o
 
--- | Publish a message with the specified QoS and Properties list.  If
+-- | Publish a message with the specified 'QoS' and 'Property' list.  If
 -- possible, use an alias to shorten the message length.  The alias
 -- list is managed by the client in a first-come, first-served basis,
 -- so if you use this with more properties than the broker allows,
