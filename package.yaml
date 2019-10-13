@@ -33,10 +33,10 @@ dependencies:
 - network-conduit-tls  >= 1.3.2 && < 1.4
 - network-uri          >= 2.6.1 && < 2.7
 - attoparsec-binary    >= 0.2   && < 1.0
-- deepseq
-- QuickCheck
-- websockets
-- wuss
+- deepseq              >= 1.4.4.0 && < 1.5
+- QuickCheck           >= 2.12.6.1 && < 2.13
+- websockets           >= 0.12.5.3 && < 0.13
+- wuss                 >= 1.1.12 && < 1.2
 
 library:
   source-dirs: src
