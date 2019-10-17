@@ -20,7 +20,7 @@ main = do
 main :: IO
 main = do
   let (Just uri) = parseURI "mqtt://test.mosquitto.org"
-  mc <- connectURI mqttConfig{_msgCB=Just msgReceived} uri
+  mc <- connectURI mqttConfig{_msgCB=SimpleCallback msgReceived} uri
   print =<< subscribe mc [("tmp/topic1", subOptions), ("tmp/topic2", subOptions)] []
   waitForClient mc   -- wait for the the client to disconnect
 
