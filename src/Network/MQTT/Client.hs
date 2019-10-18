@@ -104,16 +104,17 @@ data MQTTClient = MQTTClient {
 
 -- | Configuration for setting up an MQTT client.
 data MQTTConfig = MQTTConfig{
-  _cleanSession :: Bool -- ^ False if a session should be reused.
-  , _lwt        :: Maybe LastWill -- ^ LastWill message to be sent on client disconnect.
-  , _msgCB      :: MessageCallback -- ^ Callback for incoming messages.
-  , _protocol   :: ProtocolLevel -- ^ Protocol to use for the connection.
-  , _connProps  :: [Property] -- ^ Properties to send to the broker in the CONNECT packet.
-  , _hostname   :: String -- ^ Host to connect to (parsed from the URI)
-  , _port       :: Int -- ^ Port number (parsed from the URI)
-  , _connID     :: String -- ^ Unique connection ID (parsed from the URI)
-  , _username   :: Maybe String -- ^ Optional username (parsed from the URI)
-  , _password   :: Maybe String -- ^ Optional password (parsed from the URI)
+  _cleanSession     :: Bool -- ^ False if a session should be reused.
+  , _lwt            :: Maybe LastWill -- ^ LastWill message to be sent on client disconnect.
+  , _msgCB          :: MessageCallback -- ^ Callback for incoming messages.
+  , _protocol       :: ProtocolLevel -- ^ Protocol to use for the connection.
+  , _connProps      :: [Property] -- ^ Properties to send to the broker in the CONNECT packet.
+  , _hostname       :: String -- ^ Host to connect to (parsed from the URI)
+  , _port           :: Int -- ^ Port number (parsed from the URI)
+  , _connID         :: String -- ^ Unique connection ID (parsed from the URI)
+  , _username       :: Maybe String -- ^ Optional username (parsed from the URI)
+  , _password       :: Maybe String -- ^ Optional password (parsed from the URI)
+  , _connectTimeout :: Int -- ^ Connection timeout (microseconds)
   }
 
 -- | A default 'MQTTConfig'.  A '_connID' /may/ be required depending on
@@ -126,7 +127,8 @@ mqttConfig = MQTTConfig{_hostname="", _port=1883, _connID="",
                         _username=Nothing, _password=Nothing,
                         _cleanSession=True, _lwt=Nothing,
                         _msgCB=NoCallback,
-                        _protocol=Protocol311, _connProps=mempty}
+                        _protocol=Protocol311, _connProps=mempty,
+                        _connectTimeout=180000000}
 
 -- | Connect to an MQTT server by URI.
 --
@@ -151,9 +153,14 @@ connectURI cfg@(MQTTConfig{..}) uri = do
       (Just a) = uriAuthority uri
       (u,p) = up (uriUserInfo a)
 
-  cf cfg{Network.MQTT.Client._connID=cid _protocol (uriFragment uri),
-         _hostname=uriRegName a, _port=port (uriPort a) (uriScheme uri),
-         Network.MQTT.Client._username=u, Network.MQTT.Client._password=p}
+  v <- timeout _connectTimeout $
+    cf cfg{Network.MQTT.Client._connID=cid _protocol (uriFragment uri),
+           _hostname=uriRegName a, _port=port (uriPort a) (uriScheme uri),
+           Network.MQTT.Client._username=u, Network.MQTT.Client._password=p}
+
+  case v of
+    Nothing -> mqttFail $ "connection to " <> show uri <> " timed out"
+    Just x  -> pure x
 
   where
     port "" "mqtt:"  = 1883
