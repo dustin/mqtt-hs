@@ -1,5 +1,11 @@
 # Changelog for net-mqtt
 
+## 0.6.0.1
+
+Relaxed QuickCheck constraint slightly.
+
+Added connection timeout.
+
 ## 0.6.0.0
 
 Many changes went into this release.
