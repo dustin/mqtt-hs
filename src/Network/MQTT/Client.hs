@@ -28,7 +28,7 @@ module Network.MQTT.Client (
   disconnect, normalDisconnect,
   -- * General client interactions.
   subscribe, unsubscribe, publish, publishq, pubAliased,
-  svrProps,
+  svrProps, MQTTException(..),
   -- * Low-level bits
   runMQTTConduit, MQTTConduit, isConnectedSTM
   ) where
