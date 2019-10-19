@@ -30,7 +30,7 @@ module Network.MQTT.Client (
   subscribe, unsubscribe, publish, publishq, pubAliased,
   svrProps,
   -- * Low-level bits
-  runMQTTConduit, MQTTConduit
+  runMQTTConduit, MQTTConduit, isConnectedSTM
   ) where
 
 import           Control.Concurrent         (threadDelay)
@@ -432,9 +432,13 @@ checkConnected mc = do
     Nothing -> pure ()
     Just x  -> E.throw x
 
--- | True if we're currently in a normally connected state.
+-- | True if we're currently in a normally connected state (in the IO monad).
 isConnected :: MQTTClient -> IO Bool
-isConnected MQTTClient{..} = (Connected ==) <$> readTVarIO _st
+isConnected = atomically . isConnectedSTM
+
+-- | True if we're currently in a normally connected state (in the STM monad).
+isConnectedSTM :: MQTTClient -> STM Bool
+isConnectedSTM MQTTClient{..} = (Connected ==) <$> readTVar _st
 
 sendPacket :: MQTTClient -> MQTTPkt -> STM ()
 sendPacket c@MQTTClient{..} p = checkConnected c >> writeTChan _ch p
