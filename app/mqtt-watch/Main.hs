@@ -1,11 +1,14 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Main where
 
+import           Control.Concurrent       (threadDelay)
 import           Control.Concurrent.Async (async, link)
 import           Control.Concurrent.STM   (TChan, atomically, newTChanIO,
                                            readTChan, writeTChan)
+import           Control.Exception        (Handler (..), IOException, catches)
 import           Control.Monad            (forever, void, when)
 import qualified Data.ByteString.Lazy     as BL
 import           Data.Maybe               (fromJust)
@@ -46,18 +49,25 @@ run Options{..} = do
   ch <- newTChanIO
   async (printer ch (not optHideProps)) >>= link
 
-  mc <- connectURI mqttConfig{_msgCB=SimpleCallback (showme ch), _protocol=Protocol50,
-                              _connProps=[PropReceiveMaximum 65535,
-                                          PropTopicAliasMaximum 10,
-                                          PropRequestResponseInformation 1,
-                                          PropRequestProblemInformation 1]}
+  forever $ catches (go ch) [Handler (\(ex :: MQTTException) -> handler (show ex)),
+                             Handler (\(ex :: IOException) -> handler (show ex))]
+
+  where
+    go ch = do
+      mc <- connectURI mqttConfig{_msgCB=SimpleCallback (showme ch), _protocol=Protocol50,
+                                  _connProps=[PropReceiveMaximum 65535,
+                                              PropTopicAliasMaximum 10,
+                                              PropRequestResponseInformation 1,
+                                              PropRequestProblemInformation 1]}
         optUri
 
-  void $ subscribe mc [(t, subOptions) | t <- optTopics] mempty
+      void $ subscribe mc [(t, subOptions) | t <- optTopics] mempty
 
-  print =<< waitForClient mc
+      print =<< waitForClient mc
 
-    where showme ch _ t m props = atomically $ writeTChan ch $ Msg t m props
+    showme ch _ t m props = atomically $ writeTChan ch $ Msg t m props
+
+    handler e = putStrLn ("ERROR: " <> e) >> threadDelay 1000000
 
 main :: IO ()
 main = run =<< execParser opts
