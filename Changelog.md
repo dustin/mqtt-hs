@@ -1,5 +1,15 @@
 # Changelog for net-mqtt
 
+## 0.6.0.2
+
+Export MQTTException (thrown from various internal bits).
+
+Added isConnectedSTM for verifying connection state inside of STM
+transactions (e.g., verifying you're connected while also waiting for
+a value in a TChan).
+
+Also, mqtt-watch reconnects on error now.
+
 ## 0.6.0.1
 
 Relaxed QuickCheck constraint slightly.
