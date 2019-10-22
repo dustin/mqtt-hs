@@ -142,7 +142,7 @@ mqttConfig = MQTTConfig{_hostname="", _port=1883, _connID="",
 -- >   mc <- connectURI mqttConfig{} uri
 -- >   publish mc "tmp/topic" "hello!" False
 connectURI :: MQTTConfig -> URI -> IO MQTTClient
-connectURI cfg@(MQTTConfig{..}) uri = do
+connectURI cfg@MQTTConfig{..} uri = do
   let cf = case uriScheme uri of
              "mqtt:"  -> runClient
              "mqtts:" -> runClientTLS
@@ -188,12 +188,12 @@ runClientTLS cfg@MQTTConfig{..} = tcpCompat (runTLSClient (tlsClientConfig _port
 
 -- Compatibility mechanisms for TCP Conduit bits.
 tcpCompat :: ((AppData -> IO ()) -> IO ()) -> MQTTConfig -> IO MQTTClient
-tcpCompat mkconn cfg = runMQTTConduit (adapt mkconn) cfg
+tcpCompat mkconn = runMQTTConduit (adapt mkconn)
   where adapt mk f = mk (f . adaptor)
         adaptor ad = (appSource ad, appSink ad)
 
 runWS :: URI -> Bool -> MQTTConfig -> IO MQTTClient
-runWS uri secure cfg@MQTTConfig{..} = runMQTTConduit (adapt $ (cf secure) _hostname _port (uriPath uri) WS.defaultConnectionOptions hdrs) cfg
+runWS uri secure cfg@MQTTConfig{..} = runMQTTConduit (adapt $ cf secure _hostname _port (uriPath uri) WS.defaultConnectionOptions hdrs) cfg
   where
     hdrs = [("Sec-WebSocket-Protocol", "mqtt")]
     adapt mk f = mk (f . adaptor)
@@ -558,7 +558,7 @@ publishq c t m r q props = do
                 when (st /= 0) $ mqttFail ("qos 2 REC publish error: " <> show st <> " " <> show recprops)
                 sendPacketIO c (PubRELPkt $ PubREL pid 0 mempty)
                 cancel p -- must not publish after rel
-              PubCOMPPkt (PubCOMP _ st' compprops) -> do
+              PubCOMPPkt (PubCOMP _ st' compprops) ->
                 when (st' /= 0) $ mqttFail ("qos 2 COMP publish error: " <> show st' <> " " <> show compprops)
               wtf -> mqttFail ("unexpected packet received in QoS2 publish: " <> show wtf)
 
