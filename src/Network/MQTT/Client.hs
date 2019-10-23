@@ -54,13 +54,15 @@ import           Data.Conduit.Attoparsec    (conduitParser)
 import qualified Data.Conduit.Combinators   as C
 import           Data.Conduit.Network       (AppData, appSink, appSource,
                                              clientSettings, runTCPClient)
-import           Data.Conduit.Network.TLS   (runTLSClient, tlsClientConfig)
+import           Data.Conduit.Network.TLS   (runTLSClient, tlsClientConfig,
+                                             tlsClientTLSSettings)
 import           Data.Map.Strict            (Map)
 import qualified Data.Map.Strict            as Map
 import           Data.Maybe                 (fromMaybe)
 import           Data.Text                  (Text)
 import qualified Data.Text.Encoding         as TE
 import           Data.Word                  (Word16)
+import           Network.Connection         (TLSSettings (..))
 import           Network.URI                (URI (..), unEscapeString, uriPort,
                                              uriRegName, uriUserInfo)
 import qualified Network.WebSockets         as WS
@@ -115,6 +117,7 @@ data MQTTConfig = MQTTConfig{
   , _username       :: Maybe String -- ^ Optional username (parsed from the URI)
   , _password       :: Maybe String -- ^ Optional password (parsed from the URI)
   , _connectTimeout :: Int -- ^ Connection timeout (microseconds)
+  , _tlsSettings    :: TLSSettings -- ^ TLS Settings for secure connections
   }
 
 -- | A default 'MQTTConfig'.  A '_connID' /may/ be required depending on
@@ -128,7 +131,8 @@ mqttConfig = MQTTConfig{_hostname="", _port=1883, _connID="",
                         _cleanSession=True, _lwt=Nothing,
                         _msgCB=NoCallback,
                         _protocol=Protocol311, _connProps=mempty,
-                        _connectTimeout=180000000}
+                        _connectTimeout=180000000,
+                        _tlsSettings=TLSSettingsSimple False False False}
 
 -- | Connect to an MQTT server by URI.
 --
@@ -184,7 +188,8 @@ runClient cfg@MQTTConfig{..} = tcpCompat (runTCPClient (clientSettings _port (BC
 
 -- | Set up and run a client connected via TLS.
 runClientTLS :: MQTTConfig -> IO MQTTClient
-runClientTLS cfg@MQTTConfig{..} = tcpCompat (runTLSClient (tlsClientConfig _port (BCS.pack _hostname))) cfg
+runClientTLS cfg@MQTTConfig{..} = tcpCompat (runTLSClient tlsConf) cfg
+  where tlsConf = (tlsClientConfig _port (BCS.pack _hostname)) {tlsClientTLSSettings=_tlsSettings}
 
 -- Compatibility mechanisms for TCP Conduit bits.
 tcpCompat :: ((AppData -> IO ()) -> IO ()) -> MQTTConfig -> IO MQTTClient
