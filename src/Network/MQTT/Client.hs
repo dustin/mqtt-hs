@@ -62,12 +62,17 @@ import           Data.Maybe                 (fromMaybe)
 import           Data.Text                  (Text)
 import qualified Data.Text.Encoding         as TE
 import           Data.Word                  (Word16)
-import           Network.Connection         (TLSSettings (..))
+import           Network.Connection         (ConnectionParams (..),
+                                             TLSSettings (..), connectTo,
+                                             connectionClose,
+                                             connectionGetChunk, connectionPut,
+                                             initConnectionContext)
 import           Network.URI                (URI (..), unEscapeString, uriPort,
                                              uriRegName, uriUserInfo)
 import qualified Network.WebSockets         as WS
+import           Network.WebSockets.Stream  (makeStream)
+import           System.IO.Error            (catchIOError, isEOFError)
 import           System.Timeout             (timeout)
-import qualified Wuss                       as WSS
 
 import           Network.MQTT.Topic         (Filter, Topic)
 import           Network.MQTT.Types         as T
@@ -204,8 +209,9 @@ runWS uri secure cfg@MQTTConfig{..} = runMQTTConduit (adapt $ cf secure _hostnam
     adapt mk f = mk (f . adaptor)
     adaptor s = (wsSource s, wsSink s)
 
+    cf :: Bool -> String -> Int -> String -> WS.ConnectionOptions -> WS.Headers -> WS.ClientApp () -> IO ()
     cf False = WS.runClientWith
-    cf True  = \h p -> WSS.runSecureClientWith h ((fromInteger . toInteger) p)
+    cf True  = runWSS
 
     wsSource :: WS.Connection -> ConduitT () BCS.ByteString IO ()
     wsSource ws = loop
@@ -218,6 +224,30 @@ runWS uri secure cfg@MQTTConfig{..} = runMQTTConduit (adapt $ cf secure _hostnam
       where
         loop = await >>= maybe (pure ()) (\bs -> liftIO (WS.sendBinaryData ws bs) >> loop)
 
+    runWSS :: String -> Int -> String -> WS.ConnectionOptions -> WS.Headers -> WS.ClientApp () -> IO ()
+    runWSS host port path options hdrs' app = do
+      let connectionParams = ConnectionParams
+            { connectionHostname = host
+            , connectionPort =  toEnum port
+            , connectionUseSecure = Just _tlsSettings
+            , connectionUseSocks = Nothing
+            }
+
+      context <- initConnectionContext
+      E.bracket (connectTo context connectionParams) connectionClose
+        (\conn -> do
+            stream <- makeStream (reader conn) (writer conn)
+            WS.runClientWithStream stream host path options hdrs' app)
+
+        where
+          reader conn =
+            catchIOError (Just <$> connectionGetChunk conn)
+            (\e -> if isEOFError e then pure Nothing else E.throwIO e)
+
+          writer conn maybeBytes =
+            case maybeBytes of
+              Nothing    -> pure ()
+              Just bytes -> connectionPut conn (BC.toStrict bytes)
 
 pingPeriod :: Int
 pingPeriod = 30000000 -- 30 seconds
