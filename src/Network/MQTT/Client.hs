@@ -35,7 +35,8 @@ module Network.MQTT.Client (
 
 import           Control.Concurrent         (threadDelay)
 import           Control.Concurrent.Async   (Async, async, cancel, cancelWith,
-                                             link, race_, wait, withAsync)
+                                             link, race_, wait, waitAnyCancel,
+                                             withAsync)
 import           Control.Concurrent.STM     (STM, TChan, TVar, atomically,
                                              modifyTVar', newTChan, newTChanIO,
                                              newTVarIO, readTChan, readTVar,
@@ -100,7 +101,6 @@ data MQTTClient = MQTTClient {
   _ch         :: TChan MQTTPkt
   , _pktID    :: TVar Word16
   , _cb       :: MessageCallback
-  , _ts       :: TVar [Async ()]
   , _acks     :: TVar (Map (DispatchType,Word16) (TChan MQTTPkt))
   , _st       :: TVar ConnState
   , _ct       :: TVar (Async ())
@@ -269,7 +269,6 @@ runMQTTConduit :: ((MQTTConduit -> IO ()) -> IO ()) -- ^ an action providing an 
 runMQTTConduit mkconn MQTTConfig{..} = do
   _ch <- newTChanIO
   _pktID <- newTVarIO 1
-  _ts <- newTVarIO []
   _acks <- newTVarIO mempty
   _st <- newTVarIO Starting
   _ct <- newTVarIO undefined
@@ -291,8 +290,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
   where
     clientThread cli = E.finally connectAndRun markDisco
       where
-        connectAndRun = mkconn $ \ad ->
-          E.bracket (start cli ad) cancelAll (run ad)
+        connectAndRun = mkconn $ \ad -> (start cli ad) >>= (run ad)
         markDisco = atomically $ do
           st <- readTVar (_st cli)
           guard $ st == Starting || st == Connected
@@ -311,20 +309,20 @@ runMQTTConduit mkconn MQTTConfig{..} = do
       pure c
 
     run (src,sink) c@MQTTClient{..} = do
-      o <- async $ whenConnected >> processOut
       pch <- newTChanIO
-      p <- async $ whenConnected >> doPing
-      to <- async (watchdog pch)
-      link to
+      o <- async $ onceConnected >> processOut
+      p <- async $ onceConnected >> doPing
+      w <- async $ watchdog pch
+      s <- async $ doSrc pch
 
-      atomically $ modifyTVar' _ts (\l -> o:p:to:l)
-
-      runConduit $ src
-        .| conduitParser (parsePacket _protocol)
-        .| C.mapM_ (\(_,x) -> liftIO (dispatch c pch x))
+      void $ waitAnyCancel [o, p, w, s]
 
       where
-        whenConnected = atomically $ do
+        doSrc pch = runConduit $ src
+                    .| conduitParser (parsePacket _protocol)
+                    .| C.mapM_ (\(_,x) -> liftIO (dispatch c pch x))
+
+        onceConnected = atomically $ do
           s <- readTVar _st
           if s /= Connected then retry else pure ()
 
@@ -347,8 +345,6 @@ runMQTTConduit mkconn MQTTConfig{..} = do
       writeTVar _ct t
       c <- readTVar _st
       if c == Starting then retry else pure c
-
-    cancelAll MQTTClient{..} = mapM_ cancel =<< readTVarIO _ts
 
 -- | Wait for a client to terminate its connection.
 -- An exception is thrown if the client didn't terminate expectedly.
