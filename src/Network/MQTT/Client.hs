@@ -33,10 +33,10 @@ module Network.MQTT.Client (
   runMQTTConduit, MQTTConduit, isConnectedSTM
   ) where
 
-import           Control.Concurrent         (threadDelay)
-import           Control.Concurrent.Async   (Async, async, cancel, cancelWith,
-                                             link, race_, wait, waitAnyCancel,
-                                             withAsync)
+import           Control.Concurrent         (myThreadId, threadDelay)
+import           Control.Concurrent.Async   (Async, async, asyncThreadId,
+                                             cancel, cancelWith, link, race_,
+                                             wait, waitAnyCancel, withAsync)
 import           Control.Concurrent.STM     (STM, TChan, TVar, atomically,
                                              modifyTVar', newTChan, newTChanIO,
                                              newTVarIO, readTChan, readTVar,
@@ -63,6 +63,7 @@ import           Data.Maybe                 (fromMaybe)
 import           Data.Text                  (Text)
 import qualified Data.Text.Encoding         as TE
 import           Data.Word                  (Word16)
+import           GHC.Conc                   (labelThread)
 import           Network.Connection         (ConnectionParams (..),
                                              TLSSettings (..), connectTo,
                                              connectionClose,
@@ -162,7 +163,7 @@ connectURI cfg@MQTTConfig{..} uri = do
       (Just a) = uriAuthority uri
       (u,p) = up (uriUserInfo a)
 
-  v <- timeout _connectTimeout $
+  v <- namedTimeout "MQTT connect" _connectTimeout $
     cf cfg{Network.MQTT.Client._connID=cid _protocol (uriFragment uri),
            _hostname=uriRegName a, _port=port (uriPort a) (uriScheme uri),
            Network.MQTT.Client._username=u, Network.MQTT.Client._password=p}
@@ -255,6 +256,17 @@ pingPeriod = 30000000 -- 30 seconds
 mqttFail :: String -> a
 mqttFail = E.throw . MQTTException
 
+-- A couple async utilities to get our stuff named.
+
+namedAsync :: String -> IO a -> IO (Async a)
+namedAsync s a = async a >>= \p -> labelThread (asyncThreadId p) s >> pure p
+
+namedWithAsync :: String -> IO a -> (Async a -> IO b) -> IO b
+namedWithAsync n a t = withAsync a (\p -> labelThread (asyncThreadId p) n >> t p)
+
+namedTimeout :: String -> Int -> IO a -> IO (Maybe a)
+namedTimeout n to a = timeout to (myThreadId >>= \tid -> labelThread tid n >> a)
+
 -- | MQTTConduit provides a source and sink for data as used by 'runMQTTConduit'.
 type MQTTConduit = (ConduitT () BCS.ByteString IO (), ConduitT BCS.ByteString Void IO ())
 
@@ -278,7 +290,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
   let _cb = _msgCB
       cli = MQTTClient{..}
 
-  t <- async $ clientThread cli
+  t <- namedAsync "MQTT clientThread" $ clientThread cli
   s <- atomically (waitForLaunch cli t)
 
   when (s == Disconnected) $ wait t
@@ -310,10 +322,10 @@ runMQTTConduit mkconn MQTTConfig{..} = do
 
     run (src,sink) c@MQTTClient{..} = do
       pch <- newTChanIO
-      o <- async $ onceConnected >> processOut
-      p <- async $ onceConnected >> doPing
-      w <- async $ watchdog pch
-      s <- async $ doSrc pch
+      o <- namedAsync "MQTT out" $ onceConnected >> processOut
+      p <- namedAsync "MQTT ping" $ onceConnected >> doPing
+      w <- namedAsync "MQTT watchdog" $ watchdog pch
+      s <- namedAsync "MQTT in" $ doSrc pch
 
       void $ waitAnyCancel [o, p, w, s]
 
@@ -334,7 +346,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
         doPing = forever $ threadDelay pingPeriod >> sendPacketIO c PingPkt
 
         watchdog ch = do
-          r <- timeout (pingPeriod * 3) w
+          r <- namedTimeout "MQTT ping timeout" (pingPeriod * 3) w
           case r of
             Nothing -> killConn c Timeout
             Just _  -> watchdog ch
@@ -378,7 +390,7 @@ dispatch :: MQTTClient -> TChan Bool -> MQTTPkt -> IO ()
 dispatch c@MQTTClient{..} pch pkt =
   case pkt of
     (ConnACKPkt p)                            -> connACKd p
-    (PublishPkt p)                            -> void $ async (pubMachine p) >>= link
+    (PublishPkt p)                            -> void $ namedAsync "MQTT pub machine" (pubMachine p) >>= link
     (SubACKPkt (SubscribeResponse i _ _))     -> delegate DSubACK i
     (UnsubACKPkt (UnsubscribeResponse i _ _)) -> delegate DUnsubACK i
     (PubACKPkt (PubACK i _ _))                -> delegate DPubACK i
@@ -448,7 +460,7 @@ dispatch c@MQTTClient{..} pch pkt =
                     pure ()
 
                   manageQoS2' ch = do
-                    v <- timeout 10000000 (sendREC ch)
+                    v <- namedTimeout "QoS2 sendREC" 10000000 (sendREC ch)
                     case v of
                       Nothing -> killConn c Timeout
                       _ -> notify >> sendPacketIO c (PubCOMPPkt (PubCOMP _pubPktID 0 mempty))
@@ -558,7 +570,7 @@ publishq c t m r q props = do
     where
       types = [DPubACK, DPubREC, DPubCOMP]
       publishAndWait _ pid QoS0 = sendPacketIO c (pkt False pid)
-      publishAndWait ch pid _   = withAsync (pub False pid) (\p -> satisfyQoS p ch pid)
+      publishAndWait ch pid _   = namedWithAsync "MQTT satisfyQoS" (pub False pid) (\p -> satisfyQoS p ch pid)
 
       pub dup pid = do
         sendPacketIO c (pkt dup pid)
