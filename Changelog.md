@@ -1,5 +1,16 @@
 # Changelog for net-mqtt
 
+## 0.6.1.0
+
+Users can now specify TLSSettings for mqtts:// and wss:// connections.
+
+Small bit of refactoring of main threads used by the client.  It's a
+bit easier to reason about their lifecycle now.
+
+All (at least most) of the threads in use by the client are named so
+when you're looking at an eventlog, you can see what's coming and
+going.
+
 ## 0.6.0.2
 
 Export MQTTException (thrown from various internal bits).
