@@ -62,7 +62,6 @@ executables:
     - -threaded
     - -rtsopts
     - -eventlog
-    - -debug
     - -with-rtsopts=-N
     dependencies:
     - net-mqtt
