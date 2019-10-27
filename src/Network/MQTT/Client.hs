@@ -588,14 +588,14 @@ publishq c t m r q props = do
       satisfyQoS p ch pid
         | q == QoS0 = pure ()
         | q == QoS1 = void $ do
-            (PubACKPkt (PubACK _ st pprops)) <- atomically $ readTChan ch
+            (PubACKPkt (PubACK _ st pprops)) <- atomically $ checkConnected c >> readTChan ch
             when (st /= 0) $ mqttFail ("qos 1 publish error: " <> show st <> " " <> show pprops)
         | q == QoS2 = waitRec
         | otherwise = error "invalid QoS"
 
         where
           waitRec = do
-            rpkt <- atomically $ readTChan ch
+            rpkt <- atomically $ checkConnected c >> readTChan ch
             case rpkt of
               PubRECPkt (PubREC _ st recprops) -> do
                 when (st /= 0) $ mqttFail ("qos 2 REC publish error: " <> show st <> " " <> show recprops)
