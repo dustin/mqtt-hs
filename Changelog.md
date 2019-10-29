@@ -1,5 +1,13 @@
 # Changelog for net-mqtt
 
+## 0.6.1.1
+
+Add connection checks to publish phases.
+
+Having a broker/connection die in the middle of a publish in QoS > 0
+could result in a thread waiting indefinitely for the response that
+would not ever arrive.
+
 ## 0.6.1.0
 
 Users can now specify TLSSettings for mqtts:// and wss:// connections.
