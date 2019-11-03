@@ -15,6 +15,7 @@ and
 are supported over plain TCP, TLS, WebSockets and Secure WebSockets.
 -}
 
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -30,7 +31,8 @@ module Network.MQTT.Client (
   subscribe, unsubscribe, publish, publishq, pubAliased,
   svrProps, MQTTException(..),
   -- * Low-level bits
-  runMQTTConduit, MQTTConduit, isConnectedSTM
+  runMQTTConduit, MQTTConduit, isConnectedSTM,
+  registerCorrelated, unregisterCorrelated
   ) where
 
 import           Control.Concurrent         (myThreadId, threadDelay)
@@ -108,6 +110,7 @@ data MQTTClient = MQTTClient {
   , _outA     :: TVar (Map Topic Word16)
   , _inA      :: TVar (Map Word16 Topic)
   , _svrProps :: TVar [Property]
+  , _corr     :: TVar (Map BL.ByteString MessageCallback)
   }
 
 -- | Configuration for setting up an MQTT client.
@@ -287,6 +290,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
   _outA <- newTVarIO mempty
   _inA <- newTVarIO mempty
   _svrProps <- newTVarIO mempty
+  _corr <- newTVarIO mempty
   let _cb = _msgCB
       cli = MQTTClient{..}
 
@@ -433,9 +437,14 @@ dispatch c@MQTTClient{..} pch pkt =
           | otherwise = notify
 
           where
+            cdata = foldr f Nothing _pubProps
+              where f (PropCorrelationData x) _ = Just x
+                    f _ o                       = o
+
             notify = do
               topic <- resolveTopic (foldr aliasID Nothing _pubProps)
-              E.evaluate . force =<< case _cb of
+              corrs <- readTVarIO _corr
+              E.evaluate . force =<< case maybe _cb (\cd -> Map.findWithDefault _cb cd corrs) cdata of
                                        NoCallback         -> pure ()
                                        SimpleCallback f   -> f c topic _pubBody _pubProps
                                        LowLevelCallback f -> f c pr{_pubTopic=textToBL topic}
@@ -672,3 +681,11 @@ pubAliased c@MQTTClient{..} t m r q props = do
           v = fromMaybe (if n > mv then 0 else n) cur
       when (v > 0) $ writeTVar _outA (Map.insert t v as)
       pure (maybe t (const "") cur, v)
+
+-- | Register a callback handler for a message with the given correlated data identifier.
+registerCorrelated :: MQTTClient -> BL.ByteString -> MessageCallback -> STM ()
+registerCorrelated MQTTClient{_corr} bs cb = modifyTVar' _corr (Map.insert bs cb)
+
+-- | Unregister a callback handler for the given correlated data identifier.
+unregisterCorrelated :: MQTTClient -> BL.ByteString -> STM ()
+unregisterCorrelated MQTTClient{_corr} bs = modifyTVar' _corr (Map.delete bs)
