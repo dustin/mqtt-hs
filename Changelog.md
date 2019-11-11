@@ -1,5 +1,13 @@
 # Changelog for net-mqtt
 
+## 0.6.2.0
+
+Added low-level support for correlated responses.
+
+I'm not completely sure how generally useful this interface is, but
+I've been using it in a client that's implementing an RPC type
+interface across MQTT for a bit now.
+
 ## 0.6.1.1
 
 Add connection checks to publish phases.

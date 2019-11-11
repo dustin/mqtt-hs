@@ -683,6 +683,8 @@ pubAliased c@MQTTClient{..} t m r q props = do
       pure (maybe t (const "") cur, v)
 
 -- | Register a callback handler for a message with the given correlated data identifier.
+--
+-- This registration will remain in place until unregisterCorrelated is called to remove it.
 registerCorrelated :: MQTTClient -> BL.ByteString -> MessageCallback -> STM ()
 registerCorrelated MQTTClient{_corr} bs cb = modifyTVar' _corr (Map.insert bs cb)
 
