@@ -9,13 +9,14 @@ import           Control.Concurrent.Async (async, link)
 import           Control.Concurrent.STM   (TChan, atomically, newTChanIO,
                                            readTChan, writeTChan)
 import           Control.Exception        (Handler (..), IOException, catches)
-import           Control.Monad            (forever, void, when)
+import           Control.Monad            (forever, when)
 import qualified Data.ByteString.Lazy     as BL
 import           Data.Maybe               (fromJust)
 import qualified Data.Text.IO             as TIO
+import           Data.Word                (Word32)
 import           Network.MQTT.Client
 import           Network.URI
-import           Options.Applicative      (Parser, argument, execParser,
+import           Options.Applicative      (Parser, argument, auto, execParser,
                                            fullDesc, help, helper, info, long,
                                            maybeReader, metavar, option,
                                            progDesc, short, showDefault, some,
@@ -25,15 +26,19 @@ import           System.IO                (stdout)
 data Msg = Msg Topic BL.ByteString [Property]
 
 data Options = Options {
-  optUri         :: URI
-  , optHideProps :: Bool
-  , optTopics    :: [Topic]
+  optUri           :: URI
+  , optHideProps   :: Bool
+  , optSessionTime :: Word32
+  , optVerbose     :: Bool
+  , optTopics      :: [Topic]
   }
 
 options :: Parser Options
 options = Options
   <$> option (maybeReader parseURI) (long "mqtt-uri" <> short 'u' <> showDefault <> value (fromJust $ parseURI "mqtt://localhost/") <> help "mqtt broker URI")
   <*> switch (short 'p' <> help "hide properties")
+  <*> option auto (long "session-timeout" <> showDefault <> value 0 <> help "mqtt session timeout (0 == clean)")
+  <*> switch (short 'v' <> long "verbose" <> help "enable debug logging")
   <*> some (argument str (metavar "topics..."))
 
 printer :: TChan Msg -> Bool -> IO ()
@@ -55,13 +60,17 @@ run Options{..} = do
   where
     go ch = do
       mc <- connectURI mqttConfig{_msgCB=SimpleCallback (showme ch), _protocol=Protocol50,
+                                  _cleanSession=optSessionTime == 0,
                                   _connProps=[PropReceiveMaximum 65535,
                                               PropTopicAliasMaximum 10,
+                                              PropSessionExpiryInterval optSessionTime,
                                               PropRequestResponseInformation 1,
                                               PropRequestProblemInformation 1]}
         optUri
 
-      void $ subscribe mc [(t, subOptions) | t <- optTopics] mempty
+      when optVerbose $ svrProps mc >>= print
+      subres <- subscribe mc [(t, subOptions) | t <- optTopics] mempty
+      when optVerbose $ print subres
 
       print =<< waitForClient mc
 
