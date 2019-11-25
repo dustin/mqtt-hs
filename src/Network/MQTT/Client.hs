@@ -29,7 +29,7 @@ module Network.MQTT.Client (
   disconnect, normalDisconnect,
   -- * General client interactions.
   subscribe, unsubscribe, publish, publishq, pubAliased,
-  svrProps, MQTTException(..),
+  svrProps, connACKSTM, MQTTException(..),
   -- * Low-level bits
   runMQTTConduit, MQTTConduit, isConnectedSTM,
   registerCorrelated, unregisterCorrelated
@@ -101,16 +101,16 @@ data MessageCallback = NoCallback
 --
 -- See 'connectURI' for the most straightforward example.
 data MQTTClient = MQTTClient {
-  _ch         :: TChan MQTTPkt
-  , _pktID    :: TVar Word16
-  , _cb       :: MessageCallback
-  , _acks     :: TVar (Map (DispatchType,Word16) (TChan MQTTPkt))
-  , _st       :: TVar ConnState
-  , _ct       :: TVar (Async ())
-  , _outA     :: TVar (Map Topic Word16)
-  , _inA      :: TVar (Map Word16 Topic)
-  , _svrProps :: TVar [Property]
-  , _corr     :: TVar (Map BL.ByteString MessageCallback)
+  _ch        :: TChan MQTTPkt
+  , _pktID   :: TVar Word16
+  , _cb      :: MessageCallback
+  , _acks    :: TVar (Map (DispatchType,Word16) (TChan MQTTPkt))
+  , _st      :: TVar ConnState
+  , _ct      :: TVar (Async ())
+  , _outA    :: TVar (Map Topic Word16)
+  , _inA     :: TVar (Map Word16 Topic)
+  , _connACK :: TVar ConnACKFlags
+  , _corr    :: TVar (Map BL.ByteString MessageCallback)
   }
 
 -- | Configuration for setting up an MQTT client.
@@ -289,7 +289,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
   _ct <- newTVarIO undefined
   _outA <- newTVarIO mempty
   _inA <- newTVarIO mempty
-  _svrProps <- newTVarIO mempty
+  _connACK <- newTVarIO (ConnACKFlags False ConnUnspecifiedError mempty)
   _corr <- newTVarIO mempty
   let _cb = _msgCB
       cli = MQTTClient{..}
@@ -405,14 +405,14 @@ dispatch c@MQTTClient{..} pch pkt =
     PongPkt                                   -> atomically . writeTChan pch $ True
     x                                         -> print x
 
-  where connACKd connr@(ConnACKFlags _ val props) = case val of
-                                                      ConnAccepted -> atomically $ do
-                                                        writeTVar _svrProps props
-                                                        writeTVar _st Connected
-                                                      _ -> do
-                                                        t <- readTVarIO _ct
-                                                        atomically $ writeTVar _st (ConnErr connr)
-                                                        cancelWith t (MQTTException $ show connr)
+  where connACKd connr@(ConnACKFlags _ val _) = case val of
+                                                  ConnAccepted -> atomically $ do
+                                                    writeTVar _connACK connr
+                                                    writeTVar _st Connected
+                                                  _ -> do
+                                                    t <- readTVarIO _ct
+                                                    atomically $ writeTVar _st (ConnErr connr)
+                                                    cancelWith t (MQTTException $ show connr)
 
         delegate dt pid = atomically $ do
           m <- readTVar _acks
@@ -640,10 +640,16 @@ mkLWT t m r = T.LastWill{
 
 -- | Get the list of properties that were sent from the broker at connect time.
 svrProps :: MQTTClient -> IO [Property]
-svrProps MQTTClient{..} = readTVarIO _svrProps
+svrProps mc = p <$> atomically (connACKSTM mc)
+  where p (ConnACKFlags _ _ props) = props
+
+-- | Get the complete connection ACK packet from the beginning of this
+-- session.
+connACKSTM :: MQTTClient -> STM ConnACKFlags
+connACKSTM MQTTClient{_connACK} = readTVar _connACK
 
 maxAliases :: MQTTClient -> IO Word16
-maxAliases MQTTClient{..} = foldr f 0 <$> readTVarIO _svrProps
+maxAliases mc = foldr f 0 <$> svrProps mc
   where
     f (PropTopicAliasMaximum n) _ = n
     f _ o                         = o
