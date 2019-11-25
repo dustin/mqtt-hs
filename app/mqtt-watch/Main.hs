@@ -15,6 +15,7 @@ import           Data.Maybe               (fromJust)
 import qualified Data.Text.IO             as TIO
 import           Data.Word                (Word32)
 import           Network.MQTT.Client
+import           Network.MQTT.Types       (ConnACKFlags (..))
 import           Network.URI
 import           Options.Applicative      (Parser, argument, auto, execParser,
                                            fullDesc, help, helper, info, long,
@@ -68,7 +69,9 @@ run Options{..} = do
                                               PropRequestProblemInformation 1]}
         optUri
 
-      when optVerbose $ svrProps mc >>= print
+      (ConnACKFlags sp _ props) <- atomically (connACKSTM mc)
+      when optVerbose $ putStrLn (if sp then "<resuming session>" else "<new session>")
+      when optVerbose $ putStrLn ("Properties: " <> show props)
       subres <- subscribe mc [(t, subOptions) | t <- optTopics] mempty
       when optVerbose $ print subres
 
