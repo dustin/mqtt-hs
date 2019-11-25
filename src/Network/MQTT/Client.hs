@@ -29,9 +29,9 @@ module Network.MQTT.Client (
   disconnect, normalDisconnect,
   -- * General client interactions.
   subscribe, unsubscribe, publish, publishq, pubAliased,
-  svrProps, connACKSTM, MQTTException(..),
+  svrProps, connACK, MQTTException(..),
   -- * Low-level bits
-  runMQTTConduit, MQTTConduit, isConnectedSTM,
+  runMQTTConduit, MQTTConduit, isConnectedSTM, connACKSTM,
   registerCorrelated, unregisterCorrelated
   ) where
 
@@ -101,16 +101,16 @@ data MessageCallback = NoCallback
 --
 -- See 'connectURI' for the most straightforward example.
 data MQTTClient = MQTTClient {
-  _ch        :: TChan MQTTPkt
-  , _pktID   :: TVar Word16
-  , _cb      :: MessageCallback
-  , _acks    :: TVar (Map (DispatchType,Word16) (TChan MQTTPkt))
-  , _st      :: TVar ConnState
-  , _ct      :: TVar (Async ())
-  , _outA    :: TVar (Map Topic Word16)
-  , _inA     :: TVar (Map Word16 Topic)
-  , _connACK :: TVar ConnACKFlags
-  , _corr    :: TVar (Map BL.ByteString MessageCallback)
+  _ch             :: TChan MQTTPkt
+  , _pktID        :: TVar Word16
+  , _cb           :: MessageCallback
+  , _acks         :: TVar (Map (DispatchType,Word16) (TChan MQTTPkt))
+  , _st           :: TVar ConnState
+  , _ct           :: TVar (Async ())
+  , _outA         :: TVar (Map Topic Word16)
+  , _inA          :: TVar (Map Word16 Topic)
+  , _connACKFlags :: TVar ConnACKFlags
+  , _corr         :: TVar (Map BL.ByteString MessageCallback)
   }
 
 -- | Configuration for setting up an MQTT client.
@@ -289,7 +289,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
   _ct <- newTVarIO undefined
   _outA <- newTVarIO mempty
   _inA <- newTVarIO mempty
-  _connACK <- newTVarIO (ConnACKFlags False ConnUnspecifiedError mempty)
+  _connACKFlags <- newTVarIO (ConnACKFlags False ConnUnspecifiedError mempty)
   _corr <- newTVarIO mempty
   let _cb = _msgCB
       cli = MQTTClient{..}
@@ -407,7 +407,7 @@ dispatch c@MQTTClient{..} pch pkt =
 
   where connACKd connr@(ConnACKFlags _ val _) = case val of
                                                   ConnAccepted -> atomically $ do
-                                                    writeTVar _connACK connr
+                                                    writeTVar _connACKFlags connr
                                                     writeTVar _st Connected
                                                   _ -> do
                                                     t <- readTVarIO _ct
@@ -643,10 +643,13 @@ svrProps :: MQTTClient -> IO [Property]
 svrProps mc = p <$> atomically (connACKSTM mc)
   where p (ConnACKFlags _ _ props) = props
 
--- | Get the complete connection ACK packet from the beginning of this
--- session.
+-- | Get the complete connection ACK packet from the beginning of this session.
 connACKSTM :: MQTTClient -> STM ConnACKFlags
-connACKSTM MQTTClient{_connACK} = readTVar _connACK
+connACKSTM MQTTClient{_connACKFlags} = readTVar _connACKFlags
+
+-- | Get the complete connection aCK packet from the beginning of this session.
+connACK :: MQTTClient -> IO ConnACKFlags
+connACK = atomically . connACKSTM
 
 maxAliases :: MQTTClient -> IO Word16
 maxAliases mc = foldr f 0 <$> svrProps mc

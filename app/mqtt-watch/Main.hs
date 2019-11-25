@@ -69,7 +69,7 @@ run Options{..} = do
                                               PropRequestProblemInformation 1]}
         optUri
 
-      (ConnACKFlags sp _ props) <- atomically (connACKSTM mc)
+      (ConnACKFlags sp _ props) <- connACK mc
       when optVerbose $ putStrLn (if sp then "<resuming session>" else "<new session>")
       when optVerbose $ putStrLn ("Properties: " <> show props)
       subres <- subscribe mc [(t, subOptions) | t <- optTopics] mempty
