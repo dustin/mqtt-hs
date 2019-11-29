@@ -7,7 +7,7 @@ An [MQTT][mqtt] protocol implementation for Haskell.
 ### Publish
 
 ```haskell
-main :: IO
+main :: IO ()
 main = do
   let (Just uri) = parseURI "mqtt://test.mosquitto.org"
   mc <- connectURI mqttConfig{} uri
@@ -17,7 +17,7 @@ main = do
 ### Subscribe
 
 ```haskell
-main :: IO
+main :: IO ()
 main = do
   let (Just uri) = parseURI "mqtt://test.mosquitto.org"
   mc <- connectURI mqttConfig{_msgCB=SimpleCallback msgReceived} uri
