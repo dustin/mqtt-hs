@@ -207,7 +207,7 @@ tcpCompat mkconn = runMQTTConduit (adapt mkconn)
         adaptor ad = (appSource ad, appSink ad)
 
 runWS :: URI -> Bool -> MQTTConfig -> IO MQTTClient
-runWS uri secure cfg@MQTTConfig{..} = runMQTTConduit (adapt $ cf secure _hostname _port (uriPath uri) WS.defaultConnectionOptions hdrs) cfg
+runWS uri secure cfg@MQTTConfig{..} = runMQTTConduit (adapt $ cf secure _hostname _port ((++)<$>uriPath<*>uriQuery $ uri) WS.defaultConnectionOptions hdrs) cfg
   where
     hdrs = [("Sec-WebSocket-Protocol", "mqtt")]
     adapt mk f = mk (f . adaptor)
