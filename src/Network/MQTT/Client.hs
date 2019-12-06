@@ -207,11 +207,15 @@ tcpCompat mkconn = runMQTTConduit (adapt mkconn)
         adaptor ad = (appSource ad, appSink ad)
 
 runWS :: URI -> Bool -> MQTTConfig -> IO MQTTClient
-runWS uri secure cfg@MQTTConfig{..} = runMQTTConduit (adapt $ cf secure _hostname _port ((++)<$>uriPath<*>uriQuery $ uri) WS.defaultConnectionOptions hdrs) cfg
+runWS URI{uriPath, uriQuery} secure cfg@MQTTConfig{..} =
+  runMQTTConduit (adapt $ cf secure _hostname _port endpoint WS.defaultConnectionOptions hdrs) cfg
+
   where
     hdrs = [("Sec-WebSocket-Protocol", "mqtt")]
     adapt mk f = mk (f . adaptor)
     adaptor s = (wsSource s, wsSink s)
+
+    endpoint = uriPath <> uriQuery
 
     cf :: Bool -> String -> Int -> String -> WS.ConnectionOptions -> WS.Headers -> WS.ClientApp () -> IO ()
     cf False = WS.runClientWith
