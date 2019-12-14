@@ -1,5 +1,9 @@
 # Changelog for net-mqtt
 
+## 0.6.2.2
+
+Support query parameters in ws and wss URLs.
+
 ## 0.6.2.1
 
 Added function to get original connection ACK response packet.
