@@ -161,7 +161,7 @@ connectURI cfg@MQTTConfig{..} uri = do
              "mqtts:" -> runClientTLS
              "ws:"    -> runWS uri False
              "wss:"   -> runWS uri True
-             us       -> fail $ "invalid URI scheme: " <> us
+             us       -> mqttFail $ "invalid URI scheme: " <> us
 
       (Just a) = uriAuthority uri
       (u,p) = up (uriUserInfo a)
