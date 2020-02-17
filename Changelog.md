@@ -1,5 +1,9 @@
 # Changelog for net-mqtt
 
+## 0.6.2.3
+
+Remove a use of `fail` that prevents us from building under ghc 8.8.
+
 ## 0.6.2.2
 
 Support query parameters in ws and wss URLs.
