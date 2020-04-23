@@ -1,5 +1,4 @@
 *~
 .stack-work/
-/net-mqtt.cabal
 /stack.yaml.lock
 TAGS

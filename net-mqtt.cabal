@@ -1,0 +1,149 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.2.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: a85ef0bb166997bc2d9f79955e997df1d959d52505a9539765fb63e1f9326742
+
+name:           net-mqtt
+version:        0.6.2.3
+synopsis:       An MQTT Protocol Implementation.
+description:    Please see the README on GitHub at <https://github.com/dustin/mqtt-hs#readme>
+category:       Network
+homepage:       https://github.com/dustin/mqtt-hs#readme
+bug-reports:    https://github.com/dustin/mqtt-hs/issues
+author:         Dustin Sallings
+maintainer:     dustin@spy.net
+copyright:      BSD3
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    Changelog.md
+
+source-repository head
+  type: git
+  location: https://github.com/dustin/mqtt-hs
+
+library
+  exposed-modules:
+      Network.MQTT.Arbitrary
+      Network.MQTT.Client
+      Network.MQTT.Topic
+      Network.MQTT.Types
+  other-modules:
+      Paths_net_mqtt
+  hs-source-dirs:
+      src
+  ghc-options: -Wall
+  build-depends:
+      QuickCheck >=2.12.6.1 && <2.14
+    , async >=2.2.1 && <2.3
+    , attoparsec >=0.13.2 && <0.14
+    , attoparsec-binary >=0.2 && <1.0
+    , base >=4.7 && <5
+    , binary >=0.8.5 && <0.9
+    , bytestring >=0.10.8 && <0.11
+    , conduit >=1.3.1 && <1.4
+    , conduit-extra >=1.3.0 && <1.4
+    , connection >=0.2.0 && <0.4
+    , containers >=0.5.0 && <0.7
+    , deepseq >=1.4.4.0 && <1.5
+    , network-conduit-tls >=1.3.2 && <1.4
+    , network-uri >=2.6.1 && <2.7
+    , stm >=2.4.0 && <2.6
+    , text >=1.2.3 && <1.3
+    , websockets >=0.12.5.3 && <0.13
+  default-language: Haskell2010
+
+executable mqtt-example
+  main-is: Main.hs
+  other-modules:
+      Paths_net_mqtt
+  hs-source-dirs:
+      app/example
+  ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      QuickCheck >=2.12.6.1 && <2.14
+    , async >=2.2.1 && <2.3
+    , attoparsec >=0.13.2 && <0.14
+    , attoparsec-binary >=0.2 && <1.0
+    , base >=4.7 && <5
+    , binary >=0.8.5 && <0.9
+    , bytestring >=0.10.8 && <0.11
+    , conduit >=1.3.1 && <1.4
+    , conduit-extra >=1.3.0 && <1.4
+    , connection >=0.2.0 && <0.4
+    , containers >=0.5.0 && <0.7
+    , deepseq >=1.4.4.0 && <1.5
+    , net-mqtt
+    , network-conduit-tls >=1.3.2 && <1.4
+    , network-uri >=2.6.1 && <2.7
+    , stm >=2.4.0 && <2.6
+    , text >=1.2.3 && <1.3
+    , websockets >=0.12.5.3 && <0.13
+  default-language: Haskell2010
+
+executable mqtt-watch
+  main-is: Main.hs
+  other-modules:
+      Paths_net_mqtt
+  hs-source-dirs:
+      app/mqtt-watch
+  ghc-options: -Wall -threaded -rtsopts -eventlog -with-rtsopts=-N
+  build-depends:
+      QuickCheck >=2.12.6.1 && <2.14
+    , async >=2.2.1 && <2.3
+    , attoparsec >=0.13.2 && <0.14
+    , attoparsec-binary >=0.2 && <1.0
+    , base >=4.7 && <5
+    , binary >=0.8.5 && <0.9
+    , bytestring
+    , conduit >=1.3.1 && <1.4
+    , conduit-extra >=1.3.0 && <1.4
+    , connection >=0.2.0 && <0.4
+    , containers >=0.5.0 && <0.7
+    , deepseq >=1.4.4.0 && <1.5
+    , net-mqtt
+    , network-conduit-tls >=1.3.2 && <1.4
+    , network-uri >=2.6.1 && <2.7
+    , optparse-applicative
+    , stm >=2.4.0 && <2.6
+    , text >=1.2.3 && <1.3
+    , websockets >=0.12.5.3 && <0.13
+  default-language: Haskell2010
+
+test-suite mqtt-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_net_mqtt
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      HUnit
+    , QuickCheck >=2.12.6.1 && <2.14
+    , async >=2.2.1 && <2.3
+    , attoparsec >=0.13.2 && <0.14
+    , attoparsec-binary >=0.2 && <1.0
+    , base >=4.7 && <5
+    , binary >=0.8.5 && <0.9
+    , bytestring >=0.10.8 && <0.11
+    , conduit >=1.3.1 && <1.4
+    , conduit-extra >=1.3.0 && <1.4
+    , connection >=0.2.0 && <0.4
+    , containers >=0.5.0 && <0.7
+    , deepseq >=1.4.4.0 && <1.5
+    , net-mqtt
+    , network-conduit-tls >=1.3.2 && <1.4
+    , network-uri >=2.6.1 && <2.7
+    , stm >=2.4.0 && <2.6
+    , tasty
+    , tasty-hunit
+    , tasty-quickcheck
+    , text >=1.2.3 && <1.3
+    , websockets >=0.12.5.3 && <0.13
+  default-language: Haskell2010
