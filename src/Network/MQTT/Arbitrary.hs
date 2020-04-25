@@ -95,7 +95,7 @@ instance Arbitrary SubscribeRequest where
 
   shrink (SubscribeRequest w s p) =
     if length s < 2 then []
-    else [SubscribeRequest w (take 1 s) p' | p' <- shrinkList (const []) p, not (null p)]
+    else [SubscribeRequest w (take 1 s) p' | not (null p), p' <- shrinkList (const []) p]
 
 instance Arbitrary SubOptions where
   arbitrary = SubOptions <$> arbitraryBoundedEnum <*> arbitrary <*> arbitrary <*> arbitrary

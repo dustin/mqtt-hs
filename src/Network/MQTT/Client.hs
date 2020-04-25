@@ -36,29 +36,23 @@ module Network.MQTT.Client (
   ) where
 
 import           Control.Concurrent         (myThreadId, threadDelay)
-import           Control.Concurrent.Async   (Async, async, asyncThreadId,
-                                             cancel, cancelWith, link, race_,
-                                             wait, waitAnyCancel, withAsync)
-import           Control.Concurrent.STM     (STM, TChan, TVar, atomically,
-                                             modifyTVar', newTChan, newTChanIO,
-                                             newTVarIO, readTChan, readTVar,
-                                             readTVarIO, retry, writeTChan,
-                                             writeTVar)
+import           Control.Concurrent.Async   (Async, async, asyncThreadId, cancel, cancelWith, link, race_, wait,
+                                             waitAnyCancel, withAsync)
+import           Control.Concurrent.STM     (STM, TChan, TVar, atomically, modifyTVar', newTChan, newTChanIO, newTVarIO,
+                                             readTChan, readTVar, readTVarIO, retry, writeTChan, writeTVar)
 import           Control.DeepSeq            (force)
 import qualified Control.Exception          as E
 import           Control.Monad              (forever, guard, void, when)
 import           Control.Monad.IO.Class     (liftIO)
+import           Data.Bifunctor             (first)
 import qualified Data.ByteString.Char8      as BCS
 import qualified Data.ByteString.Lazy       as BL
 import qualified Data.ByteString.Lazy.Char8 as BC
-import           Data.Conduit               (ConduitT, Void, await, runConduit,
-                                             yield, (.|))
+import           Data.Conduit               (ConduitT, Void, await, runConduit, yield, (.|))
 import           Data.Conduit.Attoparsec    (conduitParser)
 import qualified Data.Conduit.Combinators   as C
-import           Data.Conduit.Network       (AppData, appSink, appSource,
-                                             clientSettings, runTCPClient)
-import           Data.Conduit.Network.TLS   (runTLSClient, tlsClientConfig,
-                                             tlsClientTLSSettings)
+import           Data.Conduit.Network       (AppData, appSink, appSource, clientSettings, runTCPClient)
+import           Data.Conduit.Network.TLS   (runTLSClient, tlsClientConfig, tlsClientTLSSettings)
 import           Data.Map.Strict            (Map)
 import qualified Data.Map.Strict            as Map
 import           Data.Maybe                 (fromMaybe)
@@ -66,13 +60,9 @@ import           Data.Text                  (Text)
 import qualified Data.Text.Encoding         as TE
 import           Data.Word                  (Word16)
 import           GHC.Conc                   (labelThread)
-import           Network.Connection         (ConnectionParams (..),
-                                             TLSSettings (..), connectTo,
-                                             connectionClose,
-                                             connectionGetChunk, connectionPut,
-                                             initConnectionContext)
-import           Network.URI                (URI (..), unEscapeString, uriPort,
-                                             uriRegName, uriUserInfo)
+import           Network.Connection         (ConnectionParams (..), TLSSettings (..), connectTo, connectionClose,
+                                             connectionGetChunk, connectionPut, initConnectionContext)
+import           Network.URI                (URI (..), unEscapeString, uriPort, uriRegName, uriUserInfo)
 import qualified Network.WebSockets         as WS
 import           Network.WebSockets.Stream  (makeStream)
 import           System.IO.Error            (catchIOError, isEOFError)
@@ -310,7 +300,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
   where
     clientThread cli = E.finally connectAndRun markDisco
       where
-        connectAndRun = mkconn $ \ad -> (start cli ad) >>= (run ad)
+        connectAndRun = mkconn $ \ad -> start cli ad >>= run ad
         markDisco = atomically $ do
           st <- readTVar (_st cli)
           guard $ st == Starting || st == Connected
@@ -476,7 +466,7 @@ dispatch c@MQTTClient{..} pch pkt =
                     v <- namedTimeout "QoS2 sendREC" 10000000 (sendREC ch)
                     case v of
                       Nothing -> killConn c Timeout
-                      _ -> notify >> sendPacketIO c (PubCOMPPkt (PubCOMP _pubPktID 0 mempty))
+                      _       -> notify >> sendPacketIO c (PubCOMPPkt (PubCOMP _pubPktID 0 mempty))
 
 killConn :: E.Exception e => MQTTClient -> e -> IO ()
 killConn MQTTClient{..} e = readTVarIO _ct >>= \t -> cancelWith t e
@@ -546,7 +536,7 @@ subscribe c@MQTTClient{..} ls props = do
   let (SubACKPkt (SubscribeResponse _ rs aprops)) = r
   pure (rs, aprops)
 
-    where ls' = map (\(s, i) -> (textToBL s, i)) ls
+    where ls' = map (first textToBL) ls
 
 -- | Unsubscribe from a list of topic filters.
 --
