@@ -8,8 +8,11 @@ on:
 
 jobs:
   build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
 
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v2
@@ -36,3 +39,11 @@ jobs:
     - name: Build & Test
       run: |
         stack --no-terminal test --bench --no-run-benchmarks
+        stack install
+        gzip -9v /home/runner/.local/bin/mqtt-watch
+
+    - name: Store Artifact
+      uses: actions/upload-artifact@v1
+      with:
+        name: mqtt-watch-${{ matrix.os }}.gz
+        path: /home/runner/.local/bin/mqtt-watch.gz
