@@ -41,10 +41,9 @@ jobs:
         stack --no-terminal test --bench --no-run-benchmarks
         stack install
         cp $HOME/.local/bin/mqtt-watch .
-        gzip -9v mqtt-watch
 
     - name: Store Artifact
       uses: actions/upload-artifact@v1
       with:
-        name: mqtt-watch-${{ matrix.os }}.gz
-        path: mqtt-watch.gz
+        name: mqtt-watch-${{ matrix.os }}
+        path: mqtt-watch
