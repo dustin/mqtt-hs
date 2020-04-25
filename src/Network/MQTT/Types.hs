@@ -31,11 +31,9 @@ import           Control.Monad                   (replicateM, when)
 import           Data.Attoparsec.Binary          (anyWord16be, anyWord32be)
 import qualified Data.Attoparsec.ByteString.Lazy as A
 import           Data.Binary.Put                 (putWord32be, runPut)
-import           Data.Bits                       (Bits (..), shiftL, testBit,
-                                                  (.&.), (.|.))
+import           Data.Bits                       (Bits (..), shiftL, testBit, (.&.), (.|.))
 import qualified Data.ByteString.Lazy            as BL
 import           Data.Functor                    (($>))
-import           Data.List                       (lookup)
 import           Data.Maybe                      (fromMaybe, isJust)
 import           Data.Word                       (Word16, Word32, Word8)
 
@@ -333,7 +331,7 @@ instance ByteMe ConnectRequest where
           hasp = boolBit ((prot == Protocol50 || isJust _username) && isJust _password) ≪ 6
           clean = boolBit _cleanSession ≪ 1
           willBits = case _lastWill of
-                       Nothing -> 0
+                       Nothing           -> 0
                        Just LastWill{..} -> 4 .|. ((qosW _willQoS .&. 0x3) ≪ 3) .|. (boolBit _willRetain ≪ 5)
 
       lwt :: Maybe LastWill -> BL.ByteString
