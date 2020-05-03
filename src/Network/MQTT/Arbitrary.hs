@@ -164,7 +164,7 @@ instance Arbitrary DisconnectRequest where
 
 instance Arbitrary MQTTPkt where
   arbitrary = oneof [
-    ConnPkt <$> arbitrary,
+    ConnPkt <$> arbitrary <*> pure Protocol50,
     ConnACKPkt <$> arbitrary,
     PublishPkt <$> arbitrary,
     PubACKPkt <$> arbitrary,
@@ -187,9 +187,9 @@ instance Arbitrary MQTTPkt where
 
 -- | v311mask strips all the v5 specific bits from an MQTTPkt.
 v311mask :: MQTTPkt -> MQTTPkt
-v311mask (ConnPkt c@ConnectRequest{..}) = ConnPkt (c{_properties=mempty,
-                                                     _password=mpw _username _password,
-                                                     _lastWill=cl <$> _lastWill})
+v311mask (ConnPkt c@ConnectRequest{..} _) = ConnPkt (c{_properties=mempty,
+                                                       _password=mpw _username _password,
+                                                       _lastWill=cl <$> _lastWill}) Protocol311
   where cl lw = lw{_willProps=mempty}
         mpw Nothing _ = Nothing
         mpw _ p       = p

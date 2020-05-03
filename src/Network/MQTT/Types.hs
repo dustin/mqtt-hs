@@ -20,7 +20,7 @@ module Network.MQTT.Types (
   SubscribeRequest(..), SubOptions(..), subOptions, SubscribeResponse(..), SubErr(..),
   RetainHandling(..), DisconnectRequest(..),
   UnsubscribeRequest(..), UnsubscribeResponse(..), UnsubStatus(..), DiscoReason(..),
-  parsePacket, ByteMe(toByteString),
+  parsePacket, ByteMe(toByteString), parseConnect,
   -- for testing
   encodeLength, parseHdrLen, parseProperty, parseProperties, bsProps,
   parseSubOptions, ByteSize(..)
@@ -345,7 +345,7 @@ instance ByteMe ConnectRequest where
       perhaps (Just s) = toByteString prot s
 
 
-data MQTTPkt = ConnPkt ConnectRequest
+data MQTTPkt = ConnPkt ConnectRequest ProtocolLevel
              | ConnACKPkt ConnACKFlags
              | PublishPkt PublishRequest
              | PubACKPkt PubACK
@@ -363,7 +363,7 @@ data MQTTPkt = ConnPkt ConnectRequest
   deriving (Eq, Show)
 
 instance ByteMe MQTTPkt where
-  toByteString p (ConnPkt x)        = toByteString p x
+  toByteString p (ConnPkt x _)      = toByteString p x
   toByteString p (ConnACKPkt x)     = toByteString p x
   toByteString p (PublishPkt x)     = toByteString p x
   toByteString p (PubACKPkt x)      = toByteString p x
@@ -401,6 +401,9 @@ aString = do
   s <- A.take (fromEnum n)
   pure $ BL.fromStrict s
 
+-- | Parse a CONNect packet.  This is useful when examining the
+-- beginning of the stream as it allows you to determine the protocol
+-- being used throughout the rest of the session.
 parseConnect :: A.Parser MQTTPkt
 parseConnect = do
   _ <- A.word8 0x10
@@ -419,7 +422,7 @@ parseConnect = do
   pure $ ConnPkt ConnectRequest{_connID=cid, _username=u, _password=p,
                                 _lastWill=lwt, _keepAlive=keepAlive,
                                 _cleanSession=testBit connFlagBits 1,
-                                _properties=props}
+                                _properties=props} pl
 
   where
     mstr :: Bool -> A.Parser (Maybe BL.ByteString)
