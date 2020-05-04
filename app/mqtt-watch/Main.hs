@@ -6,8 +6,7 @@ module Main where
 
 import           Control.Concurrent       (threadDelay)
 import           Control.Concurrent.Async (async, link)
-import           Control.Concurrent.STM   (TChan, atomically, newTChanIO,
-                                           readTChan, writeTChan)
+import           Control.Concurrent.STM   (TChan, atomically, newTChanIO, readTChan, writeTChan)
 import           Control.Exception        (Handler (..), IOException, catches)
 import           Control.Monad            (forever, when)
 import qualified Data.ByteString.Lazy     as BL
@@ -15,13 +14,11 @@ import           Data.Maybe               (fromJust)
 import qualified Data.Text.IO             as TIO
 import           Data.Word                (Word32)
 import           Network.MQTT.Client
-import           Network.MQTT.Types       (ConnACKFlags (..))
+import           Network.MQTT.Types       (ConnACKFlags (..), SessionReuse (..))
 import           Network.URI
-import           Options.Applicative      (Parser, argument, auto, execParser,
-                                           fullDesc, help, helper, info, long,
-                                           maybeReader, metavar, option,
-                                           progDesc, short, showDefault, some,
-                                           str, switch, value, (<**>))
+import           Options.Applicative      (Parser, argument, auto, execParser, fullDesc, help, helper, info, long,
+                                           maybeReader, metavar, option, progDesc, short, showDefault, some, str,
+                                           switch, value, (<**>))
 import           System.IO                (stdout)
 
 data Msg = Msg Topic BL.ByteString [Property]
@@ -70,7 +67,7 @@ run Options{..} = do
         optUri
 
       (ConnACKFlags sp _ props) <- connACK mc
-      when optVerbose $ putStrLn (if sp then "<resuming session>" else "<new session>")
+      when optVerbose $ putStrLn (if sp == ExistingSession then "<resuming session>" else "<new session>")
       when optVerbose $ putStrLn ("Properties: " <> show props)
       subres <- subscribe mc [(t, subOptions) | t <- optTopics] mempty
       when optVerbose $ print subres

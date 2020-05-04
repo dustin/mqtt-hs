@@ -283,7 +283,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
   _ct <- newTVarIO undefined
   _outA <- newTVarIO mempty
   _inA <- newTVarIO mempty
-  _connACKFlags <- newTVarIO (ConnACKFlags False ConnUnspecifiedError mempty)
+  _connACKFlags <- newTVarIO (ConnACKFlags NewSession ConnUnspecifiedError mempty)
   _corr <- newTVarIO mempty
   let _cb = _msgCB
       cli = MQTTClient{..}

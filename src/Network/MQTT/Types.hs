@@ -14,7 +14,7 @@ MQTT Types.
 
 module Network.MQTT.Types (
   LastWill(..), MQTTPkt(..), QoS(..),
-  ConnectRequest(..), connectRequest, ConnACKFlags(..), ConnACKRC(..),
+  ConnectRequest(..), connectRequest, SessionReuse(..), ConnACKFlags(..), ConnACKRC(..),
   PublishRequest(..), PubACK(..), PubREC(..), PubREL(..), PubCOMP(..),
   ProtocolLevel(..), Property(..), AuthRequest(..),
   SubscribeRequest(..), SubOptions(..), subOptions, SubscribeResponse(..), SubErr(..),
@@ -509,14 +509,16 @@ instance ByteSize ConnACKRC where
 connACKRev :: [(Word8, ConnACKRC)]
 connACKRev = map (\w -> (toByte w, w)) [minBound..]
 
+data SessionReuse = NewSession | ExistingSession deriving (Show, Eq, Bounded, Enum)
 
-data ConnACKFlags = ConnACKFlags Bool ConnACKRC [Property] deriving (Eq, Show)
+-- | Connection acknowledgment details.  True indicates we are reusing an existing session.
+data ConnACKFlags = ConnACKFlags SessionReuse ConnACKRC [Property] deriving (Eq, Show)
 
 instance ByteMe ConnACKFlags where
   toBytes prot (ConnACKFlags sp rc props) = let pbytes = BL.unpack $ bsProps prot props in
                                               [0x20]
                                               <> encodeVarInt (2 + length pbytes)
-                                              <>[ boolBit sp, toByte rc] <> pbytes
+                                              <>[ boolBit (sp /= NewSession), toByte rc] <> pbytes
 
 parseConnectACK :: A.Parser MQTTPkt
 parseConnectACK = do
@@ -526,7 +528,10 @@ parseConnectACK = do
   ackFlags <- A.anyWord8
   rc <- A.anyWord8
   p <- parseProperties (if rl == 2 then Protocol311 else Protocol50)
-  pure $ ConnACKPkt $ ConnACKFlags (testBit ackFlags 0) (fromByte rc) p
+  pure $ ConnACKPkt $ ConnACKFlags (sf $ testBit ackFlags 0) (fromByte rc) p
+
+    where sf False = NewSession
+          sf True  = ExistingSession
 
 data PublishRequest = PublishRequest{
   _pubDup      :: Bool

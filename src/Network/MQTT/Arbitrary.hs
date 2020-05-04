@@ -60,6 +60,8 @@ astr = L.fromStrict . BC.pack . getUnicodeString <$> arbitrary
 instance Arbitrary QoS where
   arbitrary = arbitraryBoundedEnum
 
+instance Arbitrary SessionReuse where arbitrary = arbitraryBoundedEnum
+
 instance Arbitrary ConnACKFlags where
   arbitrary = ConnACKFlags <$> arbitrary <*> arbitrary <*> arbitrary
   shrink (ConnACKFlags b c pl)
