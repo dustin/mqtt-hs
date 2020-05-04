@@ -38,12 +38,22 @@ jobs:
 
     - name: Build & Test
       run: |
-        stack --no-terminal test --bench --no-run-benchmarks
+        stack --no-terminal test --bench --no-run-benchmarks --haddock --no-haddock-deps
         stack install
         cp $HOME/.local/bin/mqtt-watch .
+        PKG_NAME=$(cat *.cabal | grep "name:" | sed "s/name:\s*\(.*\)/\1/")
+        mkdir -p dist/  && mv $(stack path --local-install-root)/doc/$PKG_NAME-*/* dist/
 
     - name: Store Artifact
       uses: actions/upload-artifact@v1
       with:
         name: mqtt-watch-${{ matrix.os }}
         path: mqtt-watch
+
+    - name: Publish Docs
+      if: matrix.os == 'ubuntu-latest' && github.event_name == 'push'
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: dist
+        enable_jekyll: false
