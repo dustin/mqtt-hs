@@ -511,7 +511,7 @@ connACKRev = map (\w -> (toByte w, w)) [minBound..]
 
 data SessionReuse = NewSession | ExistingSession deriving (Show, Eq, Bounded, Enum)
 
--- | Connection acknowledgment details.  True indicates we are reusing an existing session.
+-- | Connection acknowledgment details.
 data ConnACKFlags = ConnACKFlags SessionReuse ConnACKRC [Property] deriving (Eq, Show)
 
 instance ByteMe ConnACKFlags where
