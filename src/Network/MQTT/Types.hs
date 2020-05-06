@@ -289,19 +289,19 @@ data LastWill = LastWill {
   } deriving(Eq, Show)
 
 data ConnectRequest = ConnectRequest {
-  _username       :: Maybe BL.ByteString
-  , _password     :: Maybe BL.ByteString
-  , _lastWill     :: Maybe LastWill
-  , _cleanSession :: Bool
-  , _keepAlive    :: Word16
-  , _connID       :: BL.ByteString
-  , _properties   :: [Property]
+  _username         :: Maybe BL.ByteString
+  , _password       :: Maybe BL.ByteString
+  , _lastWill       :: Maybe LastWill
+  , _cleanSession   :: Bool
+  , _keepAlive      :: Word16
+  , _connID         :: BL.ByteString
+  , _connProperties :: [Property]
   } deriving (Eq, Show)
 
 connectRequest :: ConnectRequest
 connectRequest = ConnectRequest{_username=Nothing, _password=Nothing, _lastWill=Nothing,
                                 _cleanSession=True, _keepAlive=300, _connID="",
-                                _properties=mempty}
+                                _connProperties=mempty}
 
 instance ByteMe ConnectRequest where
   toByteString prot ConnectRequest{..} = BL.singleton 0x10
@@ -319,7 +319,7 @@ instance ByteMe ConnectRequest where
       val Protocol50 = "\NUL\EOTMQTT\ENQ" -- MQTT + Protocol50
                        <> BL.singleton connBits
                        <> encodeWord16 _keepAlive
-                       <> bsProps prot _properties
+                       <> bsProps prot _connProperties
                        <> toByteString prot _connID
                        <> lwt _lastWill
                        <> perhaps _username
@@ -422,7 +422,7 @@ parseConnect = do
   pure $ ConnPkt ConnectRequest{_connID=cid, _username=u, _password=p,
                                 _lastWill=lwt, _keepAlive=keepAlive,
                                 _cleanSession=testBit connFlagBits 1,
-                                _properties=props} pl
+                                _connProperties=props} pl
 
   where
     mstr :: Bool -> A.Parser (Maybe BL.ByteString)

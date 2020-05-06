@@ -47,7 +47,7 @@ instance Arbitrary ConnectRequest where
     _cleanSession <- arbitrary
     _keepAlive <- arbitrary
     _lastWill <- arbitrary
-    _properties <- arbitrary
+    _connProperties <- arbitrary
 
     pure ConnectRequest{..}
 
@@ -189,7 +189,7 @@ instance Arbitrary MQTTPkt where
 
 -- | v311mask strips all the v5 specific bits from an MQTTPkt.
 v311mask :: MQTTPkt -> MQTTPkt
-v311mask (ConnPkt c@ConnectRequest{..} _) = ConnPkt (c{_properties=mempty,
+v311mask (ConnPkt c@ConnectRequest{..} _) = ConnPkt (c{_connProperties=mempty,
                                                        _password=mpw _username _password,
                                                        _lastWill=cl <$> _lastWill}) Protocol311
   where cl lw = lw{_willProps=mempty}

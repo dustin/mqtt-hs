@@ -313,7 +313,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
                                  T._username=BC.pack <$> _username,
                                  T._password=BC.pack <$> _password,
                                  T._cleanSession=_cleanSession,
-                                 T._properties=_connProps}
+                                 T._connProperties=_connProps}
         yield (BL.toStrict $ toByteString _protocol req) .| sink
 
       pure c
