@@ -127,7 +127,7 @@ forall a. Arbitrary a =&gt; Gen a
 forall a. Arbitrary a =&gt; Gen a
 </span><span class="hs-identifier hs-var">arbitrary</span></span><span>
 </span><span id="line-50"></span><span>    </span><span id="local-6989586621679169127"><span class="annot"><span class="annottext">[Property]
-</span><a href="#local-6989586621679169127"><span class="hs-identifier hs-var">_properties</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">Gen [Property]
+</span><a href="#local-6989586621679169127"><span class="hs-identifier hs-var">_connProperties</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">Gen [Property]
 forall a. Arbitrary a =&gt; Gen a
 </span><span class="hs-identifier hs-var">arbitrary</span></span><span>
 </span><span id="line-51"></span><span>
@@ -956,8 +956,8 @@ forall a. Arbitrary a =&gt; a -&gt; [a]
 </span><a href="Network.MQTT.Arbitrary.html#v311mask"><span class="hs-identifier hs-var hs-var">v311mask</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Network.MQTT.Types.html#ConnPkt"><span class="hs-identifier hs-type">ConnPkt</span></a></span><span> </span><span id="local-6989586621679168921"><span class="annot"><span class="annottext">c :: ConnectRequest
 </span><a href="#local-6989586621679168921"><span class="hs-identifier hs-var">c</span></a></span></span><span class="hs-glyph">@</span><span id="local-6989586621679168914"><span id="local-6989586621679168915"><span id="local-6989586621679168916"><span id="local-6989586621679168917"><span id="local-6989586621679168918"><span id="local-6989586621679168919"><span id="local-6989586621679168920"><span class="annot"><a href="Network.MQTT.Types.html#ConnectRequest"><span class="hs-identifier hs-type">ConnectRequest</span></a></span><span class="hs-special">{</span><span class="hs-glyph">..</span><span class="hs-special">}</span></span></span></span></span></span></span></span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ConnectRequest -&gt; ProtocolLevel -&gt; MQTTPkt
 </span><a href="Network.MQTT.Types.html#ConnPkt"><span class="hs-identifier hs-var">ConnPkt</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ConnectRequest
-</span><a href="#local-6989586621679168921"><span class="hs-identifier hs-var">c</span></a></span><span class="hs-special">{</span><span class="annot"><span class="annottext">_properties :: [Property]
-</span><a href="Network.MQTT.Types.html#_properties"><span class="hs-identifier hs-var">_properties</span></a></span><span class="hs-glyph">=</span><span class="annot"><span class="annottext">[Property]
+</span><a href="#local-6989586621679168921"><span class="hs-identifier hs-var">c</span></a></span><span class="hs-special">{</span><span class="annot"><span class="annottext">_connProperties :: [Property]
+</span><a href="Network.MQTT.Types.html#_connProperties"><span class="hs-identifier hs-var">_connProperties</span></a></span><span class="hs-glyph">=</span><span class="annot"><span class="annottext">[Property]
 forall a. Monoid a =&gt; a
 </span><span class="hs-identifier hs-var">mempty</span></span><span class="hs-special">,</span><span>
 </span><span id="line-193"></span><span>                                                       </span><span class="annot"><span class="annottext">_password :: Maybe ByteString

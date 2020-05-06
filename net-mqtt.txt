@@ -65,7 +65,7 @@ ConnectRequest :: Maybe ByteString -> Maybe ByteString -> Maybe LastWill -> Bool
 [_cleanSession] :: ConnectRequest -> Bool
 [_keepAlive] :: ConnectRequest -> Word16
 [_connID] :: ConnectRequest -> ByteString
-[_properties] :: ConnectRequest -> [Property]
+[_connProperties] :: ConnectRequest -> [Property]
 connectRequest :: ConnectRequest
 data SessionReuse
 NewSession :: SessionReuse
