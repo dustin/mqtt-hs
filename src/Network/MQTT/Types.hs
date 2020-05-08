@@ -38,7 +38,7 @@ import           Data.Maybe                      (fromMaybe, isJust)
 import           Data.Word                       (Word16, Word32, Word8)
 
 -- | QoS values for publishing and subscribing.
-data QoS = QoS0 | QoS1 | QoS2 deriving (Bounded, Enum, Eq, Show)
+data QoS = QoS0 | QoS1 | QoS2 deriving (Bounded, Enum, Eq, Show, Ord)
 
 qosW :: QoS -> Word8
 qosW = toEnum.fromEnum
