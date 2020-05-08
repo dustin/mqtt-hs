@@ -331,6 +331,7 @@ instance GHC.Enum.Enum Network.MQTT.Types.ProtocolLevel
 instance GHC.Enum.Bounded Network.MQTT.Types.ProtocolLevel
 instance GHC.Classes.Eq Network.MQTT.Types.Property
 instance GHC.Show.Show Network.MQTT.Types.Property
+instance GHC.Classes.Ord Network.MQTT.Types.QoS
 instance GHC.Show.Show Network.MQTT.Types.QoS
 instance GHC.Classes.Eq Network.MQTT.Types.QoS
 instance GHC.Enum.Enum Network.MQTT.Types.QoS
