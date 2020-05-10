@@ -217,7 +217,7 @@ runWS URI{uriPath, uriQuery} secure cfg@MQTTConfig{..} =
       unless (BCS.null bs) $ yield bs
 
     wsSink :: WS.Connection -> ConduitT BCS.ByteString Void IO ()
-    wsSink ws = forever $ await >>= maybe (pure ()) (\bs -> liftIO (WS.sendBinaryData ws bs))
+    wsSink ws = maybe (pure ()) (\bs -> liftIO (WS.sendBinaryData ws bs) >> wsSink ws) =<< await
 
     runWSS :: String -> Int -> String -> WS.ConnectionOptions -> WS.Headers -> WS.ClientApp () -> IO ()
     runWSS host port path options hdrs' app = do
