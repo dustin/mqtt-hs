@@ -103,22 +103,22 @@ ConnUseAnotherServer :: ConnACKRC
 ConnServerMoved :: ConnACKRC
 ConnConnectionRateExceeded :: ConnACKRC
 data PublishRequest
-PublishRequest :: Bool -> QoS -> Bool -> ByteString -> Word16 -> ByteString -> [Property] -> PublishRequest
+PublishRequest :: Bool -> QoS -> Bool -> ByteString -> PktID -> ByteString -> [Property] -> PublishRequest
 [_pubDup] :: PublishRequest -> Bool
 [_pubQoS] :: PublishRequest -> QoS
 [_pubRetain] :: PublishRequest -> Bool
 [_pubTopic] :: PublishRequest -> ByteString
-[_pubPktID] :: PublishRequest -> Word16
+[_pubPktID] :: PublishRequest -> PktID
 [_pubBody] :: PublishRequest -> ByteString
 [_pubProps] :: PublishRequest -> [Property]
 data PubACK
-PubACK :: Word16 -> Word8 -> [Property] -> PubACK
+PubACK :: PktID -> Word8 -> [Property] -> PubACK
 data PubREC
-PubREC :: Word16 -> Word8 -> [Property] -> PubREC
+PubREC :: PktID -> Word8 -> [Property] -> PubREC
 data PubREL
-PubREL :: Word16 -> Word8 -> [Property] -> PubREL
+PubREL :: PktID -> Word8 -> [Property] -> PubREL
 data PubCOMP
-PubCOMP :: Word16 -> Word8 -> [Property] -> PubCOMP
+PubCOMP :: PktID -> Word8 -> [Property] -> PubCOMP
 
 -- | MQTT Protocol Levels
 data ProtocolLevel
@@ -163,7 +163,7 @@ PropSharedSubscriptionAvailable :: Word8 -> Property
 data AuthRequest
 AuthRequest :: Word8 -> [Property] -> AuthRequest
 data SubscribeRequest
-SubscribeRequest :: Word16 -> [(ByteString, SubOptions)] -> [Property] -> SubscribeRequest
+SubscribeRequest :: PktID -> [(ByteString, SubOptions)] -> [Property] -> SubscribeRequest
 
 -- | Options used at subscribe time to define how to handle incoming
 --   messages.
@@ -185,7 +185,7 @@ SubOptions :: RetainHandling -> Bool -> Bool -> QoS -> SubOptions
 -- | Reasonable subscription option defaults at <a>QoS0</a>.
 subOptions :: SubOptions
 data SubscribeResponse
-SubscribeResponse :: Word16 -> [Either SubErr QoS] -> [Property] -> SubscribeResponse
+SubscribeResponse :: PktID -> [Either SubErr QoS] -> [Property] -> SubscribeResponse
 data SubErr
 SubErrUnspecifiedError :: SubErr
 SubErrImplementationSpecificError :: SubErr
@@ -211,9 +211,9 @@ DoNotSendOnSubscribe :: RetainHandling
 data DisconnectRequest
 DisconnectRequest :: DiscoReason -> [Property] -> DisconnectRequest
 data UnsubscribeRequest
-UnsubscribeRequest :: Word16 -> [ByteString] -> [Property] -> UnsubscribeRequest
+UnsubscribeRequest :: PktID -> [ByteString] -> [Property] -> UnsubscribeRequest
 data UnsubscribeResponse
-UnsubscribeResponse :: Word16 -> [Property] -> [UnsubStatus] -> UnsubscribeResponse
+UnsubscribeResponse :: PktID -> [Property] -> [UnsubStatus] -> UnsubscribeResponse
 data UnsubStatus
 UnsubSuccess :: UnsubStatus
 UnsubNoSubscriptionExisted :: UnsubStatus
@@ -252,6 +252,7 @@ DiscoConnectionRateExceeded :: DiscoReason
 DiscoMaximumConnectTime :: DiscoReason
 DiscoSubscriptionIdentifiersNotSupported :: DiscoReason
 DiscoWildcardSubscriptionsNotSupported :: DiscoReason
+type PktID = Word16
 parsePacket :: ProtocolLevel -> Parser MQTTPkt
 class ByteMe a
 toByteString :: ByteMe a => ProtocolLevel -> a -> ByteString
