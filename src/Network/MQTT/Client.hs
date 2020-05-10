@@ -327,9 +327,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
                     .| conduitParser (parsePacket _protocol)
                     .| C.mapM_ (\(_,x) -> liftIO (dispatch c pch x))
 
-        onceConnected = atomically $ do
-          s <- readTVar _st
-          if s /= Connected then retry else pure ()
+        onceConnected = atomically $ check . (== Connected) =<< readTVar _st
 
         processOut = runConduit $
           C.repeatM (liftIO (atomically $ checkConnected c >> readTChan _ch))
