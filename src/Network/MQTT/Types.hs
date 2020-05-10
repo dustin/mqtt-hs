@@ -20,6 +20,7 @@ module Network.MQTT.Types (
   SubscribeRequest(..), SubOptions(..), subOptions, SubscribeResponse(..), SubErr(..),
   RetainHandling(..), DisconnectRequest(..),
   UnsubscribeRequest(..), UnsubscribeResponse(..), UnsubStatus(..), DiscoReason(..),
+  PktID,
   parsePacket, ByteMe(toByteString), parseConnect,
   -- for testing
   encodeLength, parseHdrLen, parseProperty, parseProperties, bsProps,
@@ -533,12 +534,14 @@ parseConnectACK = do
     where sf False = NewSession
           sf True  = ExistingSession
 
+type PktID = Word16
+
 data PublishRequest = PublishRequest{
   _pubDup      :: Bool
   , _pubQoS    :: QoS
   , _pubRetain :: Bool
   , _pubTopic  :: BL.ByteString
-  , _pubPktID  :: Word16
+  , _pubPktID  :: PktID
   , _pubBody   :: BL.ByteString
   , _pubProps  :: [Property]
   } deriving(Eq, Show)
@@ -626,14 +629,14 @@ parseSubOptions = do
 subOptionsBytes :: ProtocolLevel -> [(BL.ByteString, SubOptions)] -> BL.ByteString
 subOptionsBytes prot = BL.concat . map (\(bs,so) -> toByteString prot bs <> toByteString prot so)
 
-data SubscribeRequest = SubscribeRequest Word16 [(BL.ByteString, SubOptions)] [Property]
+data SubscribeRequest = SubscribeRequest PktID [(BL.ByteString, SubOptions)] [Property]
                       deriving(Eq, Show)
 
 instance ByteMe SubscribeRequest where
   toByteString prot (SubscribeRequest pid sreq props) =
     BL.singleton 0x82 <> withLength (encodeWord16 pid <> bsProps prot props <> subOptionsBytes prot sreq)
 
-data PubACK = PubACK Word16 Word8 [Property] deriving(Eq, Show)
+data PubACK = PubACK PktID Word8 [Property] deriving(Eq, Show)
 
 bsPubSeg :: ProtocolLevel -> Word8 -> Word16 -> Word8 -> [Property] -> BL.ByteString
 bsPubSeg Protocol311 h pid _ _ = BL.singleton h <> withLength (encodeWord16 pid)
@@ -648,7 +651,7 @@ bsPubSeg Protocol50 h pid st props = BL.singleton h
 instance ByteMe PubACK where
   toByteString prot (PubACK pid st props) = bsPubSeg prot 0x40 pid st props
 
-parsePubSeg :: A.Parser (Word16, Word8, [Property])
+parsePubSeg :: A.Parser (PktID, Word8, [Property])
 parsePubSeg = do
   rl <- parseHdrLen
   mid <- aWord16
@@ -662,7 +665,7 @@ parsePubACK = do
   (mid, st, props) <- parsePubSeg
   pure $ PubACKPkt (PubACK mid st props)
 
-data PubREC = PubREC Word16 Word8 [Property] deriving(Eq, Show)
+data PubREC = PubREC PktID Word8 [Property] deriving(Eq, Show)
 
 instance ByteMe PubREC where
   toByteString prot (PubREC pid st props) = bsPubSeg prot 0x50 pid st props
@@ -673,7 +676,7 @@ parsePubREC = do
   (mid, st, props) <- parsePubSeg
   pure $ PubRECPkt (PubREC mid st props)
 
-data PubREL = PubREL Word16 Word8 [Property] deriving(Eq, Show)
+data PubREL = PubREL PktID Word8 [Property] deriving(Eq, Show)
 
 instance ByteMe PubREL where
   toByteString prot (PubREL pid st props) = bsPubSeg prot 0x62 pid st props
@@ -684,7 +687,7 @@ parsePubREL = do
   (mid, st, props) <- parsePubSeg
   pure $ PubRELPkt (PubREL mid st props)
 
-data PubCOMP = PubCOMP Word16 Word8 [Property] deriving(Eq, Show)
+data PubCOMP = PubCOMP PktID Word8 [Property] deriving(Eq, Show)
 
 instance ByteMe PubCOMP where
   toByteString prot (PubCOMP pid st props) = bsPubSeg prot 0x70 pid st props
@@ -696,7 +699,7 @@ parsePubCOMP = do
   pure $ PubCOMPPkt (PubCOMP mid st props)
 
 -- Common header bits for subscribe, unsubscribe, and the sub acks.
-parseSubHdr :: Word8 -> ProtocolLevel -> A.Parser a -> A.Parser (Word16, [Property], a)
+parseSubHdr :: Word8 -> ProtocolLevel -> A.Parser a -> A.Parser (PktID, [Property], a)
 parseSubHdr b prot p = do
   _ <- A.word8 b
   hl <- parseHdrLen
@@ -713,7 +716,7 @@ parseSubscribe prot = do
   (pid, props, subs) <- parseSubHdr 0x82 prot $ A.many1 (liftA2 (,) aString parseSubOptions)
   pure $ SubscribePkt (SubscribeRequest pid subs props)
 
-data SubscribeResponse = SubscribeResponse Word16 [Either SubErr QoS] [Property] deriving (Eq, Show)
+data SubscribeResponse = SubscribeResponse PktID [Either SubErr QoS] [Property] deriving (Eq, Show)
 
 instance ByteMe SubscribeResponse where
   toByteString prot (SubscribeResponse pid sres props) =
@@ -763,7 +766,7 @@ parseSubACK prot = do
     p 0xA2 = Left SubErrWildcardSubscriptionsNotSupported
     p x    = Right (wQos x)
 
-data UnsubscribeRequest = UnsubscribeRequest Word16 [BL.ByteString] [Property]
+data UnsubscribeRequest = UnsubscribeRequest PktID [BL.ByteString] [Property]
                         deriving(Eq, Show)
 
 instance ByteMe UnsubscribeRequest where
@@ -794,7 +797,7 @@ instance ByteMe UnsubStatus where
   toByteString _ UnsubTopicFilterInvalid          = BL.singleton 0x8F
   toByteString _ UnsubPacketIdentifierInUse       = BL.singleton 0x91
 
-data UnsubscribeResponse = UnsubscribeResponse Word16 [Property] [UnsubStatus] deriving(Eq, Show)
+data UnsubscribeResponse = UnsubscribeResponse PktID [Property] [UnsubStatus] deriving(Eq, Show)
 
 instance ByteMe UnsubscribeResponse where
   toByteString Protocol311 (UnsubscribeResponse pid _ _) = BL.singleton 0xb0
