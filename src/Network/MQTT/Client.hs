@@ -38,8 +38,9 @@ module Network.MQTT.Client (
 import           Control.Concurrent         (myThreadId, threadDelay)
 import           Control.Concurrent.Async   (Async, async, asyncThreadId, cancel, cancelWith, link, race_, wait,
                                              waitAnyCancel, withAsync)
-import           Control.Concurrent.STM     (STM, TChan, TVar, atomically, modifyTVar', newTChan, newTChanIO, newTVarIO,
-                                             readTChan, readTVar, readTVarIO, retry, writeTChan, writeTVar)
+import           Control.Concurrent.STM     (STM, TChan, TVar, atomically, check, modifyTVar', newTChan, newTChanIO,
+                                             newTVarIO, orElse, readTChan, readTVar, readTVarIO, registerDelay, retry,
+                                             writeTChan, writeTVar)
 import           Control.DeepSeq            (force)
 import qualified Control.Exception          as E
 import           Control.Monad              (forever, guard, unless, void, when)
@@ -337,13 +338,10 @@ runMQTTConduit mkconn MQTTConfig{..} = do
 
         doPing = forever $ threadDelay pingPeriod >> sendPacketIO c PingPkt
 
-        watchdog ch = do
-          r <- namedTimeout "MQTT ping timeout" (pingPeriod * 3) w
-          case r of
-            Nothing -> killConn c Timeout
-            Just _  -> watchdog ch
-
-            where w = atomically . readTChan $ ch
+        watchdog ch = forever $ do
+          toch <- registerDelay pingPeriod
+          timedOut <- atomically $ ((check =<< readTVar toch) >> pure True) `orElse` (readTChan ch >> pure False)
+          when timedOut $ killConn c Timeout
 
     waitForLaunch MQTTClient{..} t = do
       writeTVar _ct t
