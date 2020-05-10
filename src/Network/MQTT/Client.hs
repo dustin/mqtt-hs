@@ -462,11 +462,7 @@ killConn :: E.Exception e => MQTTClient -> e -> IO ()
 killConn MQTTClient{..} e = readTVarIO _ct >>= \t -> cancelWith t e
 
 checkConnected :: MQTTClient -> STM ()
-checkConnected mc = do
-  e <- stateX mc Connected
-  case e of
-    Nothing -> pure ()
-    Just x  -> E.throw x
+checkConnected mc = maybe (pure ()) E.throw =<< stateX mc Connected
 
 -- | True if we're currently in a normally connected state (in the IO monad).
 isConnected :: MQTTClient -> IO Bool
