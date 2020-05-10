@@ -42,7 +42,7 @@ import           Control.Concurrent.STM     (STM, TChan, TVar, atomically, modif
                                              readTChan, readTVar, readTVarIO, retry, writeTChan, writeTVar)
 import           Control.DeepSeq            (force)
 import qualified Control.Exception          as E
-import           Control.Monad              (forever, guard, void, when)
+import           Control.Monad              (forever, guard, unless, void, when)
 import           Control.Monad.IO.Class     (liftIO)
 import           Data.Bifunctor             (first)
 import qualified Data.ByteString.Char8      as BCS
@@ -212,15 +212,12 @@ runWS URI{uriPath, uriQuery} secure cfg@MQTTConfig{..} =
     cf True  = runWSS
 
     wsSource :: WS.Connection -> ConduitT () BCS.ByteString IO ()
-    wsSource ws = loop
-      where loop = do
-              bs <- liftIO $ WS.receiveData ws
-              if BCS.null bs then pure () else yield bs >> loop
+    wsSource ws = forever $ do
+      bs <- liftIO $ WS.receiveData ws
+      unless (BCS.null bs) $ yield bs
 
     wsSink :: WS.Connection -> ConduitT BCS.ByteString Void IO ()
-    wsSink ws = loop
-      where
-        loop = await >>= maybe (pure ()) (\bs -> liftIO (WS.sendBinaryData ws bs) >> loop)
+    wsSink ws = forever $ await >>= maybe (pure ()) (\bs -> liftIO (WS.sendBinaryData ws bs))
 
     runWSS :: String -> Int -> String -> WS.ConnectionOptions -> WS.Headers -> WS.ClientApp () -> IO ()
     runWSS host port path options hdrs' app = do
@@ -242,10 +239,7 @@ runWS URI{uriPath, uriQuery} secure cfg@MQTTConfig{..} =
             catchIOError (Just <$> connectionGetChunk conn)
             (\e -> if isEOFError e then pure Nothing else E.throwIO e)
 
-          writer conn maybeBytes =
-            case maybeBytes of
-              Nothing    -> pure ()
-              Just bytes -> connectionPut conn (BC.toStrict bytes)
+          writer conn = maybe (pure ()) (connectionPut conn . BC.toStrict)
 
 pingPeriod :: Int
 pingPeriod = 30000000 -- 30 seconds
