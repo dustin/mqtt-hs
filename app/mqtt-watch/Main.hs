@@ -28,6 +28,7 @@ data Options = Options {
   , optHideProps   :: Bool
   , optSessionTime :: Word32
   , optVerbose     :: Bool
+  , optQoS         :: QoS
   , optTopics      :: [Topic]
   }
 
@@ -37,6 +38,7 @@ options = Options
   <*> switch (short 'p' <> help "hide properties")
   <*> option auto (long "session-timeout" <> showDefault <> value 0 <> help "mqtt session timeout (0 == clean)")
   <*> switch (short 'v' <> long "verbose" <> help "enable debug logging")
+  <*> option (toEnum <$> auto) (long "qos" <> short 'q' <> showDefault <> value QoS0 <> help "QoS level (0-2)")
   <*> some (argument str (metavar "topics..."))
 
 printer :: TChan Msg -> Bool -> IO ()
@@ -69,7 +71,7 @@ run Options{..} = do
       (ConnACKFlags sp _ props) <- connACK mc
       when optVerbose $ putStrLn (if sp == ExistingSession then "<resuming session>" else "<new session>")
       when optVerbose $ putStrLn ("Properties: " <> show props)
-      subres <- subscribe mc [(t, subOptions) | t <- optTopics] mempty
+      subres <- subscribe mc [(t, subOptions{_subQoS=optQoS}) | t <- optTopics] mempty
       when optVerbose $ print subres
 
       print =<< waitForClient mc
