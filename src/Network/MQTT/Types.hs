@@ -262,7 +262,7 @@ parseProperty = (A.word8 0x01 >> PropPayloadFormatIndicator <$> A.anyWord8)
 
 bsProps :: ProtocolLevel -> [Property] -> BL.ByteString
 bsProps Protocol311 _ = mempty
-bsProps p l = let b = (mconcat . map (toByteString p)) l in
+bsProps p l = let b = foldMap (toByteString p) l in
                 (BL.pack . encodeLength . fromIntegral . BL.length) b <> b
 
 parseProperties :: ProtocolLevel -> A.Parser [Property]
