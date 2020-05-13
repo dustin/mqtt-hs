@@ -62,7 +62,7 @@ run Options{..} = do
       mc <- connectURI mqttConfig{_msgCB=SimpleCallback (showme ch), _protocol=Protocol50,
                                   _cleanSession=optSessionTime == 0,
                                   _connProps=[PropReceiveMaximum 65535,
-                                              PropTopicAliasMaximum 10,
+                                              PropTopicAliasMaximum 10000,
                                               PropSessionExpiryInterval optSessionTime,
                                               PropRequestResponseInformation 1,
                                               PropRequestProblemInformation 1]}
