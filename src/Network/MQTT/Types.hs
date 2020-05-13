@@ -42,10 +42,10 @@ import           Data.Word                       (Word16, Word32, Word8)
 data QoS = QoS0 | QoS1 | QoS2 deriving (Bounded, Enum, Eq, Show, Ord)
 
 qosW :: QoS -> Word8
-qosW = toEnum.fromEnum
+qosW = toEnum . fromEnum
 
 wQos :: Word8 -> QoS
-wQos = toEnum.fromEnum
+wQos = toEnum . fromIntegral
 
 (≫) :: Bits a => a -> Int -> a
 (≫) = shiftR
@@ -77,7 +77,7 @@ decodeVarInt = go 0 1
     go :: Int -> Int -> A.Parser Int
     go v m = do
       x <- A.anyWord8
-      let a = fromEnum (x .&. 127) * m + v
+      let a = fromIntegral (x .&. 127) * m + v
       if x .&. 128 /= 0
         then go a (m*128)
         else pure a
@@ -100,7 +100,7 @@ encodeWord8 = BL.singleton
 
 encodeWord16 :: Word16 -> BL.ByteString
 encodeWord16 a = let (h,l) = a `quotRem` 256 in BL.pack [w h, w l]
-    where w = toEnum.fromEnum
+    where w = toEnum . fromIntegral
 
 encodeWord32 :: Word32 -> BL.ByteString
 encodeWord32 = runPut . putWord32be
@@ -115,16 +115,16 @@ encodeUTF8Pair :: BL.ByteString -> BL.ByteString -> BL.ByteString
 encodeUTF8Pair x y = encodeUTF8 x <> encodeUTF8 y
 
 twoByteLen :: BL.ByteString -> BL.ByteString
-twoByteLen = encodeWord16 . toEnum . fromEnum . BL.length
+twoByteLen = encodeWord16 . fromIntegral . BL.length
 
 blLength :: BL.ByteString -> BL.ByteString
-blLength = BL.pack . encodeVarInt . fromEnum . BL.length
+blLength = BL.pack . encodeVarInt . fromIntegral . BL.length
 
 withLength :: BL.ByteString -> BL.ByteString
 withLength a = blLength a <> a
 
 instance ByteMe BL.ByteString where
-  toByteString _ a = (encodeWord16 . toEnum . fromEnum . BL.length) a <> a
+  toByteString _ a = (encodeWord16 . fromIntegral . BL.length) a <> a
 
 -- | Property represents the various MQTT Properties that may sent or
 -- received along with packets in MQTT 5.  For detailed use on when
@@ -263,7 +263,7 @@ parseProperty = (A.word8 0x01 >> PropPayloadFormatIndicator <$> A.anyWord8)
 bsProps :: ProtocolLevel -> [Property] -> BL.ByteString
 bsProps Protocol311 _ = mempty
 bsProps p l = let b = (mconcat . map (toByteString p)) l in
-                (BL.pack . encodeLength . fromEnum . BL.length) b <> b
+                (BL.pack . encodeLength . fromIntegral . BL.length) b <> b
 
 parseProperties :: ProtocolLevel -> A.Parser [Property]
 parseProperties Protocol311 = pure mempty
@@ -399,7 +399,7 @@ aWord32 = anyWord32be
 aString :: A.Parser BL.ByteString
 aString = do
   n <- aWord16
-  s <- A.take (fromEnum n)
+  s <- A.take (fromIntegral n)
   pure $ BL.fromStrict s
 
 -- | Parse a CONNect packet.  This is useful when examining the
@@ -568,7 +568,7 @@ parsePublish prot = do
   _pubTopic <- aString
   _pubPktID <- if _pubQoS == QoS0 then pure 0 else aWord16
   _pubProps <- parseProperties prot
-  _pubBody <- BL.fromStrict <$> A.take (plen - fromEnum (BL.length _pubTopic) - 2
+  _pubBody <- BL.fromStrict <$> A.take (plen - fromIntegral (BL.length _pubTopic) - 2
                                         - qlen _pubQoS - propLen prot _pubProps )
   pure $ PublishPkt PublishRequest{..}
 
@@ -705,7 +705,7 @@ parseSubHdr b prot p = do
   hl <- parseHdrLen
   pid <- aWord16
   props <- parseProperties prot
-  content <- A.take (fromEnum hl - 2 - propLen prot props)
+  content <- A.take (fromIntegral hl - 2 - propLen prot props)
   a <- subp content
   pure (pid, props, a)
 
@@ -736,7 +736,7 @@ instance ByteMe SubscribeResponse where
 
 propLen :: ProtocolLevel -> [Property] -> Int
 propLen Protocol311 _ = 0
-propLen prot props    = fromEnum $ BL.length (bsProps prot props)
+propLen prot props    = fromIntegral $ BL.length (bsProps prot props)
 
 data SubErr = SubErrUnspecifiedError
   | SubErrImplementationSpecificError
