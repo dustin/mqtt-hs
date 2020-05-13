@@ -437,7 +437,9 @@ dispatch c@MQTTClient{..} pch pkt =
             resolveTopic (Just x) = do
               when (_pubTopic /= "") $ atomically $ modifyTVar' _inA (Map.insert x (blToText _pubTopic))
               m <- readTVarIO _inA
-              pure (m Map.! x)
+              case Map.lookup x m of
+                Nothing -> mqttFail $ ("failed to lookup topic alias " <> show x)
+                Just t  -> pure t
 
             aliasID (PropTopicAlias x) _ = Just x
             aliasID _ o                  = o
