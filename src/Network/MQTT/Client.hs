@@ -337,7 +337,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
         doPing = forever $ threadDelay pingPeriod >> sendPacketIO c PingPkt
 
         watchdog ch = forever $ do
-          toch <- registerDelay pingPeriod
+          toch <- registerDelay (pingPeriod * 3)
           timedOut <- atomically $ ((check =<< readTVar toch) >> pure True) `orElse` (readTChan ch >> pure False)
           when timedOut $ killConn c Timeout
 
