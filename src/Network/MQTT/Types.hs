@@ -305,8 +305,7 @@ connectRequest = ConnectRequest{_username=Nothing, _password=Nothing, _lastWill=
                                 _connProperties=mempty}
 
 instance ByteMe ConnectRequest where
-  toByteString prot ConnectRequest{..} = BL.singleton 0x10
-                                         <> withLength (val prot)
+  toByteString prot ConnectRequest{..} = BL.singleton 0x10 <> withLength (val prot)
     where
       val :: ProtocolLevel -> BL.ByteString
       val Protocol311 = "\NUL\EOTMQTT\EOT" -- MQTT + Protocol311
@@ -516,10 +515,11 @@ data SessionReuse = NewSession | ExistingSession deriving (Show, Eq, Bounded, En
 data ConnACKFlags = ConnACKFlags SessionReuse ConnACKRC [Property] deriving (Eq, Show)
 
 instance ByteMe ConnACKFlags where
-  toBytes prot (ConnACKFlags sp rc props) = let pbytes = BL.unpack $ bsProps prot props in
-                                              [0x20]
-                                              <> encodeVarInt (2 + length pbytes)
-                                              <>[ boolBit (sp /= NewSession), toByte rc] <> pbytes
+  toBytes prot (ConnACKFlags sp rc props) =
+    let pbytes = BL.unpack $ bsProps prot props in
+      [0x20]
+      <> encodeVarInt (2 + length pbytes)
+      <>[ boolBit (sp /= NewSession), toByte rc] <> pbytes
 
 parseConnectACK :: A.Parser MQTTPkt
 parseConnectACK = do
@@ -547,8 +547,9 @@ data PublishRequest = PublishRequest{
   } deriving(Eq, Show)
 
 instance ByteMe PublishRequest where
-  toByteString prot PublishRequest{..} = BL.singleton (0x30 .|. f)
-                                         <> withLength val
+  toByteString prot PublishRequest{..} =
+    BL.singleton (0x30 .|. f) <> withLength val
+
     where f = (db ≪ 3) .|. (qb ≪ 1) .|. rb
           db = boolBit _pubDup
           qb = qosW _pubQoS .&. 0x3
@@ -627,7 +628,7 @@ parseSubOptions = do
     _subQoS=wQos (w .&. 0x3)}
 
 subOptionsBytes :: ProtocolLevel -> [(BL.ByteString, SubOptions)] -> BL.ByteString
-subOptionsBytes prot = BL.concat . map (\(bs,so) -> toByteString prot bs <> toByteString prot so)
+subOptionsBytes prot = foldMap (\(bs,so) -> toByteString prot bs <> toByteString prot so)
 
 data SubscribeRequest = SubscribeRequest PktID [(BL.ByteString, SubOptions)] [Property]
                       deriving(Eq, Show)
@@ -800,13 +801,13 @@ instance ByteMe UnsubStatus where
 data UnsubscribeResponse = UnsubscribeResponse PktID [Property] [UnsubStatus] deriving(Eq, Show)
 
 instance ByteMe UnsubscribeResponse where
-  toByteString Protocol311 (UnsubscribeResponse pid _ _) = BL.singleton 0xb0
-                                                           <> withLength (encodeWord16 pid)
+  toByteString Protocol311 (UnsubscribeResponse pid _ _) =
+    BL.singleton 0xb0 <> withLength (encodeWord16 pid)
 
-  toByteString Protocol50 (UnsubscribeResponse pid props res) = BL.singleton 0xb0
-                                                                <> withLength (encodeWord16 pid
-                                                                               <> bsProps Protocol50 props
-                                                                               <> mconcat (fmap (toByteString Protocol50) res))
+  toByteString Protocol50 (UnsubscribeResponse pid props res) =
+    BL.singleton 0xb0 <> withLength (encodeWord16 pid
+                                      <> bsProps Protocol50 props
+                                      <> mconcat (fmap (toByteString Protocol50) res))
 
 parseUnsubACK :: ProtocolLevel -> A.Parser MQTTPkt
 parseUnsubACK Protocol311 = do
@@ -836,8 +837,8 @@ parseUnsubACK Protocol50 = do
 data AuthRequest = AuthRequest Word8 [Property] deriving (Eq, Show)
 
 instance ByteMe AuthRequest where
-  toByteString prot (AuthRequest i props) = BL.singleton 0xf0
-                                            <> withLength (BL.singleton i <> bsProps prot props)
+  toByteString prot (AuthRequest i props) =
+    BL.singleton 0xf0 <> withLength (BL.singleton i <> bsProps prot props)
 
 parseAuth :: A.Parser MQTTPkt
 parseAuth = do
@@ -919,9 +920,8 @@ data DisconnectRequest = DisconnectRequest DiscoReason [Property] deriving (Eq, 
 instance ByteMe DisconnectRequest where
   toByteString Protocol311 _ = "\224\NUL"
 
-  toByteString Protocol50 (DisconnectRequest r props) = BL.singleton 0xe0
-                                                        <> withLength (BL.singleton (toByte r)
-                                                                       <> bsProps Protocol50 props)
+  toByteString Protocol50 (DisconnectRequest r props) =
+    BL.singleton 0xe0 <> withLength (BL.singleton (toByte r) <> bsProps Protocol50 props)
 
 parseDisconnect :: ProtocolLevel -> A.Parser MQTTPkt
 parseDisconnect Protocol311 = do
