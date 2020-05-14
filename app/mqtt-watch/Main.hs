@@ -7,8 +7,8 @@ module Main where
 import           Control.Concurrent       (threadDelay)
 import           Control.Concurrent.Async (async, link)
 import           Control.Concurrent.STM   (TChan, atomically, newTChanIO, readTChan, writeTChan)
-import           Control.Exception        (Handler (..), IOException, catches)
-import           Control.Monad            (forever, when)
+import           Control.Exception        (Exception (..), Handler (..), IOException, catches, throw)
+import           Control.Monad            (forever, unless, when)
 import qualified Data.ByteString.Lazy     as BL
 import           Data.Maybe               (fromJust)
 import qualified Data.Text.IO             as TIO
@@ -16,9 +16,9 @@ import           Data.Word                (Word32)
 import           Network.MQTT.Client
 import           Network.MQTT.Types       (ConnACKFlags (..), SessionReuse (..))
 import           Network.URI
-import           Options.Applicative      (Parser, argument, auto, execParser, fullDesc, help, helper, info, long,
-                                           maybeReader, metavar, option, progDesc, short, showDefault, some, str,
-                                           switch, value, (<**>))
+import           Options.Applicative      (Parser, argument, auto, execParser, fullDesc, help, helper, info, long, many,
+                                           maybeReader, metavar, option, progDesc, short, showDefault, str, switch,
+                                           value, (<**>))
 import           System.IO                (stdout)
 
 data Msg = Msg Topic BL.ByteString [Property]
@@ -39,7 +39,7 @@ options = Options
   <*> option auto (long "session-timeout" <> showDefault <> value 0 <> help "mqtt session timeout (0 == clean)")
   <*> switch (short 'v' <> long "verbose" <> help "enable debug logging")
   <*> option (toEnum <$> auto) (long "qos" <> short 'q' <> showDefault <> value QoS0 <> help "QoS level (0-2)")
-  <*> some (argument str (metavar "topics..."))
+  <*> many (argument str (metavar "topics..."))
 
 printer :: TChan Msg -> Bool -> IO ()
 printer ch showProps = forever $ do
@@ -48,6 +48,13 @@ printer ch showProps = forever $ do
   BL.hPut stdout m
   putStrLn ""
   when showProps $ mapM_ (putStrLn . ("  " <>) . drop 4 . show) props
+
+data Fatal = Fatal String
+
+instance Show Fatal where
+  show (Fatal x) = x
+
+instance Exception Fatal
 
 run :: Options -> IO ()
 run Options{..} = do
@@ -71,8 +78,10 @@ run Options{..} = do
       (ConnACKFlags sp _ props) <- connACK mc
       when optVerbose $ putStrLn (if sp == ExistingSession then "<resuming session>" else "<new session>")
       when optVerbose $ putStrLn ("Properties: " <> show props)
-      subres <- subscribe mc [(t, subOptions{_subQoS=optQoS}) | t <- optTopics] mempty
-      when optVerbose $ print subres
+      when (sp == NewSession && null optTopics) $ throw (Fatal "No topics, and not resuming a session.")
+      unless (null optTopics) $ do
+        subres <- subscribe mc [(t, subOptions{_subQoS=optQoS}) | t <- optTopics] mempty
+        when optVerbose $ print subres
 
       print =<< waitForClient mc
 
