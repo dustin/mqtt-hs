@@ -96,6 +96,7 @@ data MQTTClient = MQTTClient {
   , _pktID        :: TVar Word16
   , _cb           :: MessageCallback
   , _acks         :: TVar (Map (DispatchType,Word16) (TChan MQTTPkt))
+  , _inflight     :: TVar (Map Word16 PublishRequest)
   , _st           :: TVar ConnState
   , _ct           :: TVar (Async ())
   , _outA         :: TVar (Map Topic Word16)
@@ -274,6 +275,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
   _ch <- newTChanIO
   _pktID <- newTVarIO 1
   _acks <- newTVarIO mempty
+  _inflight <- newTVarIO mempty
   _st <- newTVarIO Starting
   _ct <- newTVarIO undefined
   _outA <- newTVarIO mempty
@@ -378,12 +380,12 @@ dispatch :: MQTTClient -> TChan Bool -> MQTTPkt -> IO ()
 dispatch c@MQTTClient{..} pch pkt =
   case pkt of
     (ConnACKPkt p)                            -> connACKd p
-    (PublishPkt p)                            -> void $ namedAsync "MQTT pub machine" (pubMachine p) >>= link
+    (PublishPkt p)                            -> pub p
     (SubACKPkt (SubscribeResponse i _ _))     -> delegate DSubACK i
     (UnsubACKPkt (UnsubscribeResponse i _ _)) -> delegate DUnsubACK i
     (PubACKPkt (PubACK i _ _))                -> delegate DPubACK i
+    (PubRELPkt (PubREL i _ _))                -> pubd i
     (PubRECPkt (PubREC i _ _))                -> delegate DPubREC i
-    (PubRELPkt (PubREL i _ _))                -> delegate DPubREL i
     (PubCOMPPkt (PubCOMP i _ _))              -> delegate DPubCOMP i
     (DisconnectPkt req)                       -> disco req
     PongPkt                                   -> atomically . writeTChan pch $ True
@@ -398,6 +400,52 @@ dispatch c@MQTTClient{..} pch pkt =
                                                     atomically $ writeTVar _st (ConnErr connr)
                                                     cancelWith t (MQTTException $ show connr)
 
+        pub p@PublishRequest{_pubQoS=QoS0} = atomically (resolve p) >>= notify
+        pub p@PublishRequest{_pubQoS=QoS1, _pubPktID} = do
+          notify =<< atomically (resolve p)
+          sendPacketIO c (PubACKPkt (PubACK _pubPktID 0 mempty))
+        pub p@PublishRequest{_pubQoS=QoS2} = atomically $ do
+          p'@PublishRequest{..} <- resolve p
+          modifyTVar' _inflight (Map.insert _pubPktID p')
+          sendPacket c (PubRECPkt (PubREC _pubPktID 0 mempty))
+
+        pubd i = do
+          mp <- atomically $ do
+            r <- Map.lookup i <$> readTVar _inflight
+            modifyTVar' _inflight (Map.delete i)
+            pure r
+          case mp of
+            Nothing -> sendPacketIO c (PubCOMPPkt (PubCOMP i 0x92 mempty))
+            Just p  -> sendPacketIO c (PubCOMPPkt (PubCOMP i 0 mempty)) >> notify p
+
+        notify p@PublishRequest{..} = do
+          atomically $ modifyTVar' _inflight (Map.delete _pubPktID)
+          corrs <- readTVarIO _corr
+          E.evaluate . force =<< case maybe _cb (\cd -> Map.findWithDefault _cb cd corrs) cdata of
+                                   NoCallback         -> pure ()
+                                   SimpleCallback f   -> link =<< namedAsync "notifier" (f c (blToText _pubTopic) _pubBody _pubProps)
+                                   LowLevelCallback f -> link =<< namedAsync "notifier" (f c p)
+            where
+              cdata = foldr f Nothing _pubProps
+                where f (PropCorrelationData x) _ = Just x
+                      f _ o                       = o
+
+        resolve p@PublishRequest{..} = do
+          topic <- resolveTopic (foldr aliasID Nothing _pubProps)
+          pure p{_pubTopic=textToBL topic}
+
+          where
+            aliasID (PropTopicAlias x) _ = Just x
+            aliasID _ o                  = o
+
+            resolveTopic Nothing = pure (blToText _pubTopic)
+            resolveTopic (Just x) = do
+              when (_pubTopic /= "") $ modifyTVar' _inA (Map.insert x (blToText _pubTopic))
+              m <- readTVar _inA
+              case Map.lookup x m of
+                Nothing -> mqttFail ("failed to lookup topic alias " <> show x)
+                Just t  -> pure t
+
         delegate dt pid = atomically $ do
           m <- readTVar _acks
           case Map.lookup (dt, pid) m of
@@ -406,7 +454,6 @@ dispatch c@MQTTClient{..} pch pkt =
 
             where
               nak DPubREC = sendPacket c (PubRELPkt  (PubREL  pid 0x92 mempty))
-              nak DPubREL = sendPacket c (PubCOMPPkt (PubCOMP pid 0x92 mempty))
               nak _       = pure ()
 
 
@@ -414,51 +461,6 @@ dispatch c@MQTTClient{..} pch pkt =
           t <- readTVarIO _ct
           atomically $ writeTVar _st (DiscoErr req)
           cancelWith t (Discod req)
-
-        pubMachine pr@PublishRequest{..}
-          | _pubQoS == QoS2 = manageQoS2
-          | _pubQoS == QoS1 = notify >> sendPacketIO c (PubACKPkt (PubACK _pubPktID 0 mempty))
-          | otherwise = notify
-
-          where
-            cdata = foldr f Nothing _pubProps
-              where f (PropCorrelationData x) _ = Just x
-                    f _ o                       = o
-
-            notify = do
-              topic <- resolveTopic (foldr aliasID Nothing _pubProps)
-              corrs <- readTVarIO _corr
-              E.evaluate . force =<< case maybe _cb (\cd -> Map.findWithDefault _cb cd corrs) cdata of
-                                       NoCallback         -> pure ()
-                                       SimpleCallback f   -> f c topic _pubBody _pubProps
-                                       LowLevelCallback f -> f c pr{_pubTopic=textToBL topic}
-
-            resolveTopic Nothing = pure (blToText _pubTopic)
-            resolveTopic (Just x) = do
-              when (_pubTopic /= "") $ atomically $ modifyTVar' _inA (Map.insert x (blToText _pubTopic))
-              m <- readTVarIO _inA
-              case Map.lookup x m of
-                Nothing -> mqttFail $ ("failed to lookup topic alias " <> show x)
-                Just t  -> pure t
-
-            aliasID (PropTopicAlias x) _ = Just x
-            aliasID _ o                  = o
-
-            manageQoS2 = do
-              ch <- newTChanIO
-              atomically $ modifyTVar' _acks (Map.insert (DPubREL, _pubPktID) ch)
-              E.finally (manageQoS2' ch) (atomically $ releasePktID c (DPubREL, _pubPktID))
-                where
-                  sendREC ch = do
-                    sendPacketIO c (PubRECPkt (PubREC _pubPktID 0 mempty))
-                    (PubRELPkt _) <- atomically $ readTChan ch
-                    pure ()
-
-                  manageQoS2' ch = do
-                    v <- namedTimeout "QoS2 sendREC" 10000000 (sendREC ch)
-                    case v of
-                      Nothing -> killConn c Timeout
-                      _       -> notify >> sendPacketIO c (PubCOMPPkt (PubCOMP _pubPktID 0 mempty))
 
 killConn :: E.Exception e => MQTTClient -> e -> IO ()
 killConn MQTTClient{..} e = readTVarIO _ct >>= \t -> cancelWith t e
