@@ -97,7 +97,7 @@ data MQTTClient = MQTTClient {
   , _acks         :: TVar (Map (DispatchType,Word16) (TChan MQTTPkt))
   , _inflight     :: TVar (Map Word16 PublishRequest)
   , _st           :: TVar ConnState
-  , _ct           :: TVar (Async ())
+  , _ct           :: TVar (Maybe (Async ()))
   , _outA         :: TVar (Map Topic Word16)
   , _inA          :: TVar (Map Word16 Topic)
   , _connACKFlags :: TVar ConnACKFlags
@@ -273,7 +273,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
   _acks <- newTVarIO mempty
   _inflight <- newTVarIO mempty
   _st <- newTVarIO Starting
-  _ct <- newTVarIO undefined
+  _ct <- newTVarIO Nothing
   _outA <- newTVarIO mempty
   _inA <- newTVarIO mempty
   _connACKFlags <- newTVarIO (ConnACKFlags NewSession ConnUnspecifiedError mempty)
@@ -340,7 +340,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
           when timedOut $ killConn c Timeout
 
     waitForLaunch MQTTClient{..} t = do
-      writeTVar _ct t
+      writeTVar _ct (Just t)
       c <- readTVar _st
       if c == Starting then retry else pure c
 
@@ -348,7 +348,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
 -- An exception is thrown if the client didn't terminate expectedly.
 waitForClient :: MQTTClient -> IO ()
 waitForClient c@MQTTClient{..} = do
-  wait =<< readTVarIO _ct
+  void . traverse wait =<< readTVarIO _ct
   e <- atomically $ stateX c Stopped
   case e of
     Nothing -> pure ()
@@ -394,7 +394,7 @@ dispatch c@MQTTClient{..} pch pkt =
                                                   _ -> do
                                                     t <- readTVarIO _ct
                                                     atomically $ writeTVar _st (ConnErr connr)
-                                                    cancelWith t (MQTTException $ show connr)
+                                                    maybeCancelWith (MQTTException $ show connr) t
 
         pub p@PublishRequest{_pubQoS=QoS0} = atomically (resolve p) >>= notify Nothing
         pub p@PublishRequest{_pubQoS=QoS1, _pubPktID} = do
@@ -456,12 +456,14 @@ dispatch c@MQTTClient{..} pch pkt =
 
 
         disco req = do
-          t <- readTVarIO _ct
           atomically $ writeTVar _st (DiscoErr req)
-          cancelWith t (Discod req)
+          maybeCancelWith (Discod req) =<< readTVarIO _ct
+
+maybeCancelWith :: E.Exception e => e -> Maybe (Async ()) -> IO ()
+maybeCancelWith e = void . traverse (`cancelWith` e)
 
 killConn :: E.Exception e => MQTTClient -> e -> IO ()
-killConn MQTTClient{..} e = readTVarIO _ct >>= \t -> cancelWith t e
+killConn MQTTClient{..} e = readTVarIO _ct >>= maybeCancelWith e
 
 checkConnected :: MQTTClient -> STM ()
 checkConnected mc = maybe (pure ()) E.throw =<< stateX mc Connected
@@ -597,7 +599,7 @@ disconnect c@MQTTClient{..} reason props = race_ getDisconnected orDieTrying
   where
     getDisconnected = do
       sendPacketIO c (DisconnectPkt $ DisconnectRequest reason props)
-      wait =<< readTVarIO _ct
+      void . traverse wait =<< readTVarIO _ct
       atomically $ writeTVar _st Stopped
     orDieTrying = threadDelay 10000000 >> killConn c Timeout
 
