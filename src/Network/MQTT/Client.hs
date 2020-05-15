@@ -396,10 +396,9 @@ dispatch c@MQTTClient{..} pch pkt =
                                                     atomically $ writeTVar _st (ConnErr connr)
                                                     cancelWith t (MQTTException $ show connr)
 
-        pub p@PublishRequest{_pubQoS=QoS0} = atomically (resolve p) >>= notify
+        pub p@PublishRequest{_pubQoS=QoS0} = atomically (resolve p) >>= notify Nothing
         pub p@PublishRequest{_pubQoS=QoS1, _pubPktID} = do
-          notify =<< atomically (resolve p)
-          sendPacketIO c (PubACKPkt (PubACK _pubPktID 0 mempty))
+          notify (Just (PubACKPkt (PubACK _pubPktID 0 mempty))) =<< atomically (resolve p)
         pub p@PublishRequest{_pubQoS=QoS2} = atomically $ do
           p'@PublishRequest{..} <- resolve p
           modifyTVar' _inflight (Map.insert _pubPktID p')
@@ -412,16 +411,19 @@ dispatch c@MQTTClient{..} pch pkt =
             pure r
           case mp of
             Nothing -> sendPacketIO c (PubCOMPPkt (PubCOMP i 0x92 mempty))
-            Just p  -> notify p >> sendPacketIO c (PubCOMPPkt (PubCOMP i 0 mempty))
+            Just p  -> notify (Just (PubCOMPPkt (PubCOMP i 0 mempty))) p
 
-        notify p@PublishRequest{..} = do
+        notify rpkt p@PublishRequest{..} = do
           atomically $ modifyTVar' _inflight (Map.delete _pubPktID)
           corrs <- readTVarIO _corr
           E.evaluate . force =<< case maybe _cb (\cd -> Map.findWithDefault _cb cd corrs) cdata of
                                    NoCallback         -> pure ()
-                                   SimpleCallback f   -> link =<< namedAsync "notifier" (f c (blToText _pubTopic) _pubBody _pubProps)
-                                   LowLevelCallback f -> link =<< namedAsync "notifier" (f c p)
+                                   SimpleCallback f   -> call (f c (blToText _pubTopic) _pubBody _pubProps)
+                                   LowLevelCallback f -> call (f c p)
+
             where
+              call a = link =<< namedAsync "notifier" (a >> respond)
+              respond = void $ traverse (sendPacketIO c) rpkt
               cdata = foldr f Nothing _pubProps
                 where f (PropCorrelationData x) _ = Just x
                       f _ o                       = o
