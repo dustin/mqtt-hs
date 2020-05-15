@@ -412,7 +412,7 @@ dispatch c@MQTTClient{..} pch pkt =
             pure r
           case mp of
             Nothing -> sendPacketIO c (PubCOMPPkt (PubCOMP i 0x92 mempty))
-            Just p  -> sendPacketIO c (PubCOMPPkt (PubCOMP i 0 mempty)) >> notify p
+            Just p  -> notify p >> sendPacketIO c (PubCOMPPkt (PubCOMP i 0 mempty))
 
         notify p@PublishRequest{..} = do
           atomically $ modifyTVar' _inflight (Map.delete _pubPktID)
