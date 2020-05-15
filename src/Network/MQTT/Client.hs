@@ -36,8 +36,7 @@ module Network.MQTT.Client (
   ) where
 
 import           Control.Concurrent         (myThreadId, threadDelay)
-import           Control.Concurrent.Async   (Async, async, asyncThreadId, cancel, cancelWith, link, race_, wait,
-                                             waitAnyCancel, withAsync)
+import           Control.Concurrent.Async   (Async, async, asyncThreadId, cancelWith, link, race_, wait, waitAnyCancel)
 import           Control.Concurrent.STM     (STM, TChan, TVar, atomically, check, modifyTVar', newTChan, newTChanIO,
                                              newTVarIO, orElse, readTChan, readTVar, readTVarIO, registerDelay, retry,
                                              writeTChan, writeTVar)
@@ -253,9 +252,6 @@ mqttFail = E.throw . MQTTException
 
 namedAsync :: String -> IO a -> IO (Async a)
 namedAsync s a = async a >>= \p -> labelThread (asyncThreadId p) s >> pure p
-
-namedWithAsync :: String -> IO a -> (Async a -> IO b) -> IO b
-namedWithAsync n a t = withAsync a (\p -> labelThread (asyncThreadId p) n >> t p)
 
 namedTimeout :: String -> Int -> IO a -> IO (Maybe a)
 namedTimeout n to a = timeout to (myThreadId >>= \tid -> labelThread tid n >> a)
@@ -558,27 +554,23 @@ publishq :: MQTTClient
          -> IO ()
 publishq c t m r q props = do
   (ch,pid) <- atomically $ reservePktID c types
-  E.finally (publishAndWait ch pid q) (atomically $ releasePktIDs c [(t',pid) | t' <- types])
+  E.finally (publishAndWait ch pid) (atomically $ releasePktIDs c [(t',pid) | t' <- types])
 
     where
       types = [DPubACK, DPubREC, DPubCOMP]
-      publishAndWait _ pid QoS0 = sendPacketIO c (pkt False pid)
-      publishAndWait ch pid _   = namedWithAsync "MQTT satisfyQoS" (pub False pid) (\p -> satisfyQoS p ch pid)
+      publishAndWait ch pid = do
+        sendPacketIO c (pkt pid)
+        when (q > QoS0) $ satisfyQoS ch pid
 
-      pub dup pid = do
-        sendPacketIO c (pkt dup pid)
-        threadDelay 5000000
-        pub True pid
+      pkt pid = PublishPkt $ PublishRequest {_pubDup = False,
+                                             _pubQoS = q,
+                                             _pubPktID = pid,
+                                             _pubRetain = r,
+                                             _pubTopic = textToBL t,
+                                             _pubBody = m,
+                                             _pubProps = props}
 
-      pkt dup pid = PublishPkt $ PublishRequest {_pubDup = dup,
-                                                 _pubQoS = q,
-                                                 _pubPktID = pid,
-                                                 _pubRetain = r,
-                                                 _pubTopic = textToBL t,
-                                                 _pubBody = m,
-                                                 _pubProps = props}
-
-      satisfyQoS p ch pid
+      satisfyQoS ch pid
         | q == QoS0 = pure ()
         | q == QoS1 = void $ do
             (PubACKPkt (PubACK _ st pprops)) <- atomically $ checkConnected c >> readTChan ch
@@ -593,7 +585,6 @@ publishq c t m r q props = do
               PubRECPkt (PubREC _ st recprops) -> do
                 when (st /= 0) $ mqttFail ("qos 2 REC publish error: " <> show st <> " " <> show recprops)
                 sendPacketIO c (PubRELPkt $ PubREL pid 0 mempty)
-                cancel p -- must not publish after rel
               PubCOMPPkt (PubCOMP _ st' compprops) ->
                 when (st' /= 0) $ mqttFail ("qos 2 COMP publish error: " <> show st' <> " " <> show compprops)
               wtf -> mqttFail ("unexpected packet received in QoS2 publish: " <> show wtf)
