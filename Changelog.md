@@ -1,5 +1,25 @@
 # Changelog for net-mqtt
 
+## 0.7.0.0
+
+`ConnACKFlags` now has a `SessionReuse` type which makes it very clear
+whether the session is resuming.  I was affected by the boolean
+blindness of the previous variant myself several times.
+
+Connection `_properties` is now called `_connProperties`.  I developed
+a separate `net-mqtt-lens` package that provides a lens into all
+properties of all types that have properties, but a bit more
+consistency here is good.
+
+`QoS` now has an `Ord` instance.
+
+A new `PktID` type alias makes it clear which `Word16` values were
+meant to represent a packet ID.
+
+There are fewer threads in publish handling in both directions.  This
+mostly just simplified things, but it also helped prevent a few races
+when a lot of values arrived at the same time.
+
 ## 0.6.2.3
 
 Remove a use of `fail` that prevents us from building under ghc 8.8.
