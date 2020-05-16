@@ -4,22 +4,24 @@
 
 module Main where
 
-import           Control.Concurrent       (threadDelay)
-import           Control.Concurrent.Async (async, link)
-import           Control.Concurrent.STM   (TChan, atomically, newTChanIO, readTChan, writeTChan)
-import           Control.Exception        (Handler (..), IOException, catches)
-import           Control.Monad            (forever, when)
-import qualified Data.ByteString.Lazy     as BL
-import           Data.Maybe               (fromJust)
-import qualified Data.Text.IO             as TIO
-import           Data.Word                (Word32)
+import           Control.Concurrent         (threadDelay)
+import           Control.Concurrent.Async   (async, link)
+import           Control.Concurrent.STM     (TChan, atomically, newTChanIO, readTChan, writeTChan)
+import           Control.Exception          (Handler (..), IOException, catches)
+import           Control.Monad              (foldM_, forever, when)
+import qualified Data.ByteString.Lazy       as BL
+import qualified Data.ByteString.Lazy.Char8 as BCS
+import qualified Data.IORef                 as R
+import           Data.Maybe                 (fromJust)
+import qualified Data.Text.IO               as TIO
+import           Data.Word                  (Word32)
 import           Network.MQTT.Client
-import           Network.MQTT.Types       (ConnACKFlags (..), SessionReuse (..))
+import           Network.MQTT.Types         (ConnACKFlags (..), SessionReuse (..))
 import           Network.URI
-import           Options.Applicative      (Parser, argument, auto, execParser, fullDesc, help, helper, info, long,
-                                           maybeReader, metavar, option, progDesc, short, showDefault, some, str,
-                                           switch, value, (<**>))
-import           System.IO                (stdout)
+import           Options.Applicative        (Parser, argument, auto, execParser, fullDesc, help, helper, info, long,
+                                             maybeReader, metavar, option, progDesc, short, showDefault, some, str,
+                                             switch, value, (<**>))
+import           System.IO                  (stdout)
 
 data Msg = Msg Topic BL.ByteString [Property]
 
@@ -55,12 +57,15 @@ run :: Options -> IO ()
 run Options{..} = do
   ch <- newTChanIO
   async (printer ch (not optHideProps)) >>= link
+  uref <- R.newIORef optUri
 
-  forever $ catches (go ch) [Handler (\(ex :: MQTTException) -> handler (show ex)),
-                             Handler (\(ex :: IOException) -> handler (show ex))]
+  forever $ catches (go ch uref) [Handler (\(ex :: MQTTException) -> handler (show ex)),
+                                  Handler (\(ex :: IOException) -> handler (show ex))]
 
   where
-    go ch = do
+    go ch uref = do
+      uri <- R.readIORef uref
+      when optVerbose $ putStrLn ("Connecting to " <> show uri)
       mc <- connectURI mqttConfig{_msgCB=SimpleCallback (showme ch), _protocol=Protocol50,
                                   _cleanSession=optSessionTime == 0,
                                   _connProps=[PropReceiveMaximum 65535,
@@ -68,9 +73,10 @@ run Options{..} = do
                                               PropSessionExpiryInterval optSessionTime,
                                               PropRequestResponseInformation 1,
                                               PropRequestProblemInformation 1]}
-        optUri
+        uri
 
       (ConnACKFlags sp _ props) <- connACK mc
+      updateURI uref props
       when optVerbose $ putStrLn (if sp == ExistingSession then "<resuming session>" else "<new session>")
       when optVerbose $ putStrLn ("Properties: " <> show props)
       when (sp == NewSession || optSubResume) $ do
@@ -82,6 +88,10 @@ run Options{..} = do
     showme ch _ t m props = atomically $ writeTChan ch $ Msg t m props
 
     handler e = putStrLn ("ERROR: " <> e) >> threadDelay 1000000
+
+    updateURI uref = foldM_ up ()
+      where up _ (PropAssignedClientIdentifier i) = R.modifyIORef uref (\u -> u{uriFragment='#':BCS.unpack i})
+            up a _ = pure a
 
 main :: IO ()
 main = run =<< execParser opts
