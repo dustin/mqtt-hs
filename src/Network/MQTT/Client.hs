@@ -385,7 +385,15 @@ dispatch c@MQTTClient{..} pch pkt =
     (PubCOMPPkt (PubCOMP i _ _))              -> delegate DPubCOMP i
     (DisconnectPkt req)                       -> disco req
     PongPkt                                   -> atomically . writeTChan pch $ True
-    x                                         -> print x
+
+    -- Not implemented
+    (AuthPkt p)                               -> mqttFail ("unexpected incoming auth: " <> show p)
+
+    -- Things clients shouldn't see
+    PingPkt                                   -> mqttFail "unexpected incoming ping packet"
+    (ConnPkt _ _)                             -> mqttFail "unexpected incoming connect"
+    (SubscribePkt _)                          -> mqttFail "unexpected incoming subscribe"
+    (UnsubscribePkt _)                        -> mqttFail "unexpected incoming unsubscribe"
 
   where connACKd connr@(ConnACKFlags _ val _) = case val of
                                                   ConnAccepted -> atomically $ do
