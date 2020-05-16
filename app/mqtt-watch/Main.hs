@@ -76,7 +76,7 @@ run Options{..} = do
         uri
 
       (ConnACKFlags sp _ props) <- connACK mc
-      updateURI uref props
+      when (optSessionTime > 0) $ updateURI uref props
       when optVerbose $ putStrLn (if sp == ExistingSession then "<resuming session>" else "<new session>")
       when optVerbose $ putStrLn ("Properties: " <> show props)
       when (sp == NewSession || optSubResume) $ do
