@@ -39,7 +39,7 @@ options :: Parser Options
 options = Options
   <$> option (maybeReader parseURI) (long "mqtt-uri" <> short 'u' <> showDefault <> value (fromJust $ parseURI "mqtt://localhost/") <> help "mqtt broker URI")
   <*> switch (short 'p' <> help "hide properties")
-  <*> option auto (long "session-timeout" <> showDefault <> value 0 <> help "mqtt session timeout (0 == clean)")
+  <*> option auto (long "session-timeout" <> showDefault <> value 300 <> help "mqtt session timeout (0 == clean)")
   <*> switch (short 'v' <> long "verbose" <> help "enable debug logging")
   <*> option (toEnum <$> auto) (long "qos" <> short 'q' <> showDefault <> value QoS0 <> help "QoS level (0-2)")
   <*> switch (long "always-subscribe" <> help "subscribe even when resuming a connection")
@@ -91,7 +91,7 @@ run Options{..} = do
 
     updateURI uref = foldM_ up ()
       where up _ (PropAssignedClientIdentifier i) = R.modifyIORef uref (\u -> u{uriFragment='#':BCS.unpack i})
-            up a _ = pure a
+            up a _                                = pure a
 
 main :: IO ()
 main = run =<< execParser opts
