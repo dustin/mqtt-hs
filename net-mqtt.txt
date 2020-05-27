@@ -7,7 +7,7 @@
 --   Please see the README on GitHub at
 --   <a>https://github.com/dustin/mqtt-hs#readme</a>
 @package net-mqtt
-@version 0.7.0.0
+@version 0.7.0.1
 
 
 -- | Topic and topic related utiilities.
