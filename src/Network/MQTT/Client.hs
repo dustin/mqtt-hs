@@ -586,16 +586,20 @@ publishq c t m r q props = do
         | q == QoS0 = pure ()
         | q == QoS1 = void $ do
             (PubACKPkt (PubACK _ st pprops)) <- atomically $ checkConnected c >> readTChan ch
-            when (st /= 0) $ mqttFail ("qos 1 publish error: " <> show st <> " " <> show pprops)
+            unless (isOK st) $ mqttFail ("qos 1 publish error: " <> show st <> " " <> show pprops)
         | q == QoS2 = waitRec
         | otherwise = error "invalid QoS"
 
         where
+          isOK 0  = True -- success
+          isOK 16 = True -- It worked, but nobody cares (no matching subscribers)
+          isOK _  = False
+
           waitRec = do
             rpkt <- atomically $ checkConnected c >> readTChan ch
             case rpkt of
               PubRECPkt (PubREC _ st recprops) -> do
-                when (st /= 0) $ mqttFail ("qos 2 REC publish error: " <> show st <> " " <> show recprops)
+                unless (isOK st) $ mqttFail ("qos 2 REC publish error: " <> show st <> " " <> show recprops)
                 sendPacketIO c (PubRELPkt $ PubREL pid 0 mempty)
               PubCOMPPkt (PubCOMP _ st' compprops) ->
                 when (st' /= 0) $ mqttFail ("qos 2 COMP publish error: " <> show st' <> " " <> show compprops)
