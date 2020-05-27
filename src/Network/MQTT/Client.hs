@@ -405,7 +405,7 @@ dispatch c@MQTTClient{..} pch pkt =
                                                     maybeCancelWith (MQTTException $ show connr) t
 
         pub p@PublishRequest{_pubQoS=QoS0} = atomically (resolve p) >>= notify Nothing
-        pub p@PublishRequest{_pubQoS=QoS1, _pubPktID} = do
+        pub p@PublishRequest{_pubQoS=QoS1, _pubPktID} =
           notify (Just (PubACKPkt (PubACK _pubPktID 0 mempty))) =<< atomically (resolve p)
         pub p@PublishRequest{_pubQoS=QoS2} = atomically $ do
           p'@PublishRequest{..} <- resolve p
