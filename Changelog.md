@@ -1,5 +1,25 @@
 # Changelog for net-mqtt
 
+## 0.7.0.1
+
+Fixed an error where there'd be an ugly crash in a situation where
+connections were failing regularly and we detected the failure before
+a connection thread spun up.  I was using `undefined` for the default
+thread value because it was intended to be immediately set, but did
+find a way to get there in a failure storm.  It's a `Maybe` now.
+
+fail on unexpected packets.  I had a `print` in there from very early
+on.  Proper sequences are covered, but if a broker sends the client an
+unexpected packet, it'd be good to not just ignore it.
+
+When publishing, "no matching subscribers" should not be considered a
+failure.  It's also not bubbled up to the caller, but it is returned
+as an error from the broker to basically say the publish was
+successful, but nobody cares about the thing you published.
+
+mqtt-watch will automatically reestablish sessions by default without
+reissuing subscriptions (including auto-generated client IDs).
+
 ## 0.7.0.0
 
 `ConnACKFlags` now has a `SessionReuse` type which makes it very clear
