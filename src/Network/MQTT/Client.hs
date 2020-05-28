@@ -323,7 +323,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
       where
         doSrc pch = runConduit $ src
                     .| conduitParser (parsePacket _protocol)
-                    .| C.mapM_ (\(_,x) -> liftIO (dispatch c pch x))
+                    .| C.mapM_ (\(_,x) -> liftIO (dispatch c pch $! x))
 
         onceConnected = atomically $ check . (== Connected) =<< readTVar _st
 
