@@ -86,6 +86,9 @@ testTopicMatching = let allTopics = ["a", "a/b", "a/b/c/d", "b/a/c/d",
                                 ("#/b", [])] in
     map (\(p,want) -> testCase (show p) $ assertEqual "" want (filter (match p) allTopics)) tsts
 
+prop_TopicMatching :: MatchingTopic -> QC.Property
+prop_TopicMatching (MatchingTopic (t,m)) = counterexample (show m <> " doesn't match " <> show t) $ match m t
+
 byteRT :: (ByteSize a, Show a, Eq a) => a -> Bool
 byteRT x = x == (fromByte . toByte) x
 
@@ -103,7 +106,8 @@ tests = [
   testProperty "conn reasons" (byteRT :: ConnACKRC -> Bool),
   testProperty "disco reasons" (byteRT :: DiscoReason -> Bool),
 
-  testGroup "topic matching" testTopicMatching
+  testGroup "topic matching" testTopicMatching,
+  testProperty "arbitrary topic matching" prop_TopicMatching
   ]
 
 main :: IO ()

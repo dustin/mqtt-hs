@@ -9,20 +9,24 @@ Stability    : experimental
 Arbitrary instances for QuickCheck.
 -}
 
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Network.MQTT.Arbitrary (
   SizeT(..),
+  ATopic, unTopic, MatchingTopic(..),
   v311mask
   ) where
 
 import           Control.Applicative   (liftA2)
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy  as L
+import           Data.Text             (Text)
+import qualified Data.Text             as Text
+import           Network.MQTT.Topic    (Filter, Topic)
 import           Network.MQTT.Types    as MT
 import           Test.QuickCheck       as QC
-
 
 
 -- | Arbitrary type fitting variable integers.
@@ -208,3 +212,35 @@ v311mask (PubRECPkt (PubREC x _ _)) = PubRECPkt (PubREC x 0 mempty)
 v311mask (PubRELPkt (PubREL x _ _)) = PubRELPkt (PubREL x 0 mempty)
 v311mask (PubCOMPPkt (PubCOMP x _ _)) = PubCOMPPkt (PubCOMP x 0 mempty)
 v311mask x = x
+
+-- | An arbitrary topic.
+newtype ATopic = ATopic [Text] deriving (Show, Eq)
+
+instance Arbitrary ATopic where
+  arbitrary = ATopic <$> someSegs
+    where someSegs = choose (1,8) >>= flip vectorOf aSeg
+          aSeg = do
+            n <- choose (1,8)
+            Text.pack <$> vectorOf n aValidChar
+          aValidChar = elements (['A'..'Z'] <> ['a'..'z'] <> ['0'..'9'])
+
+  shrink (ATopic x) = fmap ATopic . shrinkList shrinkWord $ x
+    where shrinkWord = fmap Text.pack . shrink . Text.unpack
+
+-- | Retrieve the Topic from ATopic
+unTopic :: ATopic -> Topic
+unTopic (ATopic t) = Text.intercalate "/" t
+
+-- | An arbitrary Topic and an arbitrary Filter that should match it.
+newtype MatchingTopic = MatchingTopic (Topic, Filter) deriving (Eq, Show)
+
+instance Arbitrary MatchingTopic where
+  arbitrary = do
+    t@(ATopic tsegs) <- arbitrary
+    reps <- vectorOf (length tsegs) (elements [id, const "+", const "#"])
+    let m = zipWith ($) reps tsegs
+    pure $ MatchingTopic (unTopic t, unTopic . ATopic . clean $ m)
+      where
+        clean []       = []
+        clean ("#":_)  = ["#"]
+        clean (x:xs)   = x : clean xs
