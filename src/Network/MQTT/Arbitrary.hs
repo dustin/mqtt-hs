@@ -11,17 +11,20 @@ Arbitrary instances for QuickCheck.
 
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TupleSections     #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Network.MQTT.Arbitrary (
   SizeT(..),
   ATopic, unTopic, MatchingTopic(..),
+  arbitraryTopicSegment, arbitraryTopic, arbitraryMatchingTopic,
   v311mask
   ) where
 
 import           Control.Applicative   (liftA2)
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy  as L
+import           Data.Function         ((&))
 import           Data.Text             (Text)
 import qualified Data.Text             as Text
 import           Network.MQTT.Topic    (Filter, Topic)
@@ -217,12 +220,7 @@ v311mask x = x
 newtype ATopic = ATopic [Text] deriving (Show, Eq)
 
 instance Arbitrary ATopic where
-  arbitrary = ATopic <$> someSegs
-    where someSegs = choose (1,8) >>= flip vectorOf aSeg
-          aSeg = do
-            n <- choose (1,8)
-            Text.pack <$> vectorOf n aValidChar
-          aValidChar = elements (['A'..'Z'] <> ['a'..'z'] <> ['0'..'9'])
+  arbitrary = arbitraryTopic ['a'..'z'] (1,6) (1,6)
 
   shrink (ATopic x) = fmap ATopic . shrinkList shrinkWord $ x
     where shrinkWord = fmap Text.pack . shrink . Text.unpack
@@ -232,15 +230,35 @@ unTopic :: ATopic -> Topic
 unTopic (ATopic t) = Text.intercalate "/" t
 
 -- | An arbitrary Topic and an arbitrary Filter that should match it.
-newtype MatchingTopic = MatchingTopic (Topic, Filter) deriving (Eq, Show)
+newtype MatchingTopic = MatchingTopic (Topic, [Filter]) deriving (Eq, Show)
 
 instance Arbitrary MatchingTopic where
-  arbitrary = do
-    t@(ATopic tsegs) <- arbitrary
-    reps <- vectorOf (length tsegs) (elements [id, const "+", const "#"])
-    let m = zipWith ($) reps tsegs
-    pure $ MatchingTopic (unTopic t, unTopic . ATopic . clean $ m)
+  arbitrary = MatchingTopic <$> arbitraryMatchingTopic ['a'..'z'] (1,6) (1,6) (1,6)
+  shrink (MatchingTopic (t,ms)) = fmap (MatchingTopic . (t,)) . shrinkList (const []) $ ms
+
+-- | Generate an arbitrary topic segment (e.g. the 'X' in 'a\/X\/b') of a
+-- given length from the given alphabet.
+arbitraryTopicSegment :: [Char] -> Int -> Gen Text
+arbitraryTopicSegment alphabet n = Text.pack <$> vectorOf n (elements alphabet)
+
+-- | Generate an arbitrary ATopic from the given alphabet with lengths
+-- of segments and the segment count specified by the given ranges.
+arbitraryTopic :: [Char] -> (Int,Int) -> (Int,Int) -> Gen ATopic
+arbitraryTopic alphabet seglen nsegs = do
+  ATopic <$> someSegs
+    where someSegs = choose nsegs >>= flip vectorOf aSeg
+          aSeg = choose seglen >>= arbitraryTopicSegment alphabet
+
+-- | Generate an arbitrary topic similarly to arbitraryTopic as well
+-- as some arbitrary filters that should match that topic.
+arbitraryMatchingTopic :: [Char] -> (Int,Int) -> (Int,Int) -> (Int,Int) -> Gen (Topic, [Filter])
+arbitraryMatchingTopic alphabet seglen nsegs nfilts = do
+    t@(ATopic tsegs) <- arbitraryTopic alphabet seglen nsegs
+    fn <- choose nfilts
+    reps <- vectorOf fn $ vectorOf (length tsegs) (elements [id, const "+", const "#"])
+    let m = map (unTopic . ATopic . clean . zipWith (&) tsegs) reps
+    pure $ (unTopic t, m)
       where
-        clean []       = []
-        clean ("#":_)  = ["#"]
-        clean (x:xs)   = x : clean xs
+        clean []      = []
+        clean ("#":_) = ["#"]
+        clean (x:xs)  = x : clean xs

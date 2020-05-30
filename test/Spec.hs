@@ -87,7 +87,8 @@ testTopicMatching = let allTopics = ["a", "a/b", "a/b/c/d", "b/a/c/d",
     map (\(p,want) -> testCase (show p) $ assertEqual "" want (filter (match p) allTopics)) tsts
 
 prop_TopicMatching :: MatchingTopic -> QC.Property
-prop_TopicMatching (MatchingTopic (t,m)) = counterexample (show m <> " doesn't match " <> show t) $ match m t
+prop_TopicMatching (MatchingTopic (t,ms)) = counterexample (show ms <> " doesn't match " <> show t) $
+  all (\m -> match m t) ms
 
 byteRT :: (ByteSize a, Show a, Eq a) => a -> Bool
 byteRT x = x == (fromByte . toByte) x
