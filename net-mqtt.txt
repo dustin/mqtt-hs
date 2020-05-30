@@ -637,7 +637,19 @@ unTopic :: ATopic -> Topic
 
 -- | An arbitrary Topic and an arbitrary Filter that should match it.
 newtype MatchingTopic
-MatchingTopic :: (Topic, Filter) -> MatchingTopic
+MatchingTopic :: (Topic, [Filter]) -> MatchingTopic
+
+-- | Generate an arbitrary topic segment (e.g. the <tt>X</tt> in 'a/X/b')
+--   of a given length from the given alphabet.
+arbitraryTopicSegment :: [Char] -> Int -> Gen Text
+
+-- | Generate an arbitrary ATopic from the given alphabet with lengths of
+--   segments and the segment count specified by the given ranges.
+arbitraryTopic :: [Char] -> (Int, Int) -> (Int, Int) -> Gen ATopic
+
+-- | Generate an arbitrary topic similarly to arbitraryTopic as well as
+--   some arbitrary filters that should match that topic.
+arbitraryMatchingTopic :: [Char] -> (Int, Int) -> (Int, Int) -> (Int, Int) -> Gen (Topic, [Filter])
 
 -- | v311mask strips all the v5 specific bits from an MQTTPkt.
 v311mask :: MQTTPkt -> MQTTPkt
