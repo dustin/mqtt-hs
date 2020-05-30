@@ -7,7 +7,7 @@
 --   Please see the README on GitHub at
 --   <a>https://github.com/dustin/mqtt-hs#readme</a>
 @package net-mqtt
-@version 0.7.0.1
+@version 0.7.1.0
 
 
 -- | Topic and topic related utiilities.
@@ -629,10 +629,26 @@ module Network.MQTT.Arbitrary
 newtype SizeT
 SizeT :: Int -> SizeT
 
+-- | An arbitrary topic.
+data ATopic
+
+-- | Retrieve the Topic from ATopic
+unTopic :: ATopic -> Topic
+
+-- | An arbitrary Topic and an arbitrary Filter that should match it.
+newtype MatchingTopic
+MatchingTopic :: (Topic, Filter) -> MatchingTopic
+
 -- | v311mask strips all the v5 specific bits from an MQTTPkt.
 v311mask :: MQTTPkt -> MQTTPkt
+instance GHC.Show.Show Network.MQTT.Arbitrary.MatchingTopic
+instance GHC.Classes.Eq Network.MQTT.Arbitrary.MatchingTopic
+instance GHC.Classes.Eq Network.MQTT.Arbitrary.ATopic
+instance GHC.Show.Show Network.MQTT.Arbitrary.ATopic
 instance GHC.Show.Show Network.MQTT.Arbitrary.SizeT
 instance GHC.Classes.Eq Network.MQTT.Arbitrary.SizeT
+instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Arbitrary.MatchingTopic
+instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Arbitrary.ATopic
 instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Arbitrary.SizeT
 instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Types.LastWill
 instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Types.ProtocolLevel
