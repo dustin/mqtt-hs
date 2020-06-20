@@ -45,18 +45,24 @@ options = Options
   <*> switch (long "always-subscribe" <> help "subscribe even when resuming a connection")
   <*> some (argument str (metavar "topics..."))
 
-printer :: TChan Msg -> Bool -> IO ()
-printer ch showProps = forever $ do
+printer :: TChan Msg -> Bool -> Bool -> IO ()
+printer ch showProps verbose = forever $ do
   (Msg t m props) <- atomically $ readTChan ch
   TIO.putStr $ mconcat [t, " → "]
   BL.hPut stdout m
   putStrLn ""
-  when showProps $ mapM_ (putStrLn . ("  " <>) . drop 4 . show) props
+  mapM_ (putStrLn . ("  " <>) . drop 4 . show) (filter (viewableProp showProps verbose) props)
+
+    where
+      viewableProp False _ _              = False
+      viewableProp _ True _               = True
+      viewableProp _ _ (PropTopicAlias _) = False
+      viewableProp _ _ _                  = True
 
 run :: Options -> IO ()
 run Options{..} = do
   ch <- newTChanIO
-  async (printer ch (not optHideProps)) >>= link
+  async (printer ch (not optHideProps) optVerbose) >>= link
   uref <- R.newIORef optUri
 
   forever $ catches (go ch uref) [Handler (\(ex :: MQTTException) -> handler (show ex)),
