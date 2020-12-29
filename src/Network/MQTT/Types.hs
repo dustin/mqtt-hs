@@ -13,7 +13,7 @@ MQTT Types.
 {-# LANGUAGE RecordWildCards   #-}
 
 module Network.MQTT.Types (
-  LastWill(..), MQTTPkt(..), QoS(..),
+  LastWill(..), MQTTPkt(..), QoS(..), qosFromInt,
   ConnectRequest(..), connectRequest, SessionReuse(..), ConnACKFlags(..), ConnACKRC(..),
   PublishRequest(..), PubACK(..), PubREC(..), PubREL(..), PubCOMP(..),
   ProtocolLevel(..), Property(..), AuthRequest(..),
@@ -46,6 +46,13 @@ qosW = toEnum . fromEnum
 
 wQos :: Word8 -> QoS
 wQos = toEnum . fromIntegral
+
+-- | Parse a valid QoS value from an Int.
+qosFromInt :: Int -> Maybe QoS
+qosFromInt 0 = Just QoS0
+qosFromInt 1 = Just QoS1
+qosFromInt 2 = Just QoS2
+qosFromInt _ = Nothing
 
 (≫) :: Bits a => a -> Int -> a
 (≫) = shiftR

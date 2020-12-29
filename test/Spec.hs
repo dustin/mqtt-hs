@@ -93,6 +93,11 @@ prop_TopicMatching (MatchingTopic (t,ms)) = counterexample (show ms <> " doesn't
 byteRT :: (ByteSize a, Show a, Eq a) => a -> Bool
 byteRT x = x == (fromByte . toByte) x
 
+testQoSFromInt :: Assertion
+testQoSFromInt = do
+  mapM_ (\q -> assertEqual (show q) (Just q) (qosFromInt (fromEnum q))) [QoS0 ..]
+  assertEqual "invalid QoS" Nothing (qosFromInt 1939)
+
 tests :: [TestTree]
 tests = [
   localOption (QC.QuickCheckTests 10000) $ testProperty "header length rt (parser)" prop_rtLengthParser,
@@ -103,6 +108,7 @@ tests = [
   localOption (QC.QuickCheckTests 1000) $ testProperty "rt property" prop_PropertyRT,
   testProperty "rt properties" prop_PropertiesRT,
   testProperty "sub options" prop_SubOptionsRT,
+  testCase "qosFromInt" testQoSFromInt,
 
   testProperty "conn reasons" (byteRT :: ConnACKRC -> Bool),
   testProperty "disco reasons" (byteRT :: DiscoReason -> Bool),

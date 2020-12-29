@@ -8,7 +8,7 @@ import           Control.Concurrent         (threadDelay)
 import           Control.Concurrent.Async   (async, link)
 import           Control.Concurrent.STM     (TChan, atomically, newTChanIO, readTChan, writeTChan)
 import           Control.Exception          (Handler (..), IOException, catches)
-import           Control.Monad              (foldM_, forever, when)
+import           Control.Monad              (foldM_, forever, when, (<=<))
 import qualified Data.ByteString.Lazy       as BL
 import qualified Data.ByteString.Lazy.Char8 as BCS
 import qualified Data.IORef                 as R
@@ -16,12 +16,13 @@ import           Data.Maybe                 (fromJust)
 import qualified Data.Text.IO               as TIO
 import           Data.Word                  (Word32)
 import           Network.MQTT.Client
-import           Network.MQTT.Types         (ConnACKFlags (..), SessionReuse (..))
+import           Network.MQTT.Types         (ConnACKFlags (..), SessionReuse (..), qosFromInt)
 import           Network.URI
-import           Options.Applicative        (Parser, argument, auto, execParser, fullDesc, help, helper, info, long,
-                                             maybeReader, metavar, option, progDesc, short, showDefault, some, str,
-                                             switch, value, (<**>))
+import           Options.Applicative        (Parser, argument, auto, eitherReader, execParser, fullDesc, help, helper,
+                                             info, long, maybeReader, metavar, option, progDesc, short, showDefault,
+                                             some, str, switch, value, (<**>))
 import           System.IO                  (stdout)
+import           Text.Read                  (readMaybe)
 
 data Msg = Msg Topic BL.ByteString [Property]
 
@@ -41,9 +42,12 @@ options = Options
   <*> switch (short 'p' <> help "hide properties")
   <*> option auto (long "session-timeout" <> showDefault <> value 300 <> help "mqtt session timeout (0 == clean)")
   <*> switch (short 'v' <> long "verbose" <> help "enable debug logging")
-  <*> option (toEnum <$> auto) (long "qos" <> short 'q' <> showDefault <> value QoS0 <> help "QoS level (0-2)")
+  <*> option (eitherReader pQoS) (long "qos" <> short 'q' <> showDefault <> value QoS0 <> help "QoS level (0-2)")
   <*> switch (long "always-subscribe" <> help "subscribe even when resuming a connection")
   <*> some (argument str (metavar "topics..."))
+
+  where
+    pQoS = maybe (Left "Only QoS 0, 1, and 2 are supported") Right . (qosFromInt <=< readMaybe)
 
 printer :: TChan Msg -> Bool -> Bool -> IO ()
 printer ch showProps verbose = forever $ do
