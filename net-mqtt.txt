@@ -57,6 +57,9 @@ data QoS
 QoS0 :: QoS
 QoS1 :: QoS
 QoS2 :: QoS
+
+-- | Parse a valid QoS value from an Int.
+qosFromInt :: Int -> Maybe QoS
 data ConnectRequest
 ConnectRequest :: Maybe ByteString -> Maybe ByteString -> Maybe LastWill -> Bool -> Word16 -> ByteString -> [Property] -> ConnectRequest
 [_username] :: ConnectRequest -> Maybe ByteString
