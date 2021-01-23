@@ -1,5 +1,13 @@
 # Changelog for net-mqtt
 
+## 0.7.1.0
+
+More Arbitrary topic helpers.
+
+Commandline tool enhancements.
+
+Bump version bounds.
+
 ## 0.7.0.1
 
 Fixed an error where there'd be an ugly crash in a situation where
