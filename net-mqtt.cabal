@@ -1,13 +1,13 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.33.0.
+-- This file has been generated from package.yaml by hpack version 0.34.4.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d9a226d2e765d07b5d1f8269024496dfd275ee4920b8118e0b9e93f61684df17
+-- hash: 61a8c0f6c844ddab092db68ee8410eaaa215e5ca65232f4b17cec8d5cc842ecc
 
 name:           net-mqtt
-version:        0.7.1.0
+version:        0.7.1.1
 synopsis:       An MQTT Protocol Implementation.
 description:    Please see the README on GitHub at <https://github.com/dustin/mqtt-hs#readme>
 category:       Network
@@ -41,7 +41,7 @@ library
   build-depends:
       QuickCheck >=2.12.6.1 && <2.15
     , async >=2.2.1 && <2.3
-    , attoparsec >=0.13.2 && <0.14
+    , attoparsec >=0.13.2 && <0.15
     , attoparsec-binary >=0.2 && <1.0
     , base >=4.7 && <5
     , binary >=0.8.5 && <0.9
@@ -68,7 +68,7 @@ executable mqtt-example
   build-depends:
       QuickCheck >=2.12.6.1 && <2.15
     , async >=2.2.1 && <2.3
-    , attoparsec >=0.13.2 && <0.14
+    , attoparsec >=0.13.2 && <0.15
     , attoparsec-binary >=0.2 && <1.0
     , base >=4.7 && <5
     , binary >=0.8.5 && <0.9
@@ -96,7 +96,7 @@ executable mqtt-watch
   build-depends:
       QuickCheck >=2.12.6.1 && <2.15
     , async >=2.2.1 && <2.3
-    , attoparsec >=0.13.2 && <0.14
+    , attoparsec >=0.13.2 && <0.15
     , attoparsec-binary >=0.2 && <1.0
     , base >=4.7 && <5
     , binary >=0.8.5 && <0.9
@@ -127,7 +127,7 @@ test-suite mqtt-test
       HUnit
     , QuickCheck >=2.12.6.1 && <2.15
     , async >=2.2.1 && <2.3
-    , attoparsec >=0.13.2 && <0.14
+    , attoparsec >=0.13.2 && <0.15
     , attoparsec-binary >=0.2 && <1.0
     , base >=4.7 && <5
     , binary >=0.8.5 && <0.9
