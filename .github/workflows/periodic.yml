@@ -11,8 +11,8 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         plan:
-        - { resolver: "--resolver nightly" }
-        - { resolver: "--resolver lts" }
+        - { resolver: "--resolver=nightly" }
+        - { resolver: "--resolver=lts" }
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -20,7 +20,9 @@ jobs:
 
     - name: Cache Key
       id: cache_key
-      run: echo ::set-output name=key::$(md5sum stack.yaml | awk '{print $1}')
+      run: echo ::set-output name=key::$(stack $RESOLVER ls dependencies | md5sum | awk '{print $1}')
+      env:
+        RESOLVER: ${{ matrix.plan.resolver }}
 
     - name: Cache Dependencies
       id: cache
