@@ -16,7 +16,7 @@ Arbitrary instances for QuickCheck.
 
 module Network.MQTT.Arbitrary (
   SizeT(..),
-  ATopic, unTopic, MatchingTopic(..),
+  MatchingTopic(..),
   arbitraryTopicSegment, arbitraryTopic, arbitraryMatchingTopic,
   v311mask
   ) where
@@ -25,9 +25,10 @@ import           Control.Applicative   (liftA2)
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy  as L
 import           Data.Function         ((&))
+import           Data.Maybe            (fromJust, mapMaybe)
 import           Data.Text             (Text)
 import qualified Data.Text             as Text
-import           Network.MQTT.Topic    (Filter, Topic)
+import           Network.MQTT.Topic    (Filter, Topic, mkFilter, mkTopic, unTopic)
 import           Network.MQTT.Types    as MT
 import           Test.QuickCheck       as QC
 
@@ -226,8 +227,8 @@ instance Arbitrary ATopic where
     where shrinkWord = fmap Text.pack . shrink . Text.unpack
 
 -- | Retrieve the Topic from ATopic
-unTopic :: ATopic -> Topic
-unTopic (ATopic t) = Text.intercalate "/" t
+unaTopic :: ATopic -> Maybe Topic
+unaTopic (ATopic t) = mkTopic $ Text.intercalate "/" t
 
 -- | An arbitrary Topic and an arbitrary Filter that should match it.
 newtype MatchingTopic = MatchingTopic (Topic, [Filter]) deriving (Eq, Show)
@@ -256,8 +257,8 @@ arbitraryMatchingTopic alphabet seglen nsegs nfilts = do
     t@(ATopic tsegs) <- arbitraryTopic alphabet seglen nsegs
     fn <- choose nfilts
     reps <- vectorOf fn $ vectorOf (length tsegs) (elements [id, const "+", const "#"])
-    let m = map (unTopic . ATopic . clean . zipWith (&) tsegs) reps
-    pure $ (unTopic t, m)
+    let m = mapMaybe ((>>= mkFilter) . fmap unTopic . unaTopic . ATopic . clean . zipWith (&) tsegs) reps
+    pure (fromJust $ unaTopic t, m)
       where
         clean []      = []
         clean ("#":_) = ["#"]

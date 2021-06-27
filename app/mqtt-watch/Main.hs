@@ -13,9 +13,11 @@ import qualified Data.ByteString.Lazy       as BL
 import qualified Data.ByteString.Lazy.Char8 as BCS
 import qualified Data.IORef                 as R
 import           Data.Maybe                 (fromJust)
+import qualified Data.Text                  as T
 import qualified Data.Text.IO               as TIO
 import           Data.Word                  (Word32)
 import           Network.MQTT.Client
+import           Network.MQTT.Topic         (Filter, Topic, mkFilter, unTopic)
 import           Network.MQTT.Types         (ConnACKFlags (..), SessionReuse (..), qosFromInt)
 import           Network.URI
 import           Options.Applicative        (Parser, argument, auto, eitherReader, execParser, fullDesc, help, helper,
@@ -33,7 +35,7 @@ data Options = Options {
   , optVerbose     :: Bool
   , optQoS         :: QoS
   , optSubResume   :: Bool
-  , optTopics      :: [Topic]
+  , optTopics      :: [Filter]
   }
 
 options :: Parser Options
@@ -44,7 +46,7 @@ options = Options
   <*> switch (short 'v' <> long "verbose" <> help "enable debug logging")
   <*> option (eitherReader pQoS) (long "qos" <> short 'q' <> showDefault <> value QoS0 <> help "QoS level (0-2)")
   <*> switch (long "always-subscribe" <> help "subscribe even when resuming a connection")
-  <*> some (argument str (metavar "topics..."))
+  <*> some (argument (maybeReader (mkFilter . T.pack)) (metavar "topics..."))
 
   where
     pQoS = maybe (Left "Only QoS 0, 1, and 2 are supported") Right . (qosFromInt <=< readMaybe)
@@ -52,7 +54,7 @@ options = Options
 printer :: TChan Msg -> Bool -> Bool -> IO ()
 printer ch showProps verbose = forever $ do
   (Msg t m props) <- atomically $ readTChan ch
-  TIO.putStr $ mconcat [t, " → "]
+  TIO.putStr $ mconcat [unTopic t, " → "]
   BL.hPut stdout m
   putStrLn ""
   mapM_ (putStrLn . ("  " <>) . drop 4 . show) (filter (viewableProp showProps verbose) props)

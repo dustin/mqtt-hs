@@ -9,25 +9,46 @@ Stability   : experimental
 Topic and topic related utiilities.
 -}
 
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings          #-}
 
 module Network.MQTT.Topic (
-  Filter, Topic, match
+  Filter, unFilter, Topic, unTopic, match,
+  mkFilter, mkTopic
 ) where
 
-import           Data.Text (Text, isPrefixOf, splitOn)
+import           Data.String (IsString (..))
+import           Data.Text   (Text, isPrefixOf, splitOn)
 
 -- | An MQTT topic.
-type Topic = Text
+newtype Topic = Topic { unTopic :: Text } deriving (Show, Ord, Eq, IsString)
+
+-- mkTopic creates a topic from a text representation of a valid filter.
+mkTopic :: Text -> Maybe Topic
+mkTopic t = Topic <$> validate (splitOn "/" t)
+  where
+    validate ("#":_) = Nothing
+    validate ("+":_) = Nothing
+    validate []      = Just t
+    validate (_:xs)  = validate xs
 
 -- | An MQTT topic filter.
-type Filter = Text
+newtype Filter = Filter { unFilter :: Text } deriving (Show, Ord, Eq, IsString)
+
+-- mkFilter creates a filter from a text representation of a valid filter.
+mkFilter :: Text -> Maybe Filter
+mkFilter t = Filter <$> validate (splitOn "/" t)
+  where
+    validate ["#"]   = Just t
+    validate ("#":_) = Nothing
+    validate []      = Just t
+    validate (_:xs)  = validate xs
 
 -- | match returns true iff the given pattern can be matched by the
 -- specified Topic as defined in the
 -- <http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718107 MQTT 3.1.1 specification>.
 match :: Filter -> Topic -> Bool
-match pat top = cmp (splitOn "/" pat) (splitOn "/" top)
+match (Filter pat) (Topic top) = cmp (splitOn "/" pat) (splitOn "/" top)
 
   where
     cmp [] []   = True

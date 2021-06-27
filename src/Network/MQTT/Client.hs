@@ -55,7 +55,7 @@ import           Data.Conduit.Network       (AppData, appSink, appSource, client
 import           Data.Conduit.Network.TLS   (runTLSClient, tlsClientConfig, tlsClientTLSSettings)
 import           Data.Map.Strict            (Map)
 import qualified Data.Map.Strict            as Map
-import           Data.Maybe                 (fromMaybe)
+import           Data.Maybe                 (fromJust, fromMaybe)
 import           Data.Text                  (Text)
 import qualified Data.Text.Encoding         as TE
 import           Data.Word                  (Word16)
@@ -68,7 +68,7 @@ import           Network.WebSockets.Stream  (makeStream)
 import           System.IO.Error            (catchIOError, isEOFError)
 import           System.Timeout             (timeout)
 
-import           Network.MQTT.Topic         (Filter, Topic)
+import           Network.MQTT.Topic         (Filter, Topic, mkFilter, mkTopic, unFilter, unTopic)
 import           Network.MQTT.Types         as T
 
 data ConnState = Starting
@@ -426,7 +426,7 @@ dispatch c@MQTTClient{..} pch pkt =
           corrs <- readTVarIO _corr
           E.evaluate . force =<< case maybe _cb (\cd -> Map.findWithDefault _cb cd corrs) cdata of
                                    NoCallback         -> pure ()
-                                   SimpleCallback f   -> call (f c (blToText _pubTopic) _pubBody _pubProps)
+                                   SimpleCallback f   -> call (f c (blToTopic _pubTopic) _pubBody _pubProps)
                                    LowLevelCallback f -> call (f c p)
 
             where
@@ -438,15 +438,15 @@ dispatch c@MQTTClient{..} pch pkt =
 
         resolve p@PublishRequest{..} = do
           topic <- resolveTopic (foldr aliasID Nothing _pubProps)
-          pure p{_pubTopic=textToBL topic}
+          pure p{_pubTopic=textToBL (unTopic topic)}
 
           where
             aliasID (PropTopicAlias x) _ = Just x
             aliasID _ o                  = o
 
-            resolveTopic Nothing = pure (blToText _pubTopic)
+            resolveTopic Nothing = pure (blToTopic _pubTopic)
             resolveTopic (Just x) = do
-              when (_pubTopic /= "") $ modifyTVar' _inA (Map.insert x (blToText _pubTopic))
+              when (_pubTopic /= "") $ modifyTVar' _inA (Map.insert x (blToTopic _pubTopic))
               m <- readTVar _inA
               case Map.lookup x m of
                 Nothing -> mqttFail ("failed to lookup topic alias " <> show x)
@@ -496,6 +496,12 @@ textToBL = BL.fromStrict . TE.encodeUtf8
 blToText :: BL.ByteString -> Text
 blToText = TE.decodeUtf8 . BL.toStrict
 
+blToTopic :: BL.ByteString -> Topic
+blToTopic = fromJust . mkTopic . blToText
+
+blToFilter :: BL.ByteString -> Filter
+blToFilter = fromJust . mkFilter . blToText
+
 reservePktID :: MQTTClient -> [DispatchType] -> STM (TChan MQTTPkt, Word16)
 reservePktID c@MQTTClient{..} dts = do
   checkConnected c
@@ -534,7 +540,7 @@ subscribe c@MQTTClient{..} ls props = do
   let (SubACKPkt (SubscribeResponse _ rs aprops)) = r
   pure (rs, aprops)
 
-    where ls' = map (first textToBL) ls
+    where ls' = map (first (textToBL . unFilter)) ls
 
 -- | Unsubscribe from a list of topic filters.
 --
@@ -545,7 +551,7 @@ subscribe c@MQTTClient{..} ls props = do
 -- should know about.
 unsubscribe :: MQTTClient -> [Filter] -> [Property] -> IO ([UnsubStatus], [Property])
 unsubscribe c@MQTTClient{..} ls props = do
-  (UnsubACKPkt (UnsubscribeResponse _ rsn rprop)) <- sendAndWait c DUnsubACK (\pid -> UnsubscribePkt $ UnsubscribeRequest pid (map textToBL ls) props)
+  (UnsubACKPkt (UnsubscribeResponse _ rsn rprop)) <- sendAndWait c DUnsubACK (\pid -> UnsubscribePkt $ UnsubscribeRequest pid (map (textToBL . unFilter) ls) props)
   pure (rprop, rsn)
 
 -- | Publish a message (QoS 0).
@@ -578,7 +584,7 @@ publishq c t m r q props = do
                                              _pubQoS = q,
                                              _pubPktID = pid,
                                              _pubRetain = r,
-                                             _pubTopic = textToBL t,
+                                             _pubTopic = textToBL (unTopic t),
                                              _pubBody = m,
                                              _pubProps = props}
 
@@ -624,7 +630,7 @@ mkLWT :: Topic -> BL.ByteString -> Bool -> T.LastWill
 mkLWT t m r = T.LastWill{
   T._willRetain=r,
   T._willQoS=QoS0,
-  T._willTopic = textToBL t,
+  T._willTopic = textToBL (unTopic t),
   T._willMsg=m,
   T._willProps=mempty
   }
