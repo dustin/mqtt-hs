@@ -12,6 +12,7 @@ Arbitrary instances for QuickCheck.
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE ViewPatterns      #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Network.MQTT.Arbitrary (
@@ -25,7 +26,7 @@ import           Control.Applicative   (liftA2)
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy  as L
 import           Data.Function         ((&))
-import           Data.Maybe            (fromJust, mapMaybe)
+import           Data.Maybe            (mapMaybe)
 import           Data.Text             (Text)
 import qualified Data.Text             as Text
 import           Network.MQTT.Topic    (Filter, Topic, mkFilter, mkTopic, unTopic)
@@ -217,18 +218,11 @@ v311mask (PubRELPkt (PubREL x _ _)) = PubRELPkt (PubREL x 0 mempty)
 v311mask (PubCOMPPkt (PubCOMP x _ _)) = PubCOMPPkt (PubCOMP x 0 mempty)
 v311mask x = x
 
--- | An arbitrary topic.
-newtype ATopic = ATopic [Text] deriving (Show, Eq)
-
-instance Arbitrary ATopic where
+instance Arbitrary Topic where
   arbitrary = arbitraryTopic ['a'..'z'] (1,6) (1,6)
 
-  shrink (ATopic x) = fmap ATopic . shrinkList shrinkWord $ x
+  shrink (unTopic -> x) = mapMaybe (mkTopic . Text.intercalate "/") . shrinkList shrinkWord $ Text.splitOn "/" x
     where shrinkWord = fmap Text.pack . shrink . Text.unpack
-
--- | Retrieve the Topic from ATopic
-unaTopic :: ATopic -> Maybe Topic
-unaTopic (ATopic t) = mkTopic $ Text.intercalate "/" t
 
 -- | An arbitrary Topic and an arbitrary Filter that should match it.
 newtype MatchingTopic = MatchingTopic (Topic, [Filter]) deriving (Eq, Show)
@@ -242,11 +236,10 @@ instance Arbitrary MatchingTopic where
 arbitraryTopicSegment :: [Char] -> Int -> Gen Text
 arbitraryTopicSegment alphabet n = Text.pack <$> vectorOf n (elements alphabet)
 
--- | Generate an arbitrary ATopic from the given alphabet with lengths
+-- | Generate an arbitrary Topic from the given alphabet with lengths
 -- of segments and the segment count specified by the given ranges.
-arbitraryTopic :: [Char] -> (Int,Int) -> (Int,Int) -> Gen ATopic
-arbitraryTopic alphabet seglen nsegs = do
-  ATopic <$> someSegs
+arbitraryTopic :: [Char] -> (Int,Int) -> (Int,Int) -> Gen Topic
+arbitraryTopic alphabet seglen nsegs = someSegs `suchThatMap` (mkTopic . Text.intercalate "/")
     where someSegs = choose nsegs >>= flip vectorOf aSeg
           aSeg = choose seglen >>= arbitraryTopicSegment alphabet
 
@@ -254,11 +247,12 @@ arbitraryTopic alphabet seglen nsegs = do
 -- as some arbitrary filters that should match that topic.
 arbitraryMatchingTopic :: [Char] -> (Int,Int) -> (Int,Int) -> (Int,Int) -> Gen (Topic, [Filter])
 arbitraryMatchingTopic alphabet seglen nsegs nfilts = do
-    t@(ATopic tsegs) <- arbitraryTopic alphabet seglen nsegs
+    t <- arbitraryTopic alphabet seglen nsegs
+    let tsegs = Text.splitOn "/" (unTopic t)
     fn <- choose nfilts
     reps <- vectorOf fn $ vectorOf (length tsegs) (elements [id, const "+", const "#"])
-    let m = mapMaybe ((>>= mkFilter) . fmap unTopic . unaTopic . ATopic . clean . zipWith (&) tsegs) reps
-    pure (fromJust $ unaTopic t, m)
+    let m = mapMaybe (mkFilter . Text.intercalate "/" . clean . zipWith (&) tsegs) reps
+    pure (t, m)
       where
         clean []      = []
         clean ("#":_) = ["#"]
