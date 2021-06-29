@@ -29,8 +29,12 @@ newtype Topic = Topic { unTopic :: Text } deriving (Show, Ord, Eq, IsString)
 instance Splittable Topic where
   split (Topic t) = Topic <$> splitOn "/" t
 
+instance Semigroup Topic where
+  (Topic a) <> (Topic b) = Topic (a <> "/" <> b)
+
 -- mkTopic creates a topic from a text representation of a valid filter.
 mkTopic :: Text -> Maybe Topic
+mkTopic "" = Nothing
 mkTopic t = Topic <$> validate (splitOn "/" t)
   where
     validate ("#":_) = Nothing
@@ -44,8 +48,12 @@ newtype Filter = Filter { unFilter :: Text } deriving (Show, Ord, Eq, IsString)
 instance Splittable Filter where
   split (Filter f) = Filter <$> splitOn "/" f
 
+instance Semigroup Filter where
+  (Filter a) <> (Filter b) = Filter (a <> "/" <> b)
+
 -- mkFilter creates a filter from a text representation of a valid filter.
 mkFilter :: Text -> Maybe Filter
+mkFilter "" = Nothing
 mkFilter t = Filter <$> validate (splitOn "/" t)
   where
     validate ["#"]   = Just t

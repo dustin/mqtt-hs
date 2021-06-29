@@ -3,11 +3,16 @@
 import           Control.Monad                   (mapM_)
 import qualified Data.Attoparsec.ByteString.Lazy as A
 import qualified Data.ByteString.Lazy            as L
+import           Data.String                     (fromString)
+import qualified Data.Text                       as T
 import           Data.Word                       (Word8)
 import           Network.MQTT.Arbitrary
 import           Network.MQTT.Topic
 import           Network.MQTT.Types              as MT
+
 import           Test.QuickCheck                 as QC
+import           Test.QuickCheck.Checkers
+import           Test.QuickCheck.Classes
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck           as QC
@@ -98,6 +103,13 @@ testQoSFromInt = do
   mapM_ (\q -> assertEqual (show q) (Just q) (qosFromInt (fromEnum q))) [QoS0 ..]
   assertEqual "invalid QoS" Nothing (qosFromInt 1939)
 
+instance Arbitrary Filter where
+  arbitrary = ttof <$> arbitrary
+    where ttof = fromString . T.unpack . unTopic
+
+instance EqProp Filter where (=-=) = eq
+instance EqProp Topic where (=-=) = eq
+
 tests :: [TestTree]
 tests = [
   localOption (QC.QuickCheckTests 10000) $ testProperty "header length rt (parser)" prop_rtLengthParser,
@@ -112,6 +124,9 @@ tests = [
 
   testProperty "conn reasons" (byteRT :: ConnACKRC -> Bool),
   testProperty "disco reasons" (byteRT :: DiscoReason -> Bool),
+
+  testProperties "topic semigroup" (unbatch $ semigroup (undefined :: Topic, undefined :: Int)),
+  testProperties "filter semigroup" (unbatch $ semigroup (undefined :: Filter, undefined :: Int)),
 
   testGroup "topic matching" testTopicMatching,
   testProperty "arbitrary topic matching" prop_TopicMatching
