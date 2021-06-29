@@ -14,14 +14,20 @@ Topic and topic related utiilities.
 
 module Network.MQTT.Topic (
   Filter, unFilter, Topic, unTopic, match,
-  mkFilter, mkTopic
+  mkFilter, mkTopic, split
 ) where
 
 import           Data.String (IsString (..))
 import           Data.Text   (Text, isPrefixOf, splitOn)
 
+class Splittable a where
+  split :: a -> [a]
+
 -- | An MQTT topic.
 newtype Topic = Topic { unTopic :: Text } deriving (Show, Ord, Eq, IsString)
+
+instance Splittable Topic where
+  split (Topic t) = Topic <$> splitOn "/" t
 
 -- mkTopic creates a topic from a text representation of a valid filter.
 mkTopic :: Text -> Maybe Topic
@@ -34,6 +40,9 @@ mkTopic t = Topic <$> validate (splitOn "/" t)
 
 -- | An MQTT topic filter.
 newtype Filter = Filter { unFilter :: Text } deriving (Show, Ord, Eq, IsString)
+
+instance Splittable Filter where
+  split (Filter f) = Filter <$> splitOn "/" f
 
 -- mkFilter creates a filter from a text representation of a valid filter.
 mkFilter :: Text -> Maybe Filter
