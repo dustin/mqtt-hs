@@ -7,21 +7,38 @@
 --   Please see the README on GitHub at
 --   <a>https://github.com/dustin/mqtt-hs#readme</a>
 @package net-mqtt
-@version 0.7.1.1
+@version 0.8.0.0
 
 
 -- | Topic and topic related utiilities.
 module Network.MQTT.Topic
 
 -- | An MQTT topic filter.
-type Filter = Text
+data Filter
+unFilter :: Filter -> Text
 
 -- | An MQTT topic.
-type Topic = Text
+data Topic
+unTopic :: Topic -> Text
 
 -- | match returns true iff the given pattern can be matched by the
 --   specified Topic as defined in the <a>MQTT 3.1.1 specification</a>.
 match :: Filter -> Topic -> Bool
+mkFilter :: Text -> Maybe Filter
+mkTopic :: Text -> Maybe Topic
+split :: Splittable a => a -> [a]
+instance Data.String.IsString Network.MQTT.Topic.Filter
+instance GHC.Classes.Eq Network.MQTT.Topic.Filter
+instance GHC.Classes.Ord Network.MQTT.Topic.Filter
+instance GHC.Show.Show Network.MQTT.Topic.Filter
+instance Data.String.IsString Network.MQTT.Topic.Topic
+instance GHC.Classes.Eq Network.MQTT.Topic.Topic
+instance GHC.Classes.Ord Network.MQTT.Topic.Topic
+instance GHC.Show.Show Network.MQTT.Topic.Topic
+instance Network.MQTT.Topic.Splittable Network.MQTT.Topic.Filter
+instance GHC.Base.Semigroup Network.MQTT.Topic.Filter
+instance Network.MQTT.Topic.Splittable Network.MQTT.Topic.Topic
+instance GHC.Base.Semigroup Network.MQTT.Topic.Topic
 
 
 -- | MQTT Types.
@@ -421,7 +438,7 @@ QoS1 :: QoS
 QoS2 :: QoS
 
 -- | An MQTT topic.
-type Topic = Text
+data Topic
 
 -- | A default <a>MQTTConfig</a>. A <a>_connID</a> <i>may</i> be required
 --   depending on your broker (or if you just want an
@@ -632,12 +649,6 @@ module Network.MQTT.Arbitrary
 newtype SizeT
 SizeT :: Int -> SizeT
 
--- | An arbitrary topic.
-data ATopic
-
--- | Retrieve the Topic from ATopic
-unTopic :: ATopic -> Topic
-
 -- | An arbitrary Topic and an arbitrary Filter that should match it.
 newtype MatchingTopic
 MatchingTopic :: (Topic, [Filter]) -> MatchingTopic
@@ -646,9 +657,9 @@ MatchingTopic :: (Topic, [Filter]) -> MatchingTopic
 --   of a given length from the given alphabet.
 arbitraryTopicSegment :: [Char] -> Int -> Gen Text
 
--- | Generate an arbitrary ATopic from the given alphabet with lengths of
+-- | Generate an arbitrary Topic from the given alphabet with lengths of
 --   segments and the segment count specified by the given ranges.
-arbitraryTopic :: [Char] -> (Int, Int) -> (Int, Int) -> Gen ATopic
+arbitraryTopic :: [Char] -> (Int, Int) -> (Int, Int) -> Gen Topic
 
 -- | Generate an arbitrary topic similarly to arbitraryTopic as well as
 --   some arbitrary filters that should match that topic.
@@ -658,12 +669,9 @@ arbitraryMatchingTopic :: [Char] -> (Int, Int) -> (Int, Int) -> (Int, Int) -> Ge
 v311mask :: MQTTPkt -> MQTTPkt
 instance GHC.Show.Show Network.MQTT.Arbitrary.MatchingTopic
 instance GHC.Classes.Eq Network.MQTT.Arbitrary.MatchingTopic
-instance GHC.Classes.Eq Network.MQTT.Arbitrary.ATopic
-instance GHC.Show.Show Network.MQTT.Arbitrary.ATopic
 instance GHC.Show.Show Network.MQTT.Arbitrary.SizeT
 instance GHC.Classes.Eq Network.MQTT.Arbitrary.SizeT
 instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Arbitrary.MatchingTopic
-instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Arbitrary.ATopic
 instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Arbitrary.SizeT
 instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Types.LastWill
 instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Types.ProtocolLevel
@@ -689,3 +697,4 @@ instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Types.ConnACKRC
 instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Types.DiscoReason
 instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Types.DisconnectRequest
 instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Types.MQTTPkt
+instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Topic.Topic
