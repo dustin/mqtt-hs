@@ -1,5 +1,17 @@
 # Changelog for net-mqtt
 
+## 0.8.0.0
+
+The `Topic` and `Filter` types are now `newtype` wrappers around Text
+instead of being aliases for text.  This is a breaking change, but
+makes a lot of bugs harder to express.  There's a `split` function
+available that will split a `Topic` or `Filter` into components, and
+both types are `Semigroup`s joining on `/`.
+
+Because these are `newtype`s, we the `Arbitrary` instances don't need
+special wrappers, so `ATopic` is gone in favor of just `Topic`'s
+`Arbitrary` instance.
+
 ## 0.7.1.0
 
 More Arbitrary topic helpers.

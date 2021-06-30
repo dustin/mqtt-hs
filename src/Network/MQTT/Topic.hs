@@ -21,6 +21,7 @@ import           Data.String (IsString (..))
 import           Data.Text   (Text, isPrefixOf, splitOn)
 
 class Splittable a where
+  -- | split separates a `Filter` or `Topic` into its `/`-separated components.
   split :: a -> [a]
 
 -- | An MQTT topic.
@@ -32,7 +33,7 @@ instance Splittable Topic where
 instance Semigroup Topic where
   (Topic a) <> (Topic b) = Topic (a <> "/" <> b)
 
--- mkTopic creates a topic from a text representation of a valid filter.
+-- | mkTopic creates a topic from a text representation of a valid filter.
 mkTopic :: Text -> Maybe Topic
 mkTopic "" = Nothing
 mkTopic t = Topic <$> validate (splitOn "/" t)
@@ -51,7 +52,7 @@ instance Splittable Filter where
 instance Semigroup Filter where
   (Filter a) <> (Filter b) = Filter (a <> "/" <> b)
 
--- mkFilter creates a filter from a text representation of a valid filter.
+-- | mkFilter creates a filter from a text representation of a valid filter.
 mkFilter :: Text -> Maybe Filter
 mkFilter "" = Nothing
 mkFilter t = Filter <$> validate (splitOn "/" t)
