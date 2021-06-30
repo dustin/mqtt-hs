@@ -24,8 +24,16 @@ unTopic :: Topic -> Text
 -- | match returns true iff the given pattern can be matched by the
 --   specified Topic as defined in the <a>MQTT 3.1.1 specification</a>.
 match :: Filter -> Topic -> Bool
+
+-- | mkFilter creates a filter from a text representation of a valid
+--   filter.
 mkFilter :: Text -> Maybe Filter
+
+-- | mkTopic creates a topic from a text representation of a valid filter.
 mkTopic :: Text -> Maybe Topic
+
+-- | split separates a <a>Filter</a> or <a>Topic</a> into its
+--   <a>/</a>-separated components.
 split :: Splittable a => a -> [a]
 instance Data.String.IsString Network.MQTT.Topic.Filter
 instance GHC.Classes.Eq Network.MQTT.Topic.Filter
