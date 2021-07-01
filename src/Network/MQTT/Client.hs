@@ -499,9 +499,6 @@ blToText = TE.decodeUtf8 . BL.toStrict
 blToTopic :: BL.ByteString -> Topic
 blToTopic = fromJust . mkTopic . blToText
 
-blToFilter :: BL.ByteString -> Filter
-blToFilter = fromJust . mkFilter . blToText
-
 reservePktID :: MQTTClient -> [DispatchType] -> STM (TChan MQTTPkt, Word16)
 reservePktID c@MQTTClient{..} dts = do
   checkConnected c
