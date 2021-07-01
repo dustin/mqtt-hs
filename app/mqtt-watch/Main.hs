@@ -17,12 +17,12 @@ import qualified Data.Text                  as T
 import qualified Data.Text.IO               as TIO
 import           Data.Word                  (Word32)
 import           Network.MQTT.Client
-import           Network.MQTT.Topic         (Filter, Topic, mkFilter, unTopic)
+import           Network.MQTT.Topic         (Filter, mkFilter, unTopic)
 import           Network.MQTT.Types         (ConnACKFlags (..), SessionReuse (..), qosFromInt)
 import           Network.URI
 import           Options.Applicative        (Parser, argument, auto, eitherReader, execParser, fullDesc, help, helper,
                                              info, long, maybeReader, metavar, option, progDesc, short, showDefault,
-                                             some, str, switch, value, (<**>))
+                                             some, switch, value, (<**>))
 import           System.IO                  (stdout)
 import           Text.Read                  (readMaybe)
 
