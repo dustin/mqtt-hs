@@ -438,7 +438,7 @@ dispatch c@MQTTClient{..} pch pkt =
 
         resolve p@PublishRequest{..} = do
           topic <- resolveTopic (foldr aliasID Nothing _pubProps)
-          pure p{_pubTopic=textToBL (unTopic topic)}
+          pure p{_pubTopic=topicToBL topic}
 
           where
             aliasID (PropTopicAlias x) _ = Just x
@@ -495,6 +495,9 @@ textToBL = BL.fromStrict . TE.encodeUtf8
 
 blToText :: BL.ByteString -> Text
 blToText = TE.decodeUtf8 . BL.toStrict
+
+topicToBL :: Topic -> BL.ByteString
+topicToBL = textToBL . unTopic
 
 blToTopic :: BL.ByteString -> Topic
 blToTopic = fromJust . mkTopic . blToText
@@ -581,7 +584,7 @@ publishq c t m r q props = do
                                              _pubQoS = q,
                                              _pubPktID = pid,
                                              _pubRetain = r,
-                                             _pubTopic = textToBL (unTopic t),
+                                             _pubTopic = topicToBL t,
                                              _pubBody = m,
                                              _pubProps = props}
 
@@ -627,7 +630,7 @@ mkLWT :: Topic -> BL.ByteString -> Bool -> T.LastWill
 mkLWT t m r = T.LastWill{
   T._willRetain=r,
   T._willQoS=QoS0,
-  T._willTopic = textToBL (unTopic t),
+  T._willTopic = topicToBL t,
   T._willMsg=m,
   T._willProps=mempty
   }
