@@ -68,7 +68,7 @@ import           Network.WebSockets.Stream  (makeStream)
 import           System.IO.Error            (catchIOError, isEOFError)
 import           System.Timeout             (timeout)
 
-import           Network.MQTT.Topic         (Filter, Topic, mkFilter, mkTopic, unFilter, unTopic)
+import           Network.MQTT.Topic         (Filter, Topic, mkTopic, unFilter, unTopic)
 import           Network.MQTT.Types         as T
 
 data ConnState = Starting
@@ -499,6 +499,9 @@ blToText = TE.decodeUtf8 . BL.toStrict
 topicToBL :: Topic -> BL.ByteString
 topicToBL = textToBL . unTopic
 
+filterToBL :: Filter -> BL.ByteString
+filterToBL = textToBL . unFilter
+
 blToTopic :: BL.ByteString -> Topic
 blToTopic = fromJust . mkTopic . blToText
 
@@ -540,7 +543,7 @@ subscribe c@MQTTClient{..} ls props = do
   let (SubACKPkt (SubscribeResponse _ rs aprops)) = r
   pure (rs, aprops)
 
-    where ls' = map (first (textToBL . unFilter)) ls
+    where ls' = map (first filterToBL) ls
 
 -- | Unsubscribe from a list of topic filters.
 --
@@ -551,7 +554,7 @@ subscribe c@MQTTClient{..} ls props = do
 -- should know about.
 unsubscribe :: MQTTClient -> [Filter] -> [Property] -> IO ([UnsubStatus], [Property])
 unsubscribe c@MQTTClient{..} ls props = do
-  (UnsubACKPkt (UnsubscribeResponse _ rsn rprop)) <- sendAndWait c DUnsubACK (\pid -> UnsubscribePkt $ UnsubscribeRequest pid (map (textToBL . unFilter) ls) props)
+  (UnsubACKPkt (UnsubscribeResponse _ rsn rprop)) <- sendAndWait c DUnsubACK (\pid -> UnsubscribePkt $ UnsubscribeRequest pid (map filterToBL ls) props)
   pure (rprop, rsn)
 
 -- | Publish a message (QoS 0).
