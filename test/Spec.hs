@@ -103,10 +103,6 @@ testQoSFromInt = do
   mapM_ (\q -> assertEqual (show q) (Just q) (qosFromInt (fromEnum q))) [QoS0 ..]
   assertEqual "invalid QoS" Nothing (qosFromInt 1939)
 
-instance Arbitrary Filter where
-  arbitrary = ttof <$> arbitrary
-    where ttof = fromString . T.unpack . unTopic
-
 instance EqProp Filter where (=-=) = eq
 instance EqProp Topic where (=-=) = eq
 
