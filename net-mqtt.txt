@@ -7,7 +7,7 @@
 --   Please see the README on GitHub at
 --   <a>https://github.com/dustin/mqtt-hs#readme</a>
 @package net-mqtt
-@version 0.8.0.0
+@version 0.8.0.1
 
 
 -- | Topic and topic related utiilities.
@@ -706,3 +706,4 @@ instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Types.DiscoReason
 instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Types.DisconnectRequest
 instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Types.MQTTPkt
 instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Topic.Topic
+instance Test.QuickCheck.Arbitrary.Arbitrary Network.MQTT.Topic.Filter
