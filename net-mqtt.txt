@@ -7,7 +7,7 @@
 --   Please see the README on GitHub at
 --   <a>https://github.com/dustin/mqtt-hs#readme</a>
 @package net-mqtt
-@version 0.8.0.1
+@version 0.8.0.2
 
 
 -- | Topic and topic related utiilities.
@@ -668,6 +668,11 @@ arbitraryTopicSegment :: [Char] -> Int -> Gen Text
 -- | Generate an arbitrary Topic from the given alphabet with lengths of
 --   segments and the segment count specified by the given ranges.
 arbitraryTopic :: [Char] -> (Int, Int) -> (Int, Int) -> Gen Topic
+
+-- | Generate an arbitrary Filter from the given alphabet with lengths of
+--   segments and the segment count specified by the given ranges. Segments
+--   may contain wildcards.
+arbitraryFilter :: [Char] -> (Int, Int) -> (Int, Int) -> Gen Filter
 
 -- | Generate an arbitrary topic similarly to arbitraryTopic as well as
 --   some arbitrary filters that should match that topic.
