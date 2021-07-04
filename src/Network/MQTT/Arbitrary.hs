@@ -18,8 +18,8 @@ Arbitrary instances for QuickCheck.
 module Network.MQTT.Arbitrary (
   SizeT(..),
   MatchingTopic(..),
-  arbitraryTopicSegment, arbitraryTopic, arbitraryMatchingTopic,
-  v311mask
+  arbitraryTopicSegment, arbitraryTopic, arbitraryFilter,
+  arbitraryMatchingTopic, v311mask
   ) where
 
 import           Control.Applicative   (liftA2)
