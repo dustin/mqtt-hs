@@ -1,5 +1,9 @@
 # Changelog for net-mqtt
 
+## 0.8.0.1
+
+Added an `Arbitrary` instance for `Filter`.
+
 ## 0.8.0.0
 
 The `Topic` and `Filter` types are now `newtype` wrappers around Text

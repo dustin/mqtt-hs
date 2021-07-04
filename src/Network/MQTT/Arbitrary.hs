@@ -29,7 +29,7 @@ import           Data.Function         ((&))
 import           Data.Maybe            (mapMaybe)
 import           Data.Text             (Text)
 import qualified Data.Text             as Text
-import           Network.MQTT.Topic    (Filter, Topic, mkFilter, mkTopic, unTopic)
+import           Network.MQTT.Topic    (Filter, Topic, mkFilter, mkTopic, unTopic, unFilter)
 import           Network.MQTT.Types    as MT
 import           Test.QuickCheck       as QC
 
@@ -257,3 +257,20 @@ arbitraryMatchingTopic alphabet seglen nsegs nfilts = do
         clean []      = []
         clean ("#":_) = ["#"]
         clean (x:xs)  = x : clean xs
+
+-- | Generate an arbitrary Filter from the given alphabet with lengths
+-- of segments and the segment count specified by the given ranges.
+-- Segments may contain wildcards.
+arbitraryFilter :: [Char] -> (Int,Int) -> (Int,Int) -> Gen Filter
+arbitraryFilter alphabet seglen nsegs = someSegs `suchThatMap` (mkFilter . Text.intercalate "/")
+    where someSegs = choose nsegs >>= flip vectorOf aSeg
+          aSeg = oneof [
+            pure "+", pure "#",
+            choose seglen >>= arbitraryTopicSegment alphabet
+            ]
+
+instance Arbitrary Filter where
+  arbitrary = arbitraryFilter ['a'..'z'] (1,6) (1,6)
+
+  shrink (unFilter -> x) = mapMaybe (mkFilter . Text.intercalate "/") . shrinkList shrinkWord $ Text.splitOn "/" x
+    where shrinkWord = fmap Text.pack . shrink . Text.unpack
