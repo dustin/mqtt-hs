@@ -4,10 +4,10 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5a165eeed76406b35cd868b291e467af93ca4b8ac8a9da0670c73f3c8999b4c6
+-- hash: dcfcdd2f1a20a1390ddb1b704e80aaef402ac531570c44502ddfb47cd1ae85f4
 
 name:           net-mqtt
-version:        0.8.0.1
+version:        0.8.0.2
 synopsis:       An MQTT Protocol Implementation.
 description:    Please see the README on GitHub at <https://github.com/dustin/mqtt-hs#readme>
 category:       Network
