@@ -1,5 +1,15 @@
 # Changelog for net-mqtt
 
+## 0.8.1.0
+
+Added `toFilter` to convert `Topic`s to `Filter`s.
+
+(Thanks Matt Friede)
+
+## 0.8.0.2
+
+Exported `arbitraryFilter` for more control over filter creation.
+
 ## 0.8.0.1
 
 Added an `Arbitrary` instance for `Filter`.
