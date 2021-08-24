@@ -14,7 +14,7 @@ Topic and topic related utiilities.
 
 module Network.MQTT.Topic (
   Filter, unFilter, Topic, unTopic, match,
-  mkFilter, mkTopic, split
+  mkFilter, mkTopic, split, toFilter
 ) where
 
 import           Data.String (IsString (..))
@@ -77,3 +77,7 @@ match (Filter pat) (Topic top) = cmp (splitOn "/" pat) (splitOn "/" top)
       | p == t = cmp ps ts
       | p == "+" && not ("$" `isPrefixOf` t) = cmp ps ts
       | otherwise = False
+
+-- | Convert a 'Topic' to a 'Filter' as all 'Topic's are valid 'Filter's
+toFilter :: Topic -> Filter
+toFilter (Topic t) = Filter t
