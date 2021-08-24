@@ -35,6 +35,10 @@ mkTopic :: Text -> Maybe Topic
 -- | split separates a <a>Filter</a> or <a>Topic</a> into its
 --   <a>/</a>-separated components.
 split :: Splittable a => a -> [a]
+
+-- | Convert a <a>Topic</a> to a <a>Filter</a> as all <a>Topic</a>s are
+--   valid <a>Filter</a>s
+toFilter :: Topic -> Filter
 instance Data.String.IsString Network.MQTT.Topic.Topic
 instance GHC.Classes.Eq Network.MQTT.Topic.Topic
 instance GHC.Classes.Ord Network.MQTT.Topic.Topic
