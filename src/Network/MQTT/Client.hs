@@ -36,13 +36,14 @@ module Network.MQTT.Client (
   ) where
 
 import           Control.Concurrent         (myThreadId, threadDelay)
-import           Control.Concurrent.Async   (Async, async, asyncThreadId, cancelWith, link, race_, wait, waitAnyCancel)
+import           Control.Concurrent.MVar    (MVar, newEmptyMVar, putMVar, takeMVar, tryReadMVar)
+import           Control.Concurrent.Async   (Async, async, asyncThreadId, cancelWith, link, race_, wait, waitAnyCancel, cancel)
 import           Control.Concurrent.STM     (STM, TChan, TVar, atomically, check, modifyTVar', newTChan, newTChanIO,
                                              newTVarIO, orElse, readTChan, readTVar, readTVarIO, registerDelay, retry,
                                              writeTChan, writeTVar)
 import           Control.DeepSeq            (force)
 import qualified Control.Exception          as E
-import           Control.Monad              (forever, guard, unless, void, when)
+import           Control.Monad              (forever, guard, unless, void, when, join)
 import           Control.Monad.IO.Class     (liftIO)
 import           Data.Bifunctor             (first)
 import qualified Data.ByteString.Char8      as BCS
@@ -53,6 +54,7 @@ import           Data.Conduit.Attoparsec    (conduitParser)
 import qualified Data.Conduit.Combinators   as C
 import           Data.Conduit.Network       (AppData, appSink, appSource, clientSettings, runTCPClient)
 import           Data.Conduit.Network.TLS   (runTLSClient, tlsClientConfig, tlsClientTLSSettings)
+import           Data.Foldable              (traverse_)
 import           Data.Map.Strict            (Map)
 import qualified Data.Map.Strict            as Map
 import           Data.Maybe                 (fromJust, fromMaybe)
@@ -84,7 +86,16 @@ data DispatchType = DSubACK | DUnsubACK | DPubACK | DPubREC | DPubREL | DPubCOMP
 
 -- | Callback invoked on each incoming subscribed message.
 data MessageCallback = NoCallback
+  -- | Callbacks will be invoked asynchronously, ordering is likely preserved, but not guaranteed.
+  -- In high throughput scenarios, slow callbacks may result in a high number of Haskell threads, 
+  -- potentially bringing down the entire application when running out of memory.
+  -- Typically faster than `OrderedCallback`.
   | SimpleCallback (MQTTClient -> Topic -> BL.ByteString -> [Property] -> IO ())
+  -- | Callbacks are guaranteed to be invoked in the same order messages are received.
+  -- In high throughput scenarios, slow callbacks may cause the underlying TCP connection to block,
+  -- potentially being terminated by the broker.
+  -- Typically slower than `SimpleCallback`.
+  | OrderedCallback (MQTTClient -> Topic -> BL.ByteString -> [Property] -> IO ())
   | LowLevelCallback (MQTTClient -> PublishRequest -> IO ())
 
 -- | The MQTT client.
@@ -102,6 +113,9 @@ data MQTTClient = MQTTClient {
   , _inA          :: TVar (Map Word16 Topic)
   , _connACKFlags :: TVar ConnACKFlags
   , _corr         :: TVar (Map BL.ByteString MessageCallback)
+  , _cbM          :: MVar (IO ())
+  , _hasCbThread  :: TVar Bool
+  , _cbHandle     :: MVar (Async ())
   }
 
 -- | Configuration for setting up an MQTT client.
@@ -278,6 +292,9 @@ runMQTTConduit mkconn MQTTConfig{..} = do
   _inA <- newTVarIO mempty
   _connACKFlags <- newTVarIO (ConnACKFlags NewSession ConnUnspecifiedError mempty)
   _corr <- newTVarIO mempty
+  _cbM <- newEmptyMVar
+  _hasCbThread <- newTVarIO False
+  _cbHandle <- newEmptyMVar
   let _cb = _msgCB
       cli = MQTTClient{..}
 
@@ -299,7 +316,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
           guard $ st == Starting || st == Connected
           writeTVar (_st cli) Disconnected
 
-    start c@MQTTClient{..} (_,sink) = do
+    start c (_,sink) = do
       void . runConduit $ do
         let req = connectRequest{T._connID=BC.pack _connID,
                                  T._lastWill=_lwt,
@@ -347,7 +364,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
 -- | Wait for a client to terminate its connection.
 -- An exception is thrown if the client didn't terminate expectedly.
 waitForClient :: MQTTClient -> IO ()
-waitForClient c@MQTTClient{..} = do
+waitForClient c@MQTTClient{..} = flip E.finally (stopCallbackThread c) $ do
   void . traverse wait =<< readTVarIO _ct
   e <- atomically $ stateX c Stopped
   case e of
@@ -427,11 +444,13 @@ dispatch c@MQTTClient{..} pch pkt =
           E.evaluate . force =<< case maybe _cb (\cd -> Map.findWithDefault _cb cd corrs) cdata of
                                    NoCallback         -> pure ()
                                    SimpleCallback f   -> call (f c (blToTopic _pubTopic) _pubBody _pubProps)
+                                   OrderedCallback f  -> callOrd (f c (blToTopic _pubTopic) _pubBody _pubProps)
                                    LowLevelCallback f -> call (f c p)
 
             where
               call a = link =<< namedAsync "notifier" (a >> respond)
-              respond = void $ traverse (sendPacketIO c) rpkt
+              callOrd a = putMVar _cbM $ a >> respond
+              respond = traverse_ (sendPacketIO c) rpkt
               cdata = foldr f Nothing _pubProps
                 where f (PropCorrelationData x) _ = Just x
                       f _ o                       = o
@@ -466,6 +485,34 @@ dispatch c@MQTTClient{..} pch pkt =
         disco req = do
           atomically $ writeTVar _st (DiscoErr req)
           maybeCancelWith (Discod req) =<< readTVarIO _ct
+
+-- Run OrderedCallbacks in a background thread. Does nothing for other callback types.
+-- We keep the async handle in a MVar and make sure only one of these threads is running.
+runCallbackThread :: MQTTClient -> IO ()
+runCallbackThread MQTTClient{_cb, _cbM, _hasCbThread, _cbHandle}
+  | isOrdered _cb = do
+    hasCallbackThread <- atomically checkCallbackThread
+    unless hasCallbackThread setCallbackHandle
+  | otherwise = pure ()
+    where isOrdered (OrderedCallback _) = True
+          isOrdered _ = False
+          -- Atomically checks for existing callback thread
+          checkCallbackThread = do
+            hasCallbackThread <- readTVar _hasCbThread
+            unless hasCallbackThread $ writeTVar _hasCbThread True
+            pure hasCallbackThread
+          -- Run the async action and keep the handle
+          setCallbackHandle = do
+            handle <- namedAsync "ordered callbacks" runOrderedCallbacks
+            putMVar _cbHandle handle
+          -- Keep running callbacks from the MVar
+          runOrderedCallbacks = forever . join . takeMVar $ _cbM
+
+-- Stop the background thread for OrderedCallbacks. Does nothing for other callback types.
+stopCallbackThread :: MQTTClient -> IO ()
+stopCallbackThread MQTTClient{_cbHandle} = do
+  maybeHandle <- tryReadMVar _cbHandle
+  maybe (pure ()) cancel maybeHandle
 
 maybeCancelWith :: E.Exception e => e -> Maybe (Async ()) -> IO ()
 maybeCancelWith e = void . traverse (`cancelWith` e)
@@ -538,11 +585,11 @@ sendAndWait c@MQTTClient{..} dt f = do
 -- | Subscribe to a list of topic filters with their respective 'QoS'es.
 -- The accepted 'QoS'es are returned in the same order as requested.
 subscribe :: MQTTClient -> [(Filter, SubOptions)] -> [Property] -> IO ([Either SubErr QoS], [Property])
-subscribe c@MQTTClient{..} ls props = do
+subscribe c ls props = do
+  runCallbackThread c
   r <- sendAndWait c DSubACK (\pid -> SubscribePkt $ SubscribeRequest pid ls' props)
   let (SubACKPkt (SubscribeResponse _ rs aprops)) = r
   pure (rs, aprops)
-
     where ls' = map (first filterToBL) ls
 
 -- | Unsubscribe from a list of topic filters.
@@ -553,7 +600,7 @@ subscribe c@MQTTClient{..} ls props = do
 -- request filters, and whatever properties the server thought you
 -- should know about.
 unsubscribe :: MQTTClient -> [Filter] -> [Property] -> IO ([UnsubStatus], [Property])
-unsubscribe c@MQTTClient{..} ls props = do
+unsubscribe c ls props = do
   (UnsubACKPkt (UnsubscribeResponse _ rsn rprop)) <- sendAndWait c DUnsubACK (\pid -> UnsubscribePkt $ UnsubscribeRequest pid (map filterToBL ls) props)
   pure (rprop, rsn)
 
