@@ -549,7 +549,7 @@ sendAndWait c@MQTTClient{..} dt f = do
 -- The accepted 'QoS'es are returned in the same order as requested.
 subscribe :: MQTTClient -> [(Filter, SubOptions)] -> [Property] -> IO ([Either SubErr QoS], [Property])
 subscribe c@MQTTClient{_cb} ls props = do
-  when (isOrdered _cb) runAsyncQueue
+  when (isOrdered _cb) runCallbackThread
   r <- sendAndWait c DSubACK (\pid -> SubscribePkt $ SubscribeRequest pid ls' props)
   let (SubACKPkt (SubscribeResponse _ rs aprops)) = r
   pure (rs, aprops)
@@ -557,7 +557,7 @@ subscribe c@MQTTClient{_cb} ls props = do
     where ls' = map (first filterToBL) ls
           isOrdered (OrderedCallback _) = True
           isOrdered _ = False
-          runAsyncQueue = void . namedAsync "ordered callbacks" $ runOrderedCallbacks c
+          runCallbackThread = void . namedAsync "ordered callbacks" $ runOrderedCallbacks c
 
 -- | Unsubscribe from a list of topic filters.
 --
