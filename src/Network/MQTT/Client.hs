@@ -36,10 +36,11 @@ module Network.MQTT.Client (
   ) where
 
 import           Control.Concurrent         (myThreadId, threadDelay)
+import           Control.Concurrent.MVar    (MVar, newEmptyMVar, putMVar, takeMVar)
 import           Control.Concurrent.Async   (Async, async, asyncThreadId, cancelWith, link, race_, wait, waitAnyCancel)
 import           Control.Concurrent.STM     (STM, TChan, TVar, atomically, check, modifyTVar', newTChan, newTChanIO,
                                              newTVarIO, orElse, readTChan, readTVar, readTVarIO, registerDelay, retry,
-                                             writeTChan, writeTVar, TQueue, newTQueueIO, writeTQueue, readTQueue)
+                                             writeTChan, writeTVar)
 import           Control.DeepSeq            (force)
 import qualified Control.Exception          as E
 import           Control.Monad              (forever, guard, unless, void, when, join)
@@ -104,7 +105,7 @@ data MQTTClient = MQTTClient {
   , _inA          :: TVar (Map Word16 Topic)
   , _connACKFlags :: TVar ConnACKFlags
   , _corr         :: TVar (Map BL.ByteString MessageCallback)
-  , _msgQ         :: TQueue (IO ())
+  , _cbM          :: MVar (IO ())
   }
 
 -- | Configuration for setting up an MQTT client.
@@ -281,7 +282,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
   _inA <- newTVarIO mempty
   _connACKFlags <- newTVarIO (ConnACKFlags NewSession ConnUnspecifiedError mempty)
   _corr <- newTVarIO mempty
-  _msgQ <- newTQueueIO
+  _cbM <- newEmptyMVar
   let _cb = _msgCB
       cli = MQTTClient{..}
 
@@ -431,12 +432,12 @@ dispatch c@MQTTClient{..} pch pkt =
           E.evaluate . force =<< case maybe _cb (\cd -> Map.findWithDefault _cb cd corrs) cdata of
                                    NoCallback         -> pure ()
                                    SimpleCallback f   -> call (f c (blToTopic _pubTopic) _pubBody _pubProps)
-                                   OrderedCallback f  -> enqueue (f c (blToTopic _pubTopic) _pubBody _pubProps)
+                                   OrderedCallback f  -> callSync (f c (blToTopic _pubTopic) _pubBody _pubProps)
                                    LowLevelCallback f -> call (f c p)
 
             where
               call a = link =<< namedAsync "notifier" (a >> respond)
-              enqueue a = atomically $ writeTQueue _msgQ (a >> respond)
+              callSync a = putMVar _cbM $ a >> respond
               respond = traverse_ (sendPacketIO c) rpkt
               cdata = foldr f Nothing _pubProps
                 where f (PropCorrelationData x) _ = Just x
@@ -474,8 +475,7 @@ dispatch c@MQTTClient{..} pch pkt =
           maybeCancelWith (Discod req) =<< readTVarIO _ct
 
 runOrderedCallbacks :: MQTTClient -> IO ()
-runOrderedCallbacks MQTTClient {_msgQ} =
-  forever . join . atomically . readTQueue $ _msgQ
+runOrderedCallbacks MQTTClient {_cbM} = forever . join . takeMVar $ _cbM
 
 maybeCancelWith :: E.Exception e => e -> Maybe (Async ()) -> IO ()
 maybeCancelWith e = void . traverse (`cancelWith` e)
