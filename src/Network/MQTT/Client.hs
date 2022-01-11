@@ -86,7 +86,15 @@ data DispatchType = DSubACK | DUnsubACK | DPubACK | DPubREC | DPubREL | DPubCOMP
 
 -- | Callback invoked on each incoming subscribed message.
 data MessageCallback = NoCallback
+  -- | Callbacks will be invoked asynchronously, ordering is likely preserved, but not guaranteed.
+  -- In high throughput scenarios, slow callbacks may result in a high number of Haskell threads, 
+  -- potentially bringing down the entire application when running out of memory.
+  -- Typically faster than `OrderedCallback`.
   | SimpleCallback (MQTTClient -> Topic -> BL.ByteString -> [Property] -> IO ())
+  -- | Callbacks are guaranteed to be invoked in the same order messages are received.
+  -- In high throughput scenarios, slow callbacks may cause the underlying TCP connection to block,
+  -- potentially being terminated by the broker.
+  -- Typically slower than `SimpleCallback`.
   | OrderedCallback (MQTTClient -> Topic -> BL.ByteString -> [Property] -> IO ())
   | LowLevelCallback (MQTTClient -> PublishRequest -> IO ())
 
@@ -106,6 +114,7 @@ data MQTTClient = MQTTClient {
   , _connACKFlags :: TVar ConnACKFlags
   , _corr         :: TVar (Map BL.ByteString MessageCallback)
   , _cbM          :: MVar (IO ())
+  , _hasCbThread  :: TVar Bool
   }
 
 -- | Configuration for setting up an MQTT client.
@@ -283,6 +292,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
   _connACKFlags <- newTVarIO (ConnACKFlags NewSession ConnUnspecifiedError mempty)
   _corr <- newTVarIO mempty
   _cbM <- newEmptyMVar
+  _hasCbThread <- newTVarIO False
   let _cb = _msgCB
       cli = MQTTClient{..}
 
@@ -548,7 +558,7 @@ sendAndWait c@MQTTClient{..} dt f = do
 -- | Subscribe to a list of topic filters with their respective 'QoS'es.
 -- The accepted 'QoS'es are returned in the same order as requested.
 subscribe :: MQTTClient -> [(Filter, SubOptions)] -> [Property] -> IO ([Either SubErr QoS], [Property])
-subscribe c@MQTTClient{_cb} ls props = do
+subscribe c@MQTTClient{_cb, _hasCbThread} ls props = do
   when (isOrdered _cb) runCallbackThread
   r <- sendAndWait c DSubACK (\pid -> SubscribePkt $ SubscribeRequest pid ls' props)
   let (SubACKPkt (SubscribeResponse _ rs aprops)) = r
@@ -557,7 +567,15 @@ subscribe c@MQTTClient{_cb} ls props = do
     where ls' = map (first filterToBL) ls
           isOrdered (OrderedCallback _) = True
           isOrdered _ = False
-          runCallbackThread = void . namedAsync "ordered callbacks" $ runOrderedCallbacks c
+          -- Run callback thread if missing
+          runCallbackThread = do
+            hasCallbackThread <- atomically checkCallbackThread
+            unless hasCallbackThread $ void . namedAsync "ordered callbacks" $ runOrderedCallbacks c
+          -- Atomically checks for existing callback thread
+          checkCallbackThread = do
+            hasCallbackThread <- readTVar _hasCbThread
+            unless hasCallbackThread $ writeTVar _hasCbThread True
+            pure hasCallbackThread
 
 -- | Unsubscribe from a list of topic filters.
 --
