@@ -37,10 +37,10 @@ module Network.MQTT.Client (
 
 import           Control.Concurrent         (myThreadId, threadDelay)
 import           Control.Concurrent.MVar    (MVar, newEmptyMVar, putMVar, takeMVar)
-import           Control.Concurrent.Async   (Async, async, asyncThreadId, cancelWith, link, race_, wait, waitAnyCancel)
+import           Control.Concurrent.Async   (Async, async, asyncThreadId, cancelWith, link, race_, wait, waitAnyCancel, cancel)
 import           Control.Concurrent.STM     (STM, TChan, TVar, atomically, check, modifyTVar', newTChan, newTChanIO,
                                              newTVarIO, orElse, readTChan, readTVar, readTVarIO, registerDelay, retry,
-                                             writeTChan, writeTVar)
+                                             writeTChan, writeTVar, TMVar, newEmptyTMVarIO, tryReadTMVar, putTMVar)
 import           Control.DeepSeq            (force)
 import qualified Control.Exception          as E
 import           Control.Monad              (forever, guard, unless, void, when, join)
@@ -114,7 +114,7 @@ data MQTTClient = MQTTClient {
   , _connACKFlags :: TVar ConnACKFlags
   , _corr         :: TVar (Map BL.ByteString MessageCallback)
   , _cbM          :: MVar (IO ())
-  , _hasCbThread  :: TVar Bool
+  , _cbHandle     :: TMVar (Async ())
   }
 
 -- | Configuration for setting up an MQTT client.
@@ -292,7 +292,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
   _connACKFlags <- newTVarIO (ConnACKFlags NewSession ConnUnspecifiedError mempty)
   _corr <- newTVarIO mempty
   _cbM <- newEmptyMVar
-  _hasCbThread <- newTVarIO False
+  _cbHandle <- newEmptyTMVarIO
   let _cb = _msgCB
       cli = MQTTClient{..}
 
@@ -362,7 +362,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
 -- | Wait for a client to terminate its connection.
 -- An exception is thrown if the client didn't terminate expectedly.
 waitForClient :: MQTTClient -> IO ()
-waitForClient c@MQTTClient{..} = do
+waitForClient c@MQTTClient{..} = flip E.finally (stopCallbackThread c) $ do
   void . traverse wait =<< readTVarIO _ct
   e <- atomically $ stateX c Stopped
   case e of
@@ -442,12 +442,12 @@ dispatch c@MQTTClient{..} pch pkt =
           E.evaluate . force =<< case maybe _cb (\cd -> Map.findWithDefault _cb cd corrs) cdata of
                                    NoCallback         -> pure ()
                                    SimpleCallback f   -> call (f c (blToTopic _pubTopic) _pubBody _pubProps)
-                                   OrderedCallback f  -> callSync (f c (blToTopic _pubTopic) _pubBody _pubProps)
+                                   OrderedCallback f  -> callOrd (f c (blToTopic _pubTopic) _pubBody _pubProps)
                                    LowLevelCallback f -> call (f c p)
 
             where
               call a = link =<< namedAsync "notifier" (a >> respond)
-              callSync a = putMVar _cbM $ a >> respond
+              callOrd a = putMVar _cbM $ a >> respond
               respond = traverse_ (sendPacketIO c) rpkt
               cdata = foldr f Nothing _pubProps
                 where f (PropCorrelationData x) _ = Just x
@@ -484,8 +484,32 @@ dispatch c@MQTTClient{..} pch pkt =
           atomically $ writeTVar _st (DiscoErr req)
           maybeCancelWith (Discod req) =<< readTVarIO _ct
 
-runOrderedCallbacks :: MQTTClient -> IO ()
-runOrderedCallbacks MQTTClient {_cbM} = forever . join . takeMVar $ _cbM
+-- Run OrderedCallbacks in a background thread. Does nothing for other callback types.
+-- We keep the async handle in a TMVar to make sure only one of these threads is running.
+runCallbackThread :: MQTTClient -> IO ()
+runCallbackThread MQTTClient{_cb, _cbM, _cbHandle}
+  | isOrdered _cb = do
+      asyncAction <- atomically checkCallbackHandle
+      maybe (pure ()) setCallbackHandle asyncAction
+  | otherwise = pure ()
+    where isOrdered (OrderedCallback _) = True
+          isOrdered _ = False
+          -- Atomically checks for existing callback thread
+          checkCallbackHandle = do
+            existingHandle <- tryReadTMVar _cbHandle
+            case existingHandle of
+              Nothing -> pure . Just $ namedAsync "ordered callbacks" runOrderedCallbacks
+              Just _ -> pure Nothing
+          -- Run the async action and keep the handle
+          setCallbackHandle asyncAction = asyncAction >>= atomically . putTMVar _cbHandle
+          -- Keep running callbacks from the MVar
+          runOrderedCallbacks = forever . join . takeMVar $ _cbM
+
+-- Stop the background thread for OrderedCallbacks. Does nothing for other callback types.
+stopCallbackThread :: MQTTClient -> IO ()
+stopCallbackThread MQTTClient{_cb, _cbM, _cbHandle} = do
+  maybeHandle <- atomically $ tryReadTMVar _cbHandle
+  maybe (pure ()) cancel maybeHandle
 
 maybeCancelWith :: E.Exception e => e -> Maybe (Async ()) -> IO ()
 maybeCancelWith e = void . traverse (`cancelWith` e)
@@ -558,24 +582,12 @@ sendAndWait c@MQTTClient{..} dt f = do
 -- | Subscribe to a list of topic filters with their respective 'QoS'es.
 -- The accepted 'QoS'es are returned in the same order as requested.
 subscribe :: MQTTClient -> [(Filter, SubOptions)] -> [Property] -> IO ([Either SubErr QoS], [Property])
-subscribe c@MQTTClient{_cb, _hasCbThread} ls props = do
-  when (isOrdered _cb) runCallbackThread
+subscribe c ls props = do
+  runCallbackThread c
   r <- sendAndWait c DSubACK (\pid -> SubscribePkt $ SubscribeRequest pid ls' props)
   let (SubACKPkt (SubscribeResponse _ rs aprops)) = r
   pure (rs, aprops)
-
     where ls' = map (first filterToBL) ls
-          isOrdered (OrderedCallback _) = True
-          isOrdered _ = False
-          -- Run callback thread if missing
-          runCallbackThread = do
-            hasCallbackThread <- atomically checkCallbackThread
-            unless hasCallbackThread $ void . namedAsync "ordered callbacks" $ runOrderedCallbacks c
-          -- Atomically checks for existing callback thread
-          checkCallbackThread = do
-            hasCallbackThread <- readTVar _hasCbThread
-            unless hasCallbackThread $ writeTVar _hasCbThread True
-            pure hasCallbackThread
 
 -- | Unsubscribe from a list of topic filters.
 --
