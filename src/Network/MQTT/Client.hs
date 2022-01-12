@@ -36,11 +36,11 @@ module Network.MQTT.Client (
   ) where
 
 import           Control.Concurrent         (myThreadId, threadDelay)
-import           Control.Concurrent.MVar    (MVar, newEmptyMVar, putMVar, takeMVar)
+import           Control.Concurrent.MVar    (MVar, newEmptyMVar, putMVar, takeMVar, tryReadMVar)
 import           Control.Concurrent.Async   (Async, async, asyncThreadId, cancelWith, link, race_, wait, waitAnyCancel, cancel)
 import           Control.Concurrent.STM     (STM, TChan, TVar, atomically, check, modifyTVar', newTChan, newTChanIO,
                                              newTVarIO, orElse, readTChan, readTVar, readTVarIO, registerDelay, retry,
-                                             writeTChan, writeTVar, TMVar, newEmptyTMVarIO, tryReadTMVar, putTMVar)
+                                             writeTChan, writeTVar)
 import           Control.DeepSeq            (force)
 import qualified Control.Exception          as E
 import           Control.Monad              (forever, guard, unless, void, when, join)
@@ -114,7 +114,8 @@ data MQTTClient = MQTTClient {
   , _connACKFlags :: TVar ConnACKFlags
   , _corr         :: TVar (Map BL.ByteString MessageCallback)
   , _cbM          :: MVar (IO ())
-  , _cbHandle     :: TMVar (Async ())
+  , _hasCbThread  :: TVar Bool
+  , _cbHandle     :: MVar (Async ())
   }
 
 -- | Configuration for setting up an MQTT client.
@@ -292,7 +293,8 @@ runMQTTConduit mkconn MQTTConfig{..} = do
   _connACKFlags <- newTVarIO (ConnACKFlags NewSession ConnUnspecifiedError mempty)
   _corr <- newTVarIO mempty
   _cbM <- newEmptyMVar
-  _cbHandle <- newEmptyTMVarIO
+  _hasCbThread <- newTVarIO False
+  _cbHandle <- newEmptyMVar
   let _cb = _msgCB
       cli = MQTTClient{..}
 
@@ -487,28 +489,29 @@ dispatch c@MQTTClient{..} pch pkt =
 -- Run OrderedCallbacks in a background thread. Does nothing for other callback types.
 -- We keep the async handle in a TMVar to make sure only one of these threads is running.
 runCallbackThread :: MQTTClient -> IO ()
-runCallbackThread MQTTClient{_cb, _cbM, _cbHandle}
+runCallbackThread MQTTClient{_cb, _cbM, _hasCbThread, _cbHandle}
   | isOrdered _cb = do
-      asyncAction <- atomically checkCallbackHandle
-      maybe (pure ()) setCallbackHandle asyncAction
+    hasCallbackThread <- atomically checkCallbackThread
+    unless hasCallbackThread setCallbackHandle
   | otherwise = pure ()
     where isOrdered (OrderedCallback _) = True
           isOrdered _ = False
           -- Atomically checks for existing callback thread
-          checkCallbackHandle = do
-            existingHandle <- tryReadTMVar _cbHandle
-            case existingHandle of
-              Nothing -> pure . Just $ namedAsync "ordered callbacks" runOrderedCallbacks
-              Just _ -> pure Nothing
+          checkCallbackThread = do
+            hasCallbackThread <- readTVar _hasCbThread
+            unless hasCallbackThread $ writeTVar _hasCbThread True
+            pure hasCallbackThread
           -- Run the async action and keep the handle
-          setCallbackHandle asyncAction = asyncAction >>= atomically . putTMVar _cbHandle
+          setCallbackHandle = do
+            handle <- namedAsync "ordered callbacks" runOrderedCallbacks
+            putMVar _cbHandle handle
           -- Keep running callbacks from the MVar
           runOrderedCallbacks = forever . join . takeMVar $ _cbM
 
 -- Stop the background thread for OrderedCallbacks. Does nothing for other callback types.
 stopCallbackThread :: MQTTClient -> IO ()
 stopCallbackThread MQTTClient{_cb, _cbM, _cbHandle} = do
-  maybeHandle <- atomically $ tryReadTMVar _cbHandle
+  maybeHandle <- tryReadMVar _cbHandle
   maybe (pure ()) cancel maybeHandle
 
 maybeCancelWith :: E.Exception e => e -> Maybe (Async ()) -> IO ()
