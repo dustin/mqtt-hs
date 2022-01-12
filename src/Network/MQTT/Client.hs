@@ -487,7 +487,7 @@ dispatch c@MQTTClient{..} pch pkt =
           maybeCancelWith (Discod req) =<< readTVarIO _ct
 
 -- Run OrderedCallbacks in a background thread. Does nothing for other callback types.
--- We keep the async handle in a TMVar to make sure only one of these threads is running.
+-- We keep the async handle in a MVar and make sure only one of these threads is running.
 runCallbackThread :: MQTTClient -> IO ()
 runCallbackThread MQTTClient{_cb, _cbM, _hasCbThread, _cbHandle}
   | isOrdered _cb = do
@@ -510,7 +510,7 @@ runCallbackThread MQTTClient{_cb, _cbM, _hasCbThread, _cbHandle}
 
 -- Stop the background thread for OrderedCallbacks. Does nothing for other callback types.
 stopCallbackThread :: MQTTClient -> IO ()
-stopCallbackThread MQTTClient{_cb, _cbM, _cbHandle} = do
+stopCallbackThread MQTTClient{_cbHandle} = do
   maybeHandle <- tryReadMVar _cbHandle
   maybe (pure ()) cancel maybeHandle
 
