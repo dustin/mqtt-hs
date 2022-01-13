@@ -1,5 +1,16 @@
 # Changelog for net-mqtt
 
+## 0.8.2.0
+
+Added `OrderedCallback` and `OrderedLowLevelCallback` to guarantee
+processing the messages in order.
+
+`SimpleCallback` and `LowLevelCallback` both run callbacks in isolated
+threads such that when a message takes longer to process than another,
+a second message might finish before the first.  Most of the time,
+this probably doesn't matter this model is simpler and keeps latency
+lower.  Now applications can decide what's appropriate for them.
+
 ## 0.8.1.0
 
 Added `toFilter` to convert `Topic`s to `Filter`s.
