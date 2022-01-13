@@ -548,7 +548,15 @@ SimpleCallback :: (MQTTClient -> Topic -> ByteString -> [Property] -> IO ()) -> 
 --   underlying TCP connection to block, potentially being terminated by
 --   the broker. Typically slower than <a>SimpleCallback</a>.
 OrderedCallback :: (MQTTClient -> Topic -> ByteString -> [Property] -> IO ()) -> MessageCallback
+
+-- | A LowLevelCallback receives the client and the entire publish request,
+--   providing access to all of the fields of the request. This is slightly
+--   harder to use than SimpleCallback for common cases, but there are
+--   cases where you need all the things.
 LowLevelCallback :: (MQTTClient -> PublishRequest -> IO ()) -> MessageCallback
+
+-- | A low level callback that is ordered.
+OrderedLowLevelCallback :: (MQTTClient -> PublishRequest -> IO ()) -> MessageCallback
 
 -- | Wait for a client to terminate its connection. An exception is thrown
 --   if the client didn't terminate expectedly.
