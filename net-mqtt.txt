@@ -535,7 +535,19 @@ subOptions :: SubOptions
 -- | Callback invoked on each incoming subscribed message.
 data MessageCallback
 NoCallback :: MessageCallback
+
+-- | Callbacks will be invoked asynchronously, ordering is likely
+--   preserved, but not guaranteed. In high throughput scenarios, slow
+--   callbacks may result in a high number of Haskell threads, potentially
+--   bringing down the entire application when running out of memory.
+--   Typically faster than <a>OrderedCallback</a>.
 SimpleCallback :: (MQTTClient -> Topic -> ByteString -> [Property] -> IO ()) -> MessageCallback
+
+-- | Callbacks are guaranteed to be invoked in the same order messages are
+--   received. In high throughput scenarios, slow callbacks may cause the
+--   underlying TCP connection to block, potentially being terminated by
+--   the broker. Typically slower than <a>SimpleCallback</a>.
+OrderedCallback :: (MQTTClient -> Topic -> ByteString -> [Property] -> IO ()) -> MessageCallback
 LowLevelCallback :: (MQTTClient -> PublishRequest -> IO ()) -> MessageCallback
 
 -- | Wait for a client to terminate its connection. An exception is thrown
