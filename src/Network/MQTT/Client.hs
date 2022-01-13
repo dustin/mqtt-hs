@@ -97,7 +97,12 @@ data MessageCallback = NoCallback
   -- potentially being terminated by the broker.
   -- Typically slower than `SimpleCallback`.
   | OrderedCallback (MQTTClient -> Topic -> BL.ByteString -> [Property] -> IO ())
+  -- | A LowLevelCallback receives the client and the entire publish request, providing
+  -- access to all of the fields of the request.  This is slightly harder to use than
+  -- SimpleCallback for common cases, but there are cases where you need all the things.
   | LowLevelCallback (MQTTClient -> PublishRequest -> IO ())
+  -- | A low level callback that is ordered.
+  | OrderedLowLevelCallback (MQTTClient -> PublishRequest -> IO ())
 
 -- | The MQTT client.
 --
@@ -441,10 +446,11 @@ dispatch c@MQTTClient{..} pch pkt =
           atomically $ modifyTVar' _inflight (Map.delete _pubPktID)
           corrs <- readTVarIO _corr
           E.evaluate . force =<< case maybe _cb (\cd -> Map.findWithDefault _cb cd corrs) cdata of
-                                   NoCallback         -> pure ()
-                                   SimpleCallback f   -> call (f c (blToTopic _pubTopic) _pubBody _pubProps)
-                                   OrderedCallback f  -> callOrd (f c (blToTopic _pubTopic) _pubBody _pubProps)
-                                   LowLevelCallback f -> call (f c p)
+                                   NoCallback                -> pure ()
+                                   SimpleCallback f          -> call (f c (blToTopic _pubTopic) _pubBody _pubProps)
+                                   OrderedCallback f         -> callOrd (f c (blToTopic _pubTopic) _pubBody _pubProps)
+                                   LowLevelCallback f        -> call (f c p)
+                                   OrderedLowLevelCallback f -> callOrd (f c p)
 
             where
               call a = link =<< namedAsync "notifier" (a >> respond)
@@ -505,8 +511,9 @@ runCallbackThread MQTTClient{_cb, _cbM, _cbHandle}
             pure (pure ())
           Just _ -> pure (cancel handle) -- otherwise, cancel the temporary thread.
   | otherwise = pure ()
-    where isOrdered (OrderedCallback _) = True
-          isOrdered _                   = False
+    where isOrdered (OrderedCallback _)         = True
+          isOrdered (OrderedLowLevelCallback _) = True
+          isOrdered _                           = False
           waitFor latch = atomically (check =<< readTVar latch)
           -- Keep running callbacks from the MVar
           runOrderedCallbacks = forever . join . takeMVar $ _cbM
