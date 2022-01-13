@@ -36,14 +36,15 @@ module Network.MQTT.Client (
   ) where
 
 import           Control.Concurrent         (myThreadId, threadDelay)
-import           Control.Concurrent.MVar    (MVar, newEmptyMVar, putMVar, takeMVar, tryReadMVar)
-import           Control.Concurrent.Async   (Async, async, asyncThreadId, cancelWith, link, race_, wait, waitAnyCancel, cancel)
+import           Control.Concurrent.Async   (Async, async, asyncThreadId, cancel, cancelWith, link, race_, wait,
+                                             waitAnyCancel)
+import           Control.Concurrent.MVar    (MVar, newEmptyMVar, putMVar, takeMVar)
 import           Control.Concurrent.STM     (STM, TChan, TVar, atomically, check, modifyTVar', newTChan, newTChanIO,
                                              newTVarIO, orElse, readTChan, readTVar, readTVarIO, registerDelay, retry,
                                              writeTChan, writeTVar)
 import           Control.DeepSeq            (force)
 import qualified Control.Exception          as E
-import           Control.Monad              (forever, guard, unless, void, when, join)
+import           Control.Monad              (forever, guard, join, unless, void, when)
 import           Control.Monad.IO.Class     (liftIO)
 import           Data.Bifunctor             (first)
 import qualified Data.ByteString.Char8      as BCS
@@ -87,7 +88,7 @@ data DispatchType = DSubACK | DUnsubACK | DPubACK | DPubREC | DPubREL | DPubCOMP
 -- | Callback invoked on each incoming subscribed message.
 data MessageCallback = NoCallback
   -- | Callbacks will be invoked asynchronously, ordering is likely preserved, but not guaranteed.
-  -- In high throughput scenarios, slow callbacks may result in a high number of Haskell threads, 
+  -- In high throughput scenarios, slow callbacks may result in a high number of Haskell threads,
   -- potentially bringing down the entire application when running out of memory.
   -- Typically faster than `OrderedCallback`.
   | SimpleCallback (MQTTClient -> Topic -> BL.ByteString -> [Property] -> IO ())
@@ -114,8 +115,7 @@ data MQTTClient = MQTTClient {
   , _connACKFlags :: TVar ConnACKFlags
   , _corr         :: TVar (Map BL.ByteString MessageCallback)
   , _cbM          :: MVar (IO ())
-  , _hasCbThread  :: TVar Bool
-  , _cbHandle     :: MVar (Async ())
+  , _cbHandle     :: TVar (Maybe (Async ()))
   }
 
 -- | Configuration for setting up an MQTT client.
@@ -293,8 +293,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
   _connACKFlags <- newTVarIO (ConnACKFlags NewSession ConnUnspecifiedError mempty)
   _corr <- newTVarIO mempty
   _cbM <- newEmptyMVar
-  _hasCbThread <- newTVarIO False
-  _cbHandle <- newEmptyMVar
+  _cbHandle <- newTVarIO Nothing
   let _cb = _msgCB
       cli = MQTTClient{..}
 
@@ -487,32 +486,34 @@ dispatch c@MQTTClient{..} pch pkt =
           maybeCancelWith (Discod req) =<< readTVarIO _ct
 
 -- Run OrderedCallbacks in a background thread. Does nothing for other callback types.
--- We keep the async handle in a MVar and make sure only one of these threads is running.
+-- We keep the async handle in a TVar and make sure only one of these threads is running.
 runCallbackThread :: MQTTClient -> IO ()
-runCallbackThread MQTTClient{_cb, _cbM, _hasCbThread, _cbHandle}
+runCallbackThread MQTTClient{_cb, _cbM, _cbHandle}
   | isOrdered _cb = do
-    hasCallbackThread <- atomically checkCallbackThread
-    unless hasCallbackThread setCallbackHandle
+      -- We always spawn a thread, but may kill it if we already have
+      -- one.  The new thread won't start until we atomically confirm
+      -- it's the only one.
+      latch <- newTVarIO False
+      handle <- namedAsync "ordered callbacks" (waitFor latch *> runOrderedCallbacks)
+      join . atomically $ do
+        cbThread <- readTVar _cbHandle
+        case cbThread of
+          Nothing -> do
+            -- This is the first thread.  Flip the latch and put it in place.
+            writeTVar latch True
+            writeTVar _cbHandle (Just handle)
+            pure (pure ())
+          Just _ -> pure (cancel handle) -- otherwise, cancel the temporary thread.
   | otherwise = pure ()
     where isOrdered (OrderedCallback _) = True
-          isOrdered _ = False
-          -- Atomically checks for existing callback thread
-          checkCallbackThread = do
-            hasCallbackThread <- readTVar _hasCbThread
-            unless hasCallbackThread $ writeTVar _hasCbThread True
-            pure hasCallbackThread
-          -- Run the async action and keep the handle
-          setCallbackHandle = do
-            handle <- namedAsync "ordered callbacks" runOrderedCallbacks
-            putMVar _cbHandle handle
+          isOrdered _                   = False
+          waitFor latch = atomically (check =<< readTVar latch)
           -- Keep running callbacks from the MVar
           runOrderedCallbacks = forever . join . takeMVar $ _cbM
 
 -- Stop the background thread for OrderedCallbacks. Does nothing for other callback types.
 stopCallbackThread :: MQTTClient -> IO ()
-stopCallbackThread MQTTClient{_cbHandle} = do
-  maybeHandle <- tryReadMVar _cbHandle
-  maybe (pure ()) cancel maybeHandle
+stopCallbackThread MQTTClient{_cbHandle} = maybe (pure ()) cancel =<< readTVarIO _cbHandle
 
 maybeCancelWith :: E.Exception e => e -> Maybe (Async ()) -> IO ()
 maybeCancelWith e = void . traverse (`cancelWith` e)
