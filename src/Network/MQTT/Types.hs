@@ -30,6 +30,7 @@ module Network.MQTT.Types (
 import           Control.Applicative             (liftA2, (<|>))
 import           Control.Monad                   (replicateM, when)
 import           Data.Attoparsec.Binary          (anyWord16be, anyWord32be)
+import qualified Data.Attoparsec.ByteString      as AS
 import qualified Data.Attoparsec.ByteString.Lazy as A
 import           Data.Binary.Put                 (putWord32be, runPut)
 import           Data.Bits                       (Bits (..), shiftL, testBit, (.&.), (.|.))
@@ -276,7 +277,7 @@ parseProperties :: ProtocolLevel -> A.Parser [Property]
 parseProperties Protocol311 = pure mempty
 parseProperties Protocol50 = do
   len <- decodeVarInt
-  either fail pure . A.parseOnly (A.many' parseProperty) =<< A.take len
+  either fail pure . AS.parseOnly (A.many' parseProperty) =<< A.take len
 
 -- | MQTT Protocol Levels
 data ProtocolLevel = Protocol311 -- ^ MQTT 3.1.1
@@ -717,7 +718,7 @@ parseSubHdr b prot p = do
   a <- subp content
   pure (pid, props, a)
 
-    where subp = either fail pure . A.parseOnly p
+    where subp = either fail pure . AS.parseOnly p
 
 parseSubscribe :: ProtocolLevel -> A.Parser MQTTPkt
 parseSubscribe prot = do
