@@ -1,25 +1,7 @@
-# mqtt
+{-# LANGUAGE OverloadedStrings #-}
 
-An [MQTT][mqtt] protocol implementation for Haskell.
+module Example2 where
 
-## Client Examples
-
-### Publish
-
-```haskell
-import Network.MQTT.Client
-import Network.URI (parseURI)
-
-main :: IO ()
-main = do
-  let (Just uri) = parseURI "mqtt://test.mosquitto.org"
-  mc <- connectURI mqttConfig uri
-  publish mc "tmp/topic" "hello!" False
-```
-
-### Subscribe
-
-```haskell
 import Network.MQTT.Client
 import Network.URI (parseURI)
 
@@ -32,6 +14,3 @@ main = do
 
   where
     msgReceived _ t m p = print (t,m,p)
-```
-
-[mqtt]: http://mqtt.org/
