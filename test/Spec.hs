@@ -81,7 +81,7 @@ prop_PropertiesRT p = case A.parse (parseProperties Protocol50) (bsProps Protoco
 testTopicMatching :: [TestTree]
 testTopicMatching = let allTopics = ["a", "a/b", "a/b/c/d", "b/a/c/d",
                                      "$SYS/a/b", "a/$SYS/b"]
-                        tsts = [("a", ["a"]), ("a/#", ["a/b", "a/b/c/d"]),
+                        tsts = [("a", ["a"]), ("a/#", ["a", "a/b", "a/b/c/d"]),
                                 ("+/b", ["a/b"]),
                                 ("+/+/c/+", ["a/b/c/d", "b/a/c/d"]),
                                 ("+/+/b", []),
