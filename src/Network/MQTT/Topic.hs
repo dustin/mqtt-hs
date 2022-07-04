@@ -69,9 +69,10 @@ match :: Filter -> Topic -> Bool
 match (Filter pat) (Topic top) = cmp (splitOn "/" pat) (splitOn "/" top)
 
   where
-    cmp [] []   = True
-    cmp [] _    = False
-    cmp _ []    = False
+    cmp [] []       = True
+    cmp [] _        = False
+    cmp ["#"] []    = False
+    cmp _ []        = False
     cmp ["#"] (t:_) = not $ "$" `isPrefixOf` t
     cmp (p:ps) (t:ts)
       | p == t = cmp ps ts
