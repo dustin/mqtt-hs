@@ -1,5 +1,16 @@
 # Changelog for net-mqtt
 
+## 0.8.2.1
+
+A fix allowing the filter to wildcards to match their parent as per
+spec.
+
+This is not very intuitive and kind of seems like a bad idea, but [the
+spec](http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718107)
+says this is how it works.
+
+Thanks to Noah Halford.
+
 ## 0.8.2.0
 
 Added `OrderedCallback` and `OrderedLowLevelCallback` to guarantee
