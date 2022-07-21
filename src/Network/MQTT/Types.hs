@@ -660,19 +660,18 @@ bsPubSeg Protocol50 h pid st props = BL.singleton h
 instance ByteMe PubACK where
   toByteString prot (PubACK pid st props) = bsPubSeg prot 0x40 pid st props
 
-parsePubSeg :: A.Parser (PktID, Word8, [Property])
-parsePubSeg = do
+-- Common parser for all of the pub parts for q>0 handling:  (PubACK, PubREC, PubREL, PubCOMP)
+parsePubSeg :: Word8 -> (a -> MQTTPkt) -> (PktID -> Word8 -> [Property] -> a) -> A.Parser MQTTPkt
+parsePubSeg i cona conb = do
+  _ <- A.word8 i
   rl <- parseHdrLen
   mid <- aWord16
   st <- if rl > 2 then A.anyWord8 else pure 0
   props <- if rl > 3 then parseProperties Protocol50 else pure mempty
-  pure (mid, st, props)
+  pure $ cona (conb mid st props)
 
 parsePubACK :: A.Parser MQTTPkt
-parsePubACK = do
-  _ <- A.word8 0x40
-  (mid, st, props) <- parsePubSeg
-  pure $ PubACKPkt (PubACK mid st props)
+parsePubACK = parsePubSeg 0x40 PubACKPkt PubACK
 
 data PubREC = PubREC PktID Word8 [Property] deriving(Eq, Show)
 
@@ -680,10 +679,7 @@ instance ByteMe PubREC where
   toByteString prot (PubREC pid st props) = bsPubSeg prot 0x50 pid st props
 
 parsePubREC :: A.Parser MQTTPkt
-parsePubREC = do
-  _ <- A.word8 0x50
-  (mid, st, props) <- parsePubSeg
-  pure $ PubRECPkt (PubREC mid st props)
+parsePubREC = parsePubSeg 0x50 PubRECPkt PubREC
 
 data PubREL = PubREL PktID Word8 [Property] deriving(Eq, Show)
 
@@ -691,10 +687,7 @@ instance ByteMe PubREL where
   toByteString prot (PubREL pid st props) = bsPubSeg prot 0x62 pid st props
 
 parsePubREL :: A.Parser MQTTPkt
-parsePubREL = do
-  _ <- A.word8 0x62
-  (mid, st, props) <- parsePubSeg
-  pure $ PubRELPkt (PubREL mid st props)
+parsePubREL = parsePubSeg 0x62 PubRELPkt PubREL
 
 data PubCOMP = PubCOMP PktID Word8 [Property] deriving(Eq, Show)
 
@@ -702,10 +695,7 @@ instance ByteMe PubCOMP where
   toByteString prot (PubCOMP pid st props) = bsPubSeg prot 0x70 pid st props
 
 parsePubCOMP :: A.Parser MQTTPkt
-parsePubCOMP = do
-  _ <- A.word8 0x70
-  (mid, st, props) <- parsePubSeg
-  pure $ PubCOMPPkt (PubCOMP mid st props)
+parsePubCOMP = parsePubSeg 0x70 PubCOMPPkt PubCOMP
 
 -- Common header bits for subscribe, unsubscribe, and the sub acks.
 parseSubHdr :: Word8 -> ProtocolLevel -> A.Parser a -> A.Parser (PktID, [Property], a)
