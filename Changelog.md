@@ -1,5 +1,12 @@
 # Changelog for net-mqtt
 
+## 0.8.2.2
+
+Fix for pub flow messages with 0 length properties that are explicitly
+encoded.
+
+Thanks to Marc Jakobi for pointing this out.
+
 ## 0.8.2.1
 
 A fix allowing the filter to wildcards to match their parent as per
