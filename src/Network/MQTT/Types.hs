@@ -665,7 +665,7 @@ parsePubSeg = do
   rl <- parseHdrLen
   mid <- aWord16
   st <- if rl > 2 then A.anyWord8 else pure 0
-  props <- if rl > 4 then parseProperties Protocol50 else pure mempty
+  props <- if rl > 3 then parseProperties Protocol50 else pure mempty
   pure (mid, st, props)
 
 parsePubACK :: A.Parser MQTTPkt
