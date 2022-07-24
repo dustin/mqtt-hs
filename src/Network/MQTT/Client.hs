@@ -370,10 +370,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
 waitForClient :: MQTTClient -> IO ()
 waitForClient c@MQTTClient{..} = flip E.finally (stopCallbackThread c) $ do
   void . traverse wait =<< readTVarIO _ct
-  e <- atomically $ stateX c Stopped
-  case e of
-    Nothing -> pure ()
-    Just x  -> E.throwIO x
+  maybe (pure ()) E.throwIO =<< atomically (stateX c Stopped)
 
 stateX :: MQTTClient -> ConnState -> STM (Maybe E.SomeException)
 stateX MQTTClient{..} want = f <$> readTVar _st
@@ -695,7 +692,7 @@ mkLWT t m r = T.LastWill{
 
 -- | Get the list of properties that were sent from the broker at connect time.
 svrProps :: MQTTClient -> IO [Property]
-svrProps mc = p <$> atomically (connACKSTM mc)
+svrProps = fmap p . atomically . connACKSTM
   where p (ConnACKFlags _ _ props) = props
 
 -- | Get the complete connection ACK packet from the beginning of this session.
@@ -707,7 +704,7 @@ connACK :: MQTTClient -> IO ConnACKFlags
 connACK = atomically . connACKSTM
 
 maxAliases :: MQTTClient -> IO Word16
-maxAliases mc = foldr f 0 <$> svrProps mc
+maxAliases = fmap (foldr f 0) . svrProps
   where
     f (PropTopicAliasMaximum n) _ = n
     f _ o                         = o
