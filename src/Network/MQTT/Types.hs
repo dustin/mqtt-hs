@@ -349,9 +349,7 @@ instance ByteMe ConnectRequest where
                                 <> toByteString prot _willMsg
 
       perhaps :: Maybe BL.ByteString -> BL.ByteString
-      perhaps Nothing  = ""
-      perhaps (Just s) = toByteString prot s
-
+      perhaps = maybe "" (toByteString prot)
 
 data MQTTPkt = ConnPkt ConnectRequest ProtocolLevel
              | ConnACKPkt ConnACKFlags
