@@ -1,5 +1,14 @@
 # Changelog for net-mqtt
 
+## 0.8.2.4
+
+Minor build changes and code cleanup.  Includes LTS update.
+
+## 0.8.2.3
+
+Quick release for updating LTS and deps.  Wasn't committed and pushed
+because I got lazy.
+
 ## 0.8.2.2
 
 Fix for pub flow messages with 0 length properties that are explicitly
