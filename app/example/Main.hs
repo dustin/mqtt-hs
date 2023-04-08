@@ -11,7 +11,7 @@ import           Network.MQTT.Client
 
 main :: IO ()
 main = do
-  let (Just uri) = parseURI "mqtt://test.mosquitto.org"
+  uri <- maybe (fail "Failed to parse URL") pure $ parseURI "mqtt://test.mosquitto.org"
 
   mc <- connectURI mqttConfig{_lwt=Just $ (mkLWT "tmp/haskquit" "bye for now" False){
                                 _willProps=[PropUserProperty "lwt" "prop"]},

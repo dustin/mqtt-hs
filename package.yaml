@@ -59,6 +59,7 @@ executables:
     source-dirs: app/mqtt-watch
     ghc-options:
     - -Wall
+    - -Werror
     - -threaded
     - -rtsopts
     - -eventlog

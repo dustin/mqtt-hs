@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.35.0.
+-- This file has been generated from package.yaml by hpack version 0.35.2.
 --
 -- see: https://github.com/sol/hpack
 
@@ -90,7 +90,7 @@ executable mqtt-watch
       Paths_net_mqtt
   hs-source-dirs:
       app/mqtt-watch
-  ghc-options: -Wall -threaded -rtsopts -eventlog -with-rtsopts=-N
+  ghc-options: -Wall -Werror -threaded -rtsopts -eventlog -with-rtsopts=-N
   build-depends:
       QuickCheck >=2.12.6.1 && <2.15
     , async >=2.2.1 && <2.3

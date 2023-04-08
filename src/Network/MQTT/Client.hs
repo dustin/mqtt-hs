@@ -65,7 +65,7 @@ import           Data.Word                  (Word16)
 import           GHC.Conc                   (labelThread)
 import           Network.Connection         (ConnectionParams (..), TLSSettings (..), connectTo, connectionClose,
                                              connectionGetChunk, connectionPut, initConnectionContext)
-import           Network.URI                (URI (..), unEscapeString, uriPort, uriRegName, uriUserInfo)
+import           Network.URI                (URI (..), nullURIAuth, unEscapeString, uriPort, uriRegName, uriUserInfo)
 import qualified Network.WebSockets         as WS
 import           Network.WebSockets.Stream  (makeStream)
 import           System.IO.Error            (catchIOError, isEOFError)
@@ -173,7 +173,7 @@ connectURI cfg@MQTTConfig{..} uri = do
              "wss:"   -> runWS uri True
              us       -> mqttFail $ "invalid URI scheme: " <> us
 
-      (Just a) = uriAuthority uri
+      a = fromMaybe nullURIAuth $ uriAuthority uri
       (u,p) = up (uriUserInfo a)
 
   v <- namedTimeout "MQTT connect" _connectTimeout $
@@ -593,9 +593,11 @@ subscribe :: MQTTClient -> [(Filter, SubOptions)] -> [Property] -> IO ([Either S
 subscribe c ls props = do
   runCallbackThread c
   r <- sendAndWait c DSubACK (\pid -> SubscribePkt $ SubscribeRequest pid ls' props)
-  let (SubACKPkt (SubscribeResponse _ rs aprops)) = r
-  pure (rs, aprops)
-    where ls' = map (first filterToBL) ls
+  case r of
+    SubACKPkt (SubscribeResponse _ rs aprops) -> pure (rs, aprops)
+    pkt                                       -> mqttFail $ "unexpected response to subscribe: " <> show pkt
+
+  where ls' = map (first filterToBL) ls
 
 -- | Unsubscribe from a list of topic filters.
 --
