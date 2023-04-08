@@ -1,5 +1,6 @@
 *~
+.direnv
 .stack-work/
 /stack.yaml.lock
-dist-newstyle/
 TAGS
+dist-newstyle/
