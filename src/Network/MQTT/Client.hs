@@ -15,6 +15,7 @@ and
 are supported over plain TCP, TLS, WebSockets and Secure WebSockets.
 -}
 
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
@@ -71,6 +72,7 @@ import           Network.WebSockets.Stream  (makeStream)
 import           System.IO.Error            (catchIOError, isEOFError)
 import           System.Timeout             (timeout)
 
+import qualified Data.Set                   as Set
 import           Network.MQTT.Topic         (Filter, Topic, mkTopic, unFilter, unTopic)
 import           Network.MQTT.Types         as T
 
@@ -181,9 +183,7 @@ connectURI cfg@MQTTConfig{..} uri = do
            _hostname=uriRegName a, _port=port (uriPort a) (uriScheme uri),
            Network.MQTT.Client._username=u, Network.MQTT.Client._password=p}
 
-  case v of
-    Nothing -> mqttFail $ "connection to " <> show uri <> " timed out"
-    Just x  -> pure x
+  maybe (mqttFail $ "connection to " <> show uri <> " timed out") pure v
 
   where
     port "" "mqtt:"  = 1883
@@ -468,16 +468,10 @@ dispatch c@MQTTClient{..} pch pkt =
             resolveTopic Nothing = pure (blToTopic _pubTopic)
             resolveTopic (Just x) = do
               when (_pubTopic /= "") $ modifyTVar' _inA (Map.insert x (blToTopic _pubTopic))
-              m <- readTVar _inA
-              case Map.lookup x m of
-                Nothing -> mqttFail ("failed to lookup topic alias " <> show x)
-                Just t  -> pure t
+              maybe (mqttFail ("failed to lookup topic alias " <> show x)) pure . Map.lookup x =<< readTVar _inA
 
-        delegate dt pid = atomically $ do
-          m <- readTVar _acks
-          case Map.lookup (dt, pid) m of
-            Nothing -> nak dt
-            Just ch -> writeTChan ch pkt
+        delegate dt pid = atomically $
+          maybe (nak dt) (`writeTChan` pkt) . Map.lookup (dt, pid) =<< readTVar _acks
 
             where
               nak DPubREC = sendPacket c (PubRELPkt  (PubREL  pid 0x92 mempty))
@@ -571,7 +565,7 @@ releasePktID c@MQTTClient{..} k = checkConnected c >> modifyTVar' _acks (Map.del
 
 releasePktIDs :: MQTTClient -> [(DispatchType,Word16)] -> STM ()
 releasePktIDs c@MQTTClient{..} ks = checkConnected c >> modifyTVar' _acks deleteMany
-  where deleteMany m = foldr Map.delete m ks
+  where deleteMany m = Map.withoutKeys m (Set.fromList ks)
 
 sendAndWait :: MQTTClient -> DispatchType -> (Word16 -> MQTTPkt) -> IO MQTTPkt
 sendAndWait c@MQTTClient{..} dt f = do
@@ -592,8 +586,7 @@ sendAndWait c@MQTTClient{..} dt f = do
 subscribe :: MQTTClient -> [(Filter, SubOptions)] -> [Property] -> IO ([Either SubErr QoS], [Property])
 subscribe c ls props = do
   runCallbackThread c
-  r <- sendAndWait c DSubACK (\pid -> SubscribePkt $ SubscribeRequest pid ls' props)
-  case r of
+  sendAndWait c DSubACK (\pid -> SubscribePkt $ SubscribeRequest pid ls' props) >>= \case
     SubACKPkt (SubscribeResponse _ rs aprops) -> pure (rs, aprops)
     pkt                                       -> mqttFail $ "unexpected response to subscribe: " <> show pkt
 
@@ -658,9 +651,7 @@ publishq c t m r q props = do
           isOK 16 = True -- It worked, but nobody cares (no matching subscribers)
           isOK _  = False
 
-          waitRec = do
-            rpkt <- atomically $ checkConnected c >> readTChan ch
-            case rpkt of
+          waitRec = atomically (checkConnected c >> readTChan ch) >>= \case
               PubRECPkt (PubREC _ st recprops) -> do
                 unless (isOK st) $ mqttFail ("qos 2 REC publish error: " <> show st <> " " <> show recprops)
                 sendPacketIO c (PubRELPkt $ PubREL pid 0 mempty)
@@ -749,8 +740,8 @@ pubAliased c@MQTTClient{..} t m r q props = do
 --
 -- This registration will remain in place until unregisterCorrelated is called to remove it.
 registerCorrelated :: MQTTClient -> BL.ByteString -> MessageCallback -> STM ()
-registerCorrelated MQTTClient{_corr} bs cb = modifyTVar' _corr (Map.insert bs cb)
+registerCorrelated MQTTClient{_corr} bs = modifyTVar' _corr . Map.insert bs
 
 -- | Unregister a callback handler for the given correlated data identifier.
 unregisterCorrelated :: MQTTClient -> BL.ByteString -> STM ()
-unregisterCorrelated MQTTClient{_corr} bs = modifyTVar' _corr (Map.delete bs)
+unregisterCorrelated MQTTClient{_corr} = modifyTVar' _corr . Map.delete

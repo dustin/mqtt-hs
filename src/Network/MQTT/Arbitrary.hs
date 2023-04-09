@@ -29,7 +29,7 @@ import           Data.Function         ((&))
 import           Data.Maybe            (mapMaybe)
 import           Data.Text             (Text)
 import qualified Data.Text             as Text
-import           Network.MQTT.Topic    (Filter, Topic, mkFilter, mkTopic, unTopic, unFilter)
+import           Network.MQTT.Topic    (Filter, Topic, mkFilter, mkTopic, unFilter, unTopic)
 import           Network.MQTT.Types    as MT
 import           Test.QuickCheck       as QC
 

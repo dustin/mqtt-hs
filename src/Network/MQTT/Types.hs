@@ -27,7 +27,7 @@ module Network.MQTT.Types (
   parseSubOptions, ByteSize(..)
   ) where
 
-import           Control.Applicative             (liftA2, (<|>))
+import           Control.Applicative             (asum, liftA2, (<|>))
 import           Control.Monad                   (replicateM, when)
 import           Data.Attoparsec.Binary          (anyWord16be, anyWord32be)
 import qualified Data.Attoparsec.ByteString      as AS
@@ -386,14 +386,14 @@ instance ByteMe MQTTPkt where
   toByteString p (AuthPkt x)        = toByteString p x
 
 parsePacket :: ProtocolLevel -> A.Parser MQTTPkt
-parsePacket p = parseConnect <|> parseConnectACK
-                <|> parsePublish p <|> parsePubACK
-                <|> parsePubREC <|> parsePubREL <|> parsePubCOMP
-                <|> parseSubscribe p <|> parseSubACK p
-                <|> parseUnsubscribe p <|> parseUnsubACK p
-                <|> PingPkt <$ A.string "\192\NUL" <|> PongPkt <$ A.string "\208\NUL"
-                <|> parseDisconnect p
-                <|> parseAuth
+parsePacket p = asum [parseConnect, parseConnectACK,
+                      parsePublish p, parsePubACK,
+                      parsePubREC, parsePubREL, parsePubCOMP,
+                      parseSubscribe p, parseSubACK p,
+                      parseUnsubscribe p, parseUnsubACK p,
+                      PingPkt <$ A.string "\192\NUL", PongPkt <$ A.string "\208\NUL",
+                      parseDisconnect p,
+                      parseAuth]
 
 aWord16 :: A.Parser Word16
 aWord16 = anyWord16be
@@ -404,8 +404,7 @@ aWord32 = anyWord32be
 aString :: A.Parser BL.ByteString
 aString = do
   n <- aWord16
-  s <- A.take (fromIntegral n)
-  pure $ BL.fromStrict s
+  BL.fromStrict <$> A.take (fromIntegral n)
 
 -- | Parse a CONNect packet.  This is useful when examining the
 -- beginning of the stream as it allows you to determine the protocol

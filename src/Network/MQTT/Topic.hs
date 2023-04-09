@@ -81,4 +81,4 @@ match (Filter pat) (Topic top) = cmp (splitOn "/" pat) (splitOn "/" top)
 
 -- | Convert a 'Topic' to a 'Filter' as all 'Topic's are valid 'Filter's
 toFilter :: Topic -> Filter
-toFilter (Topic t) = Filter t
+toFilter = Filter . unTopic
