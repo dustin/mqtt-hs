@@ -452,8 +452,8 @@ QoS2 :: QoS
 -- | An MQTT topic.
 data Topic
 
--- | A default <a>MQTTConfig</a>. A <a>_connID</a> <i>may</i> be required
---   depending on your broker (or if you just want an
+-- | A default <a>MQTTConfig</a>. A <a>MQTTConfig</a> <i>may</i> be
+--   required depending on your broker (or if you just want an
 --   identifiable/resumable connection). In MQTTv5, an empty connection ID
 --   may be sent and the server may assign an identifier for you and return
 --   it in the <a>PropAssignedClientIdentifier</a> <a>Property</a>.

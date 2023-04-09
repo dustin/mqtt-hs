@@ -20,17 +20,15 @@ Topic and topic related utiilities.
 </span><span id="line-20"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.String</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">IsString</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
 </span><span id="line-21"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.Text</span></span><span>   </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Text</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">isPrefixOf</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">splitOn</span></span><span class="hs-special">)</span><span>
 </span><span id="line-22"></span><span>
-</span><span id="line-23"></span><span class="hs-keyword">class</span><span> </span><span id="Splittable"><span class="annot"><a href="Network.MQTT.Topic.html#Splittable"><span class="hs-identifier hs-var">Splittable</span></a></span></span><span> </span><span id="local-6989586621679107647"><span class="annot"><a href="#local-6989586621679107647"><span class="hs-identifier hs-type">a</span></a></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-23"></span><span class="hs-keyword">class</span><span> </span><span id="Splittable"><span class="annot"><a href="Network.MQTT.Topic.html#Splittable"><span class="hs-identifier hs-var">Splittable</span></a></span></span><span> </span><span id="local-6989586621679106218"><span class="annot"><a href="#local-6989586621679106218"><span class="hs-identifier hs-type">a</span></a></span></span><span> </span><span class="hs-keyword">where</span><span>
 </span><span id="line-24"></span><span>  </span><span class="hs-comment">-- | split separates a `Filter` or `Topic` into its `/`-separated components.</span><span>
-</span><span id="line-25"></span><span>  </span><span id="split"><span class="annot"><a href="Network.MQTT.Topic.html#split"><span class="hs-identifier hs-type">split</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="#local-6989586621679107647"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="#local-6989586621679107647"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-25"></span><span>  </span><span id="split"><span class="annot"><a href="Network.MQTT.Topic.html#split"><span class="hs-identifier hs-type">split</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="#local-6989586621679106218"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="#local-6989586621679106218"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">]</span><span>
 </span><span id="line-26"></span><span>
 </span><span id="line-27"></span><span class="hs-comment">-- | An MQTT topic.</span><span>
 </span><span id="line-28"></span><span class="hs-keyword">newtype</span><span> </span><span id="Topic"><span class="annot"><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-var">Topic</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="Topic"><span class="annot"><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-var">Topic</span></a></span></span><span> </span><span class="hs-special">{</span><span> </span><span id="unTopic"><span class="annot"><span class="annottext">Topic -&gt; Text
-</span><a href="Network.MQTT.Topic.html#unTopic"><span class="hs-identifier hs-var hs-var">unTopic</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-special">}</span><span> </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679107582"><span id="local-6989586621679107584"><span id="local-6989586621679107590"><span class="annot"><span class="annottext">Int -&gt; Topic -&gt; ShowS
+</span><a href="Network.MQTT.Topic.html#unTopic"><span class="hs-identifier hs-var hs-var">unTopic</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-special">}</span><span> </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679106150"><span id="local-6989586621679106152"><span id="local-6989586621679106158"><span class="annot"><span class="annottext">Int -&gt; Topic -&gt; ShowS
 [Topic] -&gt; ShowS
 Topic -&gt; String
-(Int -&gt; Topic -&gt; ShowS)
--&gt; (Topic -&gt; String) -&gt; ([Topic] -&gt; ShowS) -&gt; Show Topic
 forall a.
 (Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
 showList :: [Topic] -&gt; ShowS
@@ -39,16 +37,7 @@ show :: Topic -&gt; String
 $cshow :: Topic -&gt; String
 showsPrec :: Int -&gt; Topic -&gt; ShowS
 $cshowsPrec :: Int -&gt; Topic -&gt; ShowS
-</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679107551"><span id="local-6989586621679107555"><span id="local-6989586621679107559"><span id="local-6989586621679107563"><span id="local-6989586621679107567"><span id="local-6989586621679107571"><span id="local-6989586621679107576"><span class="annot"><span class="annottext">Eq Topic
-Eq Topic
--&gt; (Topic -&gt; Topic -&gt; Ordering)
--&gt; (Topic -&gt; Topic -&gt; Bool)
--&gt; (Topic -&gt; Topic -&gt; Bool)
--&gt; (Topic -&gt; Topic -&gt; Bool)
--&gt; (Topic -&gt; Topic -&gt; Bool)
--&gt; (Topic -&gt; Topic -&gt; Topic)
--&gt; (Topic -&gt; Topic -&gt; Topic)
--&gt; Ord Topic
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679106119"><span id="local-6989586621679106123"><span id="local-6989586621679106127"><span id="local-6989586621679106131"><span id="local-6989586621679106135"><span id="local-6989586621679106139"><span id="local-6989586621679106144"><span class="annot"><span class="annottext">Eq Topic
 Topic -&gt; Topic -&gt; Bool
 Topic -&gt; Topic -&gt; Ordering
 Topic -&gt; Topic -&gt; Topic
@@ -76,91 +65,78 @@ $c&lt;= :: Topic -&gt; Topic -&gt; Bool
 $c&lt; :: Topic -&gt; Topic -&gt; Bool
 compare :: Topic -&gt; Topic -&gt; Ordering
 $ccompare :: Topic -&gt; Topic -&gt; Ordering
-</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Ord</span></span></span></span></span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679107541"><span id="local-6989586621679107545"><span class="annot"><span class="annottext">Topic -&gt; Topic -&gt; Bool
-(Topic -&gt; Topic -&gt; Bool) -&gt; (Topic -&gt; Topic -&gt; Bool) -&gt; Eq Topic
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Ord</span></span></span></span></span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679106109"><span id="local-6989586621679106113"><span class="annot"><span class="annottext">Topic -&gt; Topic -&gt; Bool
 forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
 /= :: Topic -&gt; Topic -&gt; Bool
 $c/= :: Topic -&gt; Topic -&gt; Bool
 == :: Topic -&gt; Topic -&gt; Bool
 $c== :: Topic -&gt; Topic -&gt; Bool
-</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679107536"><span class="annot"><span class="annottext">String -&gt; Topic
-(String -&gt; Topic) -&gt; IsString Topic
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679106104"><span class="annot"><span class="annottext">String -&gt; Topic
 forall a. (String -&gt; a) -&gt; IsString a
 fromString :: String -&gt; Topic
 $cfromString :: String -&gt; Topic
 </span><span class="hs-identifier hs-var hs-var hs-var hs-var">IsString</span></span></span><span class="hs-special">)</span><span>
 </span><span id="line-29"></span><span>
 </span><span id="line-30"></span><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Network.MQTT.Topic.html#Splittable"><span class="hs-identifier hs-type">Splittable</span></a></span><span> </span><span class="annot"><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-type">Topic</span></a></span><span> </span><span class="hs-keyword">where</span><span>
-</span><span id="line-31"></span><span>  </span><span id="local-6989586621679107525"><span class="annot"><span class="annottext">split :: Topic -&gt; [Topic]
-</span><a href="#local-6989586621679107525"><span class="hs-identifier hs-var hs-var hs-var hs-var">split</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-type">Topic</span></a></span><span> </span><span id="local-6989586621679107524"><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107524"><span class="hs-identifier hs-var">t</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Topic
-</span><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-var">Topic</span></a></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Topic) -&gt; [Text] -&gt; [Topic]
-forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span id="line-31"></span><span>  </span><span id="local-6989586621679106093"><span class="annot"><span class="annottext">split :: Topic -&gt; [Topic]
+</span><a href="#local-6989586621679106093"><span class="hs-identifier hs-var hs-var hs-var hs-var">split</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-type">Topic</span></a></span><span> </span><span id="local-6989586621679106092"><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679106092"><span class="hs-identifier hs-var">t</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Topic
+</span><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-var">Topic</span></a></span><span> </span><span class="annot"><span class="annottext">forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
 </span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; [Text]
 </span><span class="hs-identifier hs-var">splitOn</span></span><span> </span><span class="annot"><span class="annottext">Text
 </span><span class="hs-string">&quot;/&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107524"><span class="hs-identifier hs-var">t</span></a></span><span>
+</span><a href="#local-6989586621679106092"><span class="hs-identifier hs-var">t</span></a></span><span>
 </span><span id="line-32"></span><span>
-</span><span id="line-33"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679107518"><span id="local-6989586621679107520"><span class="annot"><span class="hs-identifier hs-type">Semigroup</span></span><span> </span><span class="annot"><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-type">Topic</span></a></span></span></span><span> </span><span class="hs-keyword">where</span><span>
-</span><span id="line-34"></span><span>  </span><span class="hs-special">(</span><span class="annot"><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-type">Topic</span></a></span><span> </span><span id="local-6989586621679107512"><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107512"><span class="hs-identifier hs-var">a</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679107511"><span class="annot"><span class="annottext">&lt;&gt; :: Topic -&gt; Topic -&gt; Topic
-</span><span class="hs-operator hs-var hs-var hs-var hs-var">&lt;&gt;</span></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-type">Topic</span></a></span><span> </span><span id="local-6989586621679107510"><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107510"><span class="hs-identifier hs-var">b</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Topic
+</span><span id="line-33"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679106086"><span id="local-6989586621679106088"><span class="annot"><span class="hs-identifier hs-type">Semigroup</span></span><span> </span><span class="annot"><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-type">Topic</span></a></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-34"></span><span>  </span><span class="hs-special">(</span><span class="annot"><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-type">Topic</span></a></span><span> </span><span id="local-6989586621679106080"><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679106080"><span class="hs-identifier hs-var">a</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679106079"><span class="annot"><span class="annottext">&lt;&gt; :: Topic -&gt; Topic -&gt; Topic
+</span><span class="hs-operator hs-var hs-var hs-var hs-var">&lt;&gt;</span></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-type">Topic</span></a></span><span> </span><span id="local-6989586621679106078"><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679106078"><span class="hs-identifier hs-var">b</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Topic
 </span><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-var">Topic</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107512"><span class="hs-identifier hs-var">a</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
-forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><a href="#local-6989586621679106080"><span class="hs-identifier hs-var">a</span></a></span><span> </span><span class="annot"><span class="annottext">forall a. Semigroup a =&gt; a -&gt; a -&gt; a
 </span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><span class="hs-string">&quot;/&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
-forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-string">&quot;/&quot;</span></span><span> </span><span class="annot"><span class="annottext">forall a. Semigroup a =&gt; a -&gt; a -&gt; a
 </span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107510"><span class="hs-identifier hs-var">b</span></a></span><span class="hs-special">)</span><span>
+</span><a href="#local-6989586621679106078"><span class="hs-identifier hs-var">b</span></a></span><span class="hs-special">)</span><span>
 </span><span id="line-35"></span><span>
 </span><span id="line-36"></span><span class="hs-comment">-- | mkTopic creates a topic from a text representation of a valid filter.</span><span>
 </span><span id="line-37"></span><span class="annot"><a href="Network.MQTT.Topic.html#mkTopic"><span class="hs-identifier hs-type">mkTopic</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-type">Topic</span></a></span><span>
 </span><span id="line-38"></span><span id="mkTopic"><span class="annot"><span class="annottext">mkTopic :: Text -&gt; Maybe Topic
 </span><a href="Network.MQTT.Topic.html#mkTopic"><span class="hs-identifier hs-var hs-var">mkTopic</span></a></span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><span class="hs-string">&quot;&quot;</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe Topic
-forall a. Maybe a
+</span><span class="hs-string">&quot;&quot;</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. Maybe a
 </span><span class="hs-identifier hs-var">Nothing</span></span><span>
-</span><span id="line-39"></span><span class="annot"><a href="Network.MQTT.Topic.html#mkTopic"><span class="hs-identifier hs-var">mkTopic</span></a></span><span> </span><span id="local-6989586621679107509"><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107509"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Topic
-</span><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-var">Topic</span></a></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Topic) -&gt; Maybe Text -&gt; Maybe Topic
-forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
-</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">[Text] -&gt; Maybe Text
-forall {a}. (Eq a, IsString a) =&gt; [a] -&gt; Maybe Text
-</span><a href="#local-6989586621679107508"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; [Text]
+</span><span id="line-39"></span><span class="annot"><a href="Network.MQTT.Topic.html#mkTopic"><span class="hs-identifier hs-var">mkTopic</span></a></span><span> </span><span id="local-6989586621679106077"><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679106077"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Topic
+</span><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-var">Topic</span></a></span><span> </span><span class="annot"><span class="annottext">forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">forall {a}. (Eq a, IsString a) =&gt; [a] -&gt; Maybe Text
+</span><a href="#local-6989586621679106076"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; [Text]
 </span><span class="hs-identifier hs-var">splitOn</span></span><span> </span><span class="annot"><span class="annottext">Text
 </span><span class="hs-string">&quot;/&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107509"><span class="hs-identifier hs-var">t</span></a></span><span class="hs-special">)</span><span>
+</span><a href="#local-6989586621679106077"><span class="hs-identifier hs-var">t</span></a></span><span class="hs-special">)</span><span>
 </span><span id="line-40"></span><span>  </span><span class="hs-keyword">where</span><span>
-</span><span id="line-41"></span><span>    </span><span id="local-6989586621679107508"><span class="annot"><span class="annottext">validate :: [a] -&gt; Maybe Text
-</span><a href="#local-6989586621679107508"><span class="hs-identifier hs-var hs-var">validate</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a
+</span><span id="line-41"></span><span>    </span><span id="local-6989586621679106076"><span class="annot"><span class="annottext">validate :: [a] -&gt; Maybe Text
+</span><a href="#local-6989586621679106076"><span class="hs-identifier hs-var hs-var">validate</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a
 </span><span class="hs-string">&quot;#&quot;</span></span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span class="annot"><span class="annottext">[a]
-</span><span class="hs-identifier">_</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe Text
-forall a. Maybe a
+</span><span class="hs-identifier">_</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. Maybe a
 </span><span class="hs-identifier hs-var">Nothing</span></span><span>
-</span><span id="line-42"></span><span>    </span><span class="annot"><a href="#local-6989586621679107508"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a
+</span><span id="line-42"></span><span>    </span><span class="annot"><a href="#local-6989586621679106076"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a
 </span><span class="hs-string">&quot;+&quot;</span></span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span class="annot"><span class="annottext">[a]
-</span><span class="hs-identifier">_</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe Text
-forall a. Maybe a
+</span><span class="hs-identifier">_</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. Maybe a
 </span><span class="hs-identifier hs-var">Nothing</span></span><span>
-</span><span id="line-43"></span><span>    </span><span class="annot"><a href="#local-6989586621679107508"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>      </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Maybe Text
-forall a. a -&gt; Maybe a
+</span><span id="line-43"></span><span>    </span><span class="annot"><a href="#local-6989586621679106076"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>      </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. a -&gt; Maybe a
 </span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107509"><span class="hs-identifier hs-var">t</span></a></span><span>
-</span><span id="line-44"></span><span>    </span><span class="annot"><a href="#local-6989586621679107508"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a
-</span><span class="hs-identifier">_</span></span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679107501"><span class="annot"><span class="annottext">[a]
-</span><a href="#local-6989586621679107501"><span class="hs-identifier hs-var">xs</span></a></span></span><span class="hs-special">)</span><span>  </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[a] -&gt; Maybe Text
-</span><a href="#local-6989586621679107508"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="annot"><span class="annottext">[a]
-</span><a href="#local-6989586621679107501"><span class="hs-identifier hs-var">xs</span></a></span><span>
+</span><a href="#local-6989586621679106077"><span class="hs-identifier hs-var">t</span></a></span><span>
+</span><span id="line-44"></span><span>    </span><span class="annot"><a href="#local-6989586621679106076"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a
+</span><span class="hs-identifier">_</span></span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679106069"><span class="annot"><span class="annottext">[a]
+</span><a href="#local-6989586621679106069"><span class="hs-identifier hs-var">xs</span></a></span></span><span class="hs-special">)</span><span>  </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[a] -&gt; Maybe Text
+</span><a href="#local-6989586621679106076"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="annot"><span class="annottext">[a]
+</span><a href="#local-6989586621679106069"><span class="hs-identifier hs-var">xs</span></a></span><span>
 </span><span id="line-45"></span><span>
 </span><span id="line-46"></span><span class="hs-comment">-- | An MQTT topic filter.</span><span>
 </span><span id="line-47"></span><span class="hs-keyword">newtype</span><span> </span><span id="Filter"><span class="annot"><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-var">Filter</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="Filter"><span class="annot"><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-var">Filter</span></a></span></span><span> </span><span class="hs-special">{</span><span> </span><span id="unFilter"><span class="annot"><span class="annottext">Filter -&gt; Text
-</span><a href="Network.MQTT.Topic.html#unFilter"><span class="hs-identifier hs-var hs-var">unFilter</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-special">}</span><span> </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679107492"><span id="local-6989586621679107494"><span id="local-6989586621679107498"><span class="annot"><span class="annottext">Int -&gt; Filter -&gt; ShowS
+</span><a href="Network.MQTT.Topic.html#unFilter"><span class="hs-identifier hs-var hs-var">unFilter</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-special">}</span><span> </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679106060"><span id="local-6989586621679106062"><span id="local-6989586621679106066"><span class="annot"><span class="annottext">Int -&gt; Filter -&gt; ShowS
 [Filter] -&gt; ShowS
 Filter -&gt; String
-(Int -&gt; Filter -&gt; ShowS)
--&gt; (Filter -&gt; String) -&gt; ([Filter] -&gt; ShowS) -&gt; Show Filter
 forall a.
 (Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
 showList :: [Filter] -&gt; ShowS
@@ -169,16 +145,7 @@ show :: Filter -&gt; String
 $cshow :: Filter -&gt; String
 showsPrec :: Int -&gt; Filter -&gt; ShowS
 $cshowsPrec :: Int -&gt; Filter -&gt; ShowS
-</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679107463"><span id="local-6989586621679107467"><span id="local-6989586621679107471"><span id="local-6989586621679107475"><span id="local-6989586621679107479"><span id="local-6989586621679107483"><span id="local-6989586621679107487"><span class="annot"><span class="annottext">Eq Filter
-Eq Filter
--&gt; (Filter -&gt; Filter -&gt; Ordering)
--&gt; (Filter -&gt; Filter -&gt; Bool)
--&gt; (Filter -&gt; Filter -&gt; Bool)
--&gt; (Filter -&gt; Filter -&gt; Bool)
--&gt; (Filter -&gt; Filter -&gt; Bool)
--&gt; (Filter -&gt; Filter -&gt; Filter)
--&gt; (Filter -&gt; Filter -&gt; Filter)
--&gt; Ord Filter
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679106031"><span id="local-6989586621679106035"><span id="local-6989586621679106039"><span id="local-6989586621679106043"><span id="local-6989586621679106047"><span id="local-6989586621679106051"><span id="local-6989586621679106055"><span class="annot"><span class="annottext">Eq Filter
 Filter -&gt; Filter -&gt; Bool
 Filter -&gt; Filter -&gt; Ordering
 Filter -&gt; Filter -&gt; Filter
@@ -206,150 +173,135 @@ $c&lt;= :: Filter -&gt; Filter -&gt; Bool
 $c&lt; :: Filter -&gt; Filter -&gt; Bool
 compare :: Filter -&gt; Filter -&gt; Ordering
 $ccompare :: Filter -&gt; Filter -&gt; Ordering
-</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Ord</span></span></span></span></span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679107454"><span id="local-6989586621679107458"><span class="annot"><span class="annottext">Filter -&gt; Filter -&gt; Bool
-(Filter -&gt; Filter -&gt; Bool)
--&gt; (Filter -&gt; Filter -&gt; Bool) -&gt; Eq Filter
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Ord</span></span></span></span></span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679106022"><span id="local-6989586621679106026"><span class="annot"><span class="annottext">Filter -&gt; Filter -&gt; Bool
 forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
 /= :: Filter -&gt; Filter -&gt; Bool
 $c/= :: Filter -&gt; Filter -&gt; Bool
 == :: Filter -&gt; Filter -&gt; Bool
 $c== :: Filter -&gt; Filter -&gt; Bool
-</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679107450"><span class="annot"><span class="annottext">String -&gt; Filter
-(String -&gt; Filter) -&gt; IsString Filter
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679106018"><span class="annot"><span class="annottext">String -&gt; Filter
 forall a. (String -&gt; a) -&gt; IsString a
 fromString :: String -&gt; Filter
 $cfromString :: String -&gt; Filter
 </span><span class="hs-identifier hs-var hs-var hs-var hs-var">IsString</span></span></span><span class="hs-special">)</span><span>
 </span><span id="line-48"></span><span>
 </span><span id="line-49"></span><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Network.MQTT.Topic.html#Splittable"><span class="hs-identifier hs-type">Splittable</span></a></span><span> </span><span class="annot"><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-type">Filter</span></a></span><span> </span><span class="hs-keyword">where</span><span>
-</span><span id="line-50"></span><span>  </span><span id="local-6989586621679107442"><span class="annot"><span class="annottext">split :: Filter -&gt; [Filter]
-</span><a href="#local-6989586621679107442"><span class="hs-identifier hs-var hs-var hs-var hs-var">split</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-type">Filter</span></a></span><span> </span><span id="local-6989586621679107441"><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107441"><span class="hs-identifier hs-var">f</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Filter
-</span><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-var">Filter</span></a></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Filter) -&gt; [Text] -&gt; [Filter]
-forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span id="line-50"></span><span>  </span><span id="local-6989586621679106010"><span class="annot"><span class="annottext">split :: Filter -&gt; [Filter]
+</span><a href="#local-6989586621679106010"><span class="hs-identifier hs-var hs-var hs-var hs-var">split</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-type">Filter</span></a></span><span> </span><span id="local-6989586621679106009"><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679106009"><span class="hs-identifier hs-var">f</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Filter
+</span><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-var">Filter</span></a></span><span> </span><span class="annot"><span class="annottext">forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
 </span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; [Text]
 </span><span class="hs-identifier hs-var">splitOn</span></span><span> </span><span class="annot"><span class="annottext">Text
 </span><span class="hs-string">&quot;/&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107441"><span class="hs-identifier hs-var">f</span></a></span><span>
+</span><a href="#local-6989586621679106009"><span class="hs-identifier hs-var">f</span></a></span><span>
 </span><span id="line-51"></span><span>
-</span><span id="line-52"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679107436"><span id="local-6989586621679107438"><span class="annot"><span class="hs-identifier hs-type">Semigroup</span></span><span> </span><span class="annot"><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-type">Filter</span></a></span></span></span><span> </span><span class="hs-keyword">where</span><span>
-</span><span id="line-53"></span><span>  </span><span class="hs-special">(</span><span class="annot"><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-type">Filter</span></a></span><span> </span><span id="local-6989586621679107432"><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107432"><span class="hs-identifier hs-var">a</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679107431"><span class="annot"><span class="annottext">&lt;&gt; :: Filter -&gt; Filter -&gt; Filter
-</span><span class="hs-operator hs-var hs-var hs-var hs-var">&lt;&gt;</span></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-type">Filter</span></a></span><span> </span><span id="local-6989586621679107430"><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107430"><span class="hs-identifier hs-var">b</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Filter
+</span><span id="line-52"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679106004"><span id="local-6989586621679106006"><span class="annot"><span class="hs-identifier hs-type">Semigroup</span></span><span> </span><span class="annot"><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-type">Filter</span></a></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-53"></span><span>  </span><span class="hs-special">(</span><span class="annot"><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-type">Filter</span></a></span><span> </span><span id="local-6989586621679106000"><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679106000"><span class="hs-identifier hs-var">a</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679105999"><span class="annot"><span class="annottext">&lt;&gt; :: Filter -&gt; Filter -&gt; Filter
+</span><span class="hs-operator hs-var hs-var hs-var hs-var">&lt;&gt;</span></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-type">Filter</span></a></span><span> </span><span id="local-6989586621679105998"><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679105998"><span class="hs-identifier hs-var">b</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Filter
 </span><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-var">Filter</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107432"><span class="hs-identifier hs-var">a</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
-forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><a href="#local-6989586621679106000"><span class="hs-identifier hs-var">a</span></a></span><span> </span><span class="annot"><span class="annottext">forall a. Semigroup a =&gt; a -&gt; a -&gt; a
 </span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><span class="hs-string">&quot;/&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
-forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-string">&quot;/&quot;</span></span><span> </span><span class="annot"><span class="annottext">forall a. Semigroup a =&gt; a -&gt; a -&gt; a
 </span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107430"><span class="hs-identifier hs-var">b</span></a></span><span class="hs-special">)</span><span>
+</span><a href="#local-6989586621679105998"><span class="hs-identifier hs-var">b</span></a></span><span class="hs-special">)</span><span>
 </span><span id="line-54"></span><span>
 </span><span id="line-55"></span><span class="hs-comment">-- | mkFilter creates a filter from a text representation of a valid filter.</span><span>
 </span><span id="line-56"></span><span class="annot"><a href="Network.MQTT.Topic.html#mkFilter"><span class="hs-identifier hs-type">mkFilter</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-type">Filter</span></a></span><span>
 </span><span id="line-57"></span><span id="mkFilter"><span class="annot"><span class="annottext">mkFilter :: Text -&gt; Maybe Filter
 </span><a href="Network.MQTT.Topic.html#mkFilter"><span class="hs-identifier hs-var hs-var">mkFilter</span></a></span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><span class="hs-string">&quot;&quot;</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe Filter
-forall a. Maybe a
+</span><span class="hs-string">&quot;&quot;</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. Maybe a
 </span><span class="hs-identifier hs-var">Nothing</span></span><span>
-</span><span id="line-58"></span><span class="annot"><a href="Network.MQTT.Topic.html#mkFilter"><span class="hs-identifier hs-var">mkFilter</span></a></span><span> </span><span id="local-6989586621679107429"><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107429"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Filter
-</span><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-var">Filter</span></a></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Filter) -&gt; Maybe Text -&gt; Maybe Filter
-forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
-</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">[Text] -&gt; Maybe Text
-forall {a}. (Eq a, IsString a) =&gt; [a] -&gt; Maybe Text
-</span><a href="#local-6989586621679107428"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; [Text]
+</span><span id="line-58"></span><span class="annot"><a href="Network.MQTT.Topic.html#mkFilter"><span class="hs-identifier hs-var">mkFilter</span></a></span><span> </span><span id="local-6989586621679105997"><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679105997"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Filter
+</span><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-var">Filter</span></a></span><span> </span><span class="annot"><span class="annottext">forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">forall {a}. (Eq a, IsString a) =&gt; [a] -&gt; Maybe Text
+</span><a href="#local-6989586621679105996"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; [Text]
 </span><span class="hs-identifier hs-var">splitOn</span></span><span> </span><span class="annot"><span class="annottext">Text
 </span><span class="hs-string">&quot;/&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107429"><span class="hs-identifier hs-var">t</span></a></span><span class="hs-special">)</span><span>
+</span><a href="#local-6989586621679105997"><span class="hs-identifier hs-var">t</span></a></span><span class="hs-special">)</span><span>
 </span><span id="line-59"></span><span>  </span><span class="hs-keyword">where</span><span>
-</span><span id="line-60"></span><span>    </span><span id="local-6989586621679107428"><span class="annot"><span class="annottext">validate :: [a] -&gt; Maybe Text
-</span><a href="#local-6989586621679107428"><span class="hs-identifier hs-var hs-var">validate</span></a></span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">a
-</span><span class="hs-string">&quot;#&quot;</span></span><span class="hs-special">]</span><span>   </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Maybe Text
-forall a. a -&gt; Maybe a
+</span><span id="line-60"></span><span>    </span><span id="local-6989586621679105996"><span class="annot"><span class="annottext">validate :: [a] -&gt; Maybe Text
+</span><a href="#local-6989586621679105996"><span class="hs-identifier hs-var hs-var">validate</span></a></span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">a
+</span><span class="hs-string">&quot;#&quot;</span></span><span class="hs-special">]</span><span>   </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. a -&gt; Maybe a
 </span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107429"><span class="hs-identifier hs-var">t</span></a></span><span>
-</span><span id="line-61"></span><span>    </span><span class="annot"><a href="#local-6989586621679107428"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679105997"><span class="hs-identifier hs-var">t</span></a></span><span>
+</span><span id="line-61"></span><span>    </span><span class="annot"><a href="#local-6989586621679105996"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a
 </span><span class="hs-string">&quot;#&quot;</span></span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span class="annot"><span class="annottext">[a]
-</span><span class="hs-identifier">_</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe Text
-forall a. Maybe a
+</span><span class="hs-identifier">_</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. Maybe a
 </span><span class="hs-identifier hs-var">Nothing</span></span><span>
-</span><span id="line-62"></span><span>    </span><span class="annot"><a href="#local-6989586621679107428"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>      </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Maybe Text
-forall a. a -&gt; Maybe a
+</span><span id="line-62"></span><span>    </span><span class="annot"><a href="#local-6989586621679105996"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>      </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">forall a. a -&gt; Maybe a
 </span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107429"><span class="hs-identifier hs-var">t</span></a></span><span>
-</span><span id="line-63"></span><span>    </span><span class="annot"><a href="#local-6989586621679107428"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a
-</span><span class="hs-identifier">_</span></span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679107421"><span class="annot"><span class="annottext">[a]
-</span><a href="#local-6989586621679107421"><span class="hs-identifier hs-var">xs</span></a></span></span><span class="hs-special">)</span><span>  </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[a] -&gt; Maybe Text
-</span><a href="#local-6989586621679107428"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="annot"><span class="annottext">[a]
-</span><a href="#local-6989586621679107421"><span class="hs-identifier hs-var">xs</span></a></span><span>
+</span><a href="#local-6989586621679105997"><span class="hs-identifier hs-var">t</span></a></span><span>
+</span><span id="line-63"></span><span>    </span><span class="annot"><a href="#local-6989586621679105996"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a
+</span><span class="hs-identifier">_</span></span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679105989"><span class="annot"><span class="annottext">[a]
+</span><a href="#local-6989586621679105989"><span class="hs-identifier hs-var">xs</span></a></span></span><span class="hs-special">)</span><span>  </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[a] -&gt; Maybe Text
+</span><a href="#local-6989586621679105996"><span class="hs-identifier hs-var">validate</span></a></span><span> </span><span class="annot"><span class="annottext">[a]
+</span><a href="#local-6989586621679105989"><span class="hs-identifier hs-var">xs</span></a></span><span>
 </span><span id="line-64"></span><span>
 </span><span id="line-65"></span><span class="hs-comment">-- | match returns true iff the given pattern can be matched by the</span><span>
 </span><span id="line-66"></span><span class="hs-comment">-- specified Topic as defined in the</span><span>
 </span><span id="line-67"></span><span class="hs-comment">-- &lt;http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718107 MQTT 3.1.1 specification&gt;.</span><span>
 </span><span id="line-68"></span><span class="annot"><a href="Network.MQTT.Topic.html#match"><span class="hs-identifier hs-type">match</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-type">Filter</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-type">Topic</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span>
 </span><span id="line-69"></span><span id="match"><span class="annot"><span class="annottext">match :: Filter -&gt; Topic -&gt; Bool
-</span><a href="Network.MQTT.Topic.html#match"><span class="hs-identifier hs-var hs-var">match</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-type">Filter</span></a></span><span> </span><span id="local-6989586621679107420"><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107420"><span class="hs-identifier hs-var">pat</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-type">Topic</span></a></span><span> </span><span id="local-6989586621679107419"><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107419"><span class="hs-identifier hs-var">top</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Text] -&gt; [Text] -&gt; Bool
-</span><a href="#local-6989586621679107418"><span class="hs-identifier hs-var">cmp</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; [Text]
+</span><a href="Network.MQTT.Topic.html#match"><span class="hs-identifier hs-var hs-var">match</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-type">Filter</span></a></span><span> </span><span id="local-6989586621679105988"><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679105988"><span class="hs-identifier hs-var">pat</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-type">Topic</span></a></span><span> </span><span id="local-6989586621679105987"><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679105987"><span class="hs-identifier hs-var">top</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Text] -&gt; [Text] -&gt; Bool
+</span><a href="#local-6989586621679105986"><span class="hs-identifier hs-var">cmp</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; [Text]
 </span><span class="hs-identifier hs-var">splitOn</span></span><span> </span><span class="annot"><span class="annottext">Text
 </span><span class="hs-string">&quot;/&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107420"><span class="hs-identifier hs-var">pat</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; [Text]
+</span><a href="#local-6989586621679105988"><span class="hs-identifier hs-var">pat</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; [Text]
 </span><span class="hs-identifier hs-var">splitOn</span></span><span> </span><span class="annot"><span class="annottext">Text
 </span><span class="hs-string">&quot;/&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107419"><span class="hs-identifier hs-var">top</span></a></span><span class="hs-special">)</span><span>
+</span><a href="#local-6989586621679105987"><span class="hs-identifier hs-var">top</span></a></span><span class="hs-special">)</span><span>
 </span><span id="line-70"></span><span>
 </span><span id="line-71"></span><span>  </span><span class="hs-keyword">where</span><span>
-</span><span id="line-72"></span><span>    </span><span id="local-6989586621679107418"><span class="annot"><span class="annottext">cmp :: [Text] -&gt; [Text] -&gt; Bool
-</span><a href="#local-6989586621679107418"><span class="hs-identifier hs-var hs-var">cmp</span></a></span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>       </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span id="line-72"></span><span>    </span><span id="local-6989586621679105986"><span class="annot"><span class="annottext">cmp :: [Text] -&gt; [Text] -&gt; Bool
+</span><a href="#local-6989586621679105986"><span class="hs-identifier hs-var hs-var">cmp</span></a></span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>       </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
 </span><span class="hs-identifier hs-var">True</span></span><span>
-</span><span id="line-73"></span><span>    </span><span class="annot"><a href="#local-6989586621679107418"><span class="hs-identifier hs-var">cmp</span></a></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span> </span><span class="annot"><span class="annottext">[Text]
+</span><span id="line-73"></span><span>    </span><span class="annot"><a href="#local-6989586621679105986"><span class="hs-identifier hs-var">cmp</span></a></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span> </span><span class="annot"><span class="annottext">[Text]
 </span><span class="hs-identifier">_</span></span><span>        </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
 </span><span class="hs-identifier hs-var">False</span></span><span>
-</span><span id="line-74"></span><span>    </span><span class="annot"><a href="#local-6989586621679107418"><span class="hs-identifier hs-var">cmp</span></a></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">Text
+</span><span id="line-74"></span><span>    </span><span class="annot"><a href="#local-6989586621679105986"><span class="hs-identifier hs-var">cmp</span></a></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">Text
 </span><span class="hs-string">&quot;#&quot;</span></span><span class="hs-special">]</span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>    </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
 </span><span class="hs-identifier hs-var">True</span></span><span>
-</span><span id="line-75"></span><span>    </span><span class="annot"><a href="#local-6989586621679107418"><span class="hs-identifier hs-var">cmp</span></a></span><span> </span><span class="annot"><span class="annottext">[Text]
+</span><span id="line-75"></span><span>    </span><span class="annot"><a href="#local-6989586621679105986"><span class="hs-identifier hs-var">cmp</span></a></span><span> </span><span class="annot"><span class="annottext">[Text]
 </span><span class="hs-identifier">_</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>        </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
 </span><span class="hs-identifier hs-var">False</span></span><span>
-</span><span id="line-76"></span><span>    </span><span class="annot"><a href="#local-6989586621679107418"><span class="hs-identifier hs-var">cmp</span></a></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">Text
-</span><span class="hs-string">&quot;#&quot;</span></span><span class="hs-special">]</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679107408"><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107408"><span class="hs-identifier hs-var">t</span></a></span></span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span class="annot"><span class="annottext">[Text]
+</span><span id="line-76"></span><span>    </span><span class="annot"><a href="#local-6989586621679105986"><span class="hs-identifier hs-var">cmp</span></a></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">Text
+</span><span class="hs-string">&quot;#&quot;</span></span><span class="hs-special">]</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679105976"><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679105976"><span class="hs-identifier hs-var">t</span></a></span></span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span class="annot"><span class="annottext">[Text]
 </span><span class="hs-identifier">_</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool
-</span><span class="hs-identifier hs-var">not</span></span><span> </span><span class="annot"><span class="annottext">(Bool -&gt; Bool) -&gt; Bool -&gt; Bool
-forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-identifier hs-var">not</span></span><span> </span><span class="annot"><span class="annottext">forall a b. (a -&gt; b) -&gt; a -&gt; b
 </span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text
 </span><span class="hs-string">&quot;$&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Bool
 </span><span class="hs-operator hs-var">`isPrefixOf`</span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107408"><span class="hs-identifier hs-var">t</span></a></span><span>
-</span><span id="line-77"></span><span>    </span><span class="annot"><a href="#local-6989586621679107418"><span class="hs-identifier hs-var">cmp</span></a></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679107406"><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107406"><span class="hs-identifier hs-var">p</span></a></span></span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679107405"><span class="annot"><span class="annottext">[Text]
-</span><a href="#local-6989586621679107405"><span class="hs-identifier hs-var">ps</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679107404"><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107404"><span class="hs-identifier hs-var">t</span></a></span></span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679107403"><span class="annot"><span class="annottext">[Text]
-</span><a href="#local-6989586621679107403"><span class="hs-identifier hs-var">ts</span></a></span></span><span class="hs-special">)</span><span>
+</span><a href="#local-6989586621679105976"><span class="hs-identifier hs-var">t</span></a></span><span>
+</span><span id="line-77"></span><span>    </span><span class="annot"><a href="#local-6989586621679105986"><span class="hs-identifier hs-var">cmp</span></a></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679105974"><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679105974"><span class="hs-identifier hs-var">p</span></a></span></span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679105973"><span class="annot"><span class="annottext">[Text]
+</span><a href="#local-6989586621679105973"><span class="hs-identifier hs-var">ps</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679105972"><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679105972"><span class="hs-identifier hs-var">t</span></a></span></span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679105971"><span class="annot"><span class="annottext">[Text]
+</span><a href="#local-6989586621679105971"><span class="hs-identifier hs-var">ts</span></a></span></span><span class="hs-special">)</span><span>
 </span><span id="line-78"></span><span>      </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107406"><span class="hs-identifier hs-var">p</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Bool
-forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><a href="#local-6989586621679105974"><span class="hs-identifier hs-var">p</span></a></span><span> </span><span class="annot"><span class="annottext">forall a. Eq a =&gt; a -&gt; a -&gt; Bool
 </span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107404"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Text] -&gt; [Text] -&gt; Bool
-</span><a href="#local-6989586621679107418"><span class="hs-identifier hs-var">cmp</span></a></span><span> </span><span class="annot"><span class="annottext">[Text]
-</span><a href="#local-6989586621679107405"><span class="hs-identifier hs-var">ps</span></a></span><span> </span><span class="annot"><span class="annottext">[Text]
-</span><a href="#local-6989586621679107403"><span class="hs-identifier hs-var">ts</span></a></span><span>
+</span><a href="#local-6989586621679105972"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Text] -&gt; [Text] -&gt; Bool
+</span><a href="#local-6989586621679105986"><span class="hs-identifier hs-var">cmp</span></a></span><span> </span><span class="annot"><span class="annottext">[Text]
+</span><a href="#local-6989586621679105973"><span class="hs-identifier hs-var">ps</span></a></span><span> </span><span class="annot"><span class="annottext">[Text]
+</span><a href="#local-6989586621679105971"><span class="hs-identifier hs-var">ts</span></a></span><span>
 </span><span id="line-79"></span><span>      </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107406"><span class="hs-identifier hs-var">p</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Bool
-forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><a href="#local-6989586621679105974"><span class="hs-identifier hs-var">p</span></a></span><span> </span><span class="annot"><span class="annottext">forall a. Eq a =&gt; a -&gt; a -&gt; Bool
 </span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">Text
 </span><span class="hs-string">&quot;+&quot;</span></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
 </span><span class="hs-operator hs-var">&amp;&amp;</span></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool
 </span><span class="hs-identifier hs-var">not</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text
 </span><span class="hs-string">&quot;$&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Bool
 </span><span class="hs-operator hs-var">`isPrefixOf`</span></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107404"><span class="hs-identifier hs-var">t</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Text] -&gt; [Text] -&gt; Bool
-</span><a href="#local-6989586621679107418"><span class="hs-identifier hs-var">cmp</span></a></span><span> </span><span class="annot"><span class="annottext">[Text]
-</span><a href="#local-6989586621679107405"><span class="hs-identifier hs-var">ps</span></a></span><span> </span><span class="annot"><span class="annottext">[Text]
-</span><a href="#local-6989586621679107403"><span class="hs-identifier hs-var">ts</span></a></span><span>
+</span><a href="#local-6989586621679105972"><span class="hs-identifier hs-var">t</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Text] -&gt; [Text] -&gt; Bool
+</span><a href="#local-6989586621679105986"><span class="hs-identifier hs-var">cmp</span></a></span><span> </span><span class="annot"><span class="annottext">[Text]
+</span><a href="#local-6989586621679105973"><span class="hs-identifier hs-var">ps</span></a></span><span> </span><span class="annot"><span class="annottext">[Text]
+</span><a href="#local-6989586621679105971"><span class="hs-identifier hs-var">ts</span></a></span><span>
 </span><span id="line-80"></span><span>      </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
 </span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
 </span><span class="hs-identifier hs-var">False</span></span><span>
@@ -357,8 +309,8 @@ forall a. Eq a =&gt; a -&gt; a -&gt; Bool
 </span><span id="line-82"></span><span class="hs-comment">-- | Convert a 'Topic' to a 'Filter' as all 'Topic's are valid 'Filter's</span><span>
 </span><span id="line-83"></span><span class="annot"><a href="Network.MQTT.Topic.html#toFilter"><span class="hs-identifier hs-type">toFilter</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-type">Topic</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-type">Filter</span></a></span><span>
 </span><span id="line-84"></span><span id="toFilter"><span class="annot"><span class="annottext">toFilter :: Topic -&gt; Filter
-</span><a href="Network.MQTT.Topic.html#toFilter"><span class="hs-identifier hs-var hs-var">toFilter</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Network.MQTT.Topic.html#Topic"><span class="hs-identifier hs-type">Topic</span></a></span><span> </span><span id="local-6989586621679107401"><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107401"><span class="hs-identifier hs-var">t</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Filter
-</span><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-var">Filter</span></a></span><span> </span><span class="annot"><span class="annottext">Text
-</span><a href="#local-6989586621679107401"><span class="hs-identifier hs-var">t</span></a></span><span>
+</span><a href="Network.MQTT.Topic.html#toFilter"><span class="hs-identifier hs-var hs-var">toFilter</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Filter
+</span><a href="Network.MQTT.Topic.html#Filter"><span class="hs-identifier hs-var">Filter</span></a></span><span> </span><span class="annot"><span class="annottext">forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">Topic -&gt; Text
+</span><a href="Network.MQTT.Topic.html#unTopic"><span class="hs-identifier hs-var">unTopic</span></a></span><span>
 </span><span id="line-85"></span></pre></body></html>
