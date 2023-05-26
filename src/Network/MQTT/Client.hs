@@ -139,6 +139,8 @@ data MQTTConfig = MQTTConfig{
   , _password       :: Maybe String -- ^ Optional password (parsed from the URI)
   , _connectTimeout :: Int -- ^ Connection timeout (microseconds)
   , _tlsSettings    :: TLSSettings -- ^ TLS Settings for secure connections
+  , _pingPeriod     :: Int -- ^ Time in seconds between pings
+  , _pingPatience   :: Int -- ^ Time in seconds for which there must be no incoming packets before the broker is considered dead. Should be more than the ping period plus the maximum expected ping round trip time.
   }
 
 -- | A default 'MQTTConfig'.  A '_connID' /may/ be required depending on
@@ -153,7 +155,9 @@ mqttConfig = MQTTConfig{_hostname="", _port=1883, _connID="",
                         _msgCB=NoCallback,
                         _protocol=Protocol311, _connProps=mempty,
                         _connectTimeout=180000000,
-                        _tlsSettings=TLSSettingsSimple False False False}
+                        _tlsSettings=TLSSettingsSimple False False False,
+                        _pingPeriod=30,
+                        _pingPatience=90}
 
 -- | Connect to an MQTT server by URI.
 --
@@ -261,9 +265,6 @@ runWS URI{uriPath, uriQuery} secure cfg@MQTTConfig{..} =
 
           writer conn = maybe (pure ()) (connectionPut conn . BC.toStrict)
 
-pingPeriod :: Int
-pingPeriod = 30000000 -- 30 seconds
-
 mqttFail :: String -> a
 mqttFail = E.throw . MQTTException
 
@@ -353,10 +354,10 @@ runMQTTConduit mkconn MQTTConfig{..} = do
           .| C.map (BL.toStrict . toByteString _protocol)
           .| sink
 
-        doPing = forever $ threadDelay pingPeriod >> sendPacketIO c PingPkt
+        doPing = forever $ threadDelay _pingPeriod >> sendPacketIO c PingPkt
 
         watchdog ch = forever $ do
-          toch <- registerDelay (pingPeriod * 3)
+          toch <- registerDelay _pingPatience
           timedOut <- atomically $ ((check =<< readTVar toch) >> pure True) `orElse` (readTChan ch >> pure False)
           when timedOut $ killConn c Timeout
 
