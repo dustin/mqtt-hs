@@ -400,7 +400,7 @@ module Network.MQTT.Client
 
 -- | Configuration for setting up an MQTT client.
 data MQTTConfig
-MQTTConfig :: Bool -> Maybe LastWill -> MessageCallback -> ProtocolLevel -> [Property] -> String -> Int -> String -> Maybe String -> Maybe String -> Int -> TLSSettings -> MQTTConfig
+MQTTConfig :: Bool -> Maybe LastWill -> MessageCallback -> ProtocolLevel -> [Property] -> String -> Int -> String -> Maybe String -> Maybe String -> Int -> TLSSettings -> Int -> Int -> MQTTConfig
 
 -- | False if a session should be reused.
 [_cleanSession] :: MQTTConfig -> Bool
@@ -437,6 +437,14 @@ MQTTConfig :: Bool -> Maybe LastWill -> MessageCallback -> ProtocolLevel -> [Pro
 
 -- | TLS Settings for secure connections
 [_tlsSettings] :: MQTTConfig -> TLSSettings
+
+-- | Time in seconds between pings
+[_pingPeriod] :: MQTTConfig -> Int
+
+-- | Time in seconds for which there must be no incoming packets before the
+--   broker is considered dead. Should be more than the ping period plus
+--   the maximum expected ping round trip time.
+[_pingPatience] :: MQTTConfig -> Int
 
 -- | The MQTT client.
 --   
