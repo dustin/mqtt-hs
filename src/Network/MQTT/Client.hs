@@ -159,6 +159,7 @@ mqttConfig = MQTTConfig{_hostname="", _port=1883, _connID="",
                         _pingPeriod=30000000,
                         _pingPatience=90000000}
 
+
 -- | Connect to an MQTT server by URI.
 --
 -- @mqtt://@, @mqtts://@, @ws://@, and @wss://@ URLs are supported.
