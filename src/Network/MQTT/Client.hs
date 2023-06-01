@@ -156,8 +156,8 @@ mqttConfig = MQTTConfig{_hostname="", _port=1883, _connID="",
                         _protocol=Protocol311, _connProps=mempty,
                         _connectTimeout=180000000,
                         _tlsSettings=TLSSettingsSimple False False False,
-                        _pingPeriod=30,
-                        _pingPatience=90}
+                        _pingPeriod=30000000,
+                        _pingPatience=90000000}
 
 -- | Connect to an MQTT server by URI.
 --
