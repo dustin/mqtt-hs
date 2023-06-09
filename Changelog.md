@@ -1,5 +1,9 @@
 # Changelog for net-mqtt
 
+## 0.8.3.0
+
+Ping time is configurable.
+
 ## 0.8.2.4
 
 Minor build changes and code cleanup.  Includes LTS update.
