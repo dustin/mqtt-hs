@@ -27,7 +27,7 @@ module Network.MQTT.Client (
   -- * Running and waiting for the client.
   waitForClient,
   connectURI, isConnected,
-  disconnect, normalDisconnect,
+  disconnect, normalDisconnect, stopClient,
   -- * General client interactions.
   subscribe, unsubscribe, publish, publishq, pubAliased,
   svrProps, connACK, MQTTException(..),
@@ -372,6 +372,15 @@ waitForClient :: MQTTClient -> IO ()
 waitForClient c@MQTTClient{..} = flip E.finally (stopCallbackThread c) $ do
   void . traverse wait =<< readTVarIO _ct
   maybe (pure ()) E.throwIO =<< atomically (stateX c Stopped)
+
+-- | Stops the client and closes the connection without sending a DISCONNECT
+-- message to the broker. This will cause the last-will message to be delivered
+-- by the broker if it has been defined.
+stopClient :: MQTTClient -> IO ()
+stopClient MQTTClient{..} = do
+  void . traverse cancel =<< readTVarIO _ct
+  void . traverse cancel =<< readTVarIO _cbHandle
+  atomically (writeTVar _st Stopped)
 
 stateX :: MQTTClient -> ConnState -> STM (Maybe E.SomeException)
 stateX MQTTClient{..} want = f <$> readTVar _st
