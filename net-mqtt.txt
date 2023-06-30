@@ -596,6 +596,11 @@ disconnect :: MQTTClient -> DiscoReason -> [Property] -> IO ()
 -- | Disconnect with <a>DiscoNormalDisconnection</a> and no properties.
 normalDisconnect :: MQTTClient -> IO ()
 
+-- | Stops the client and closes the connection without sending a
+--   DISCONNECT message to the broker. This will cause the last-will
+--   message to be delivered by the broker if it has been defined.
+stopClient :: MQTTClient -> IO ()
+
 -- | Subscribe to a list of topic filters with their respective
 --   <a>QoS</a>es. The accepted <a>QoS</a>es are returned in the same order
 --   as requested.
