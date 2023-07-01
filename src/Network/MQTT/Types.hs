@@ -27,7 +27,7 @@ module Network.MQTT.Types (
   parseSubOptions, ByteSize(..)
   ) where
 
-import           Control.Applicative             (asum, liftA2, (<|>))
+import           Control.Applicative             (liftA2, (<|>))
 import           Control.Monad                   (replicateM, when)
 import           Data.Attoparsec.Binary          (anyWord16be, anyWord32be)
 import qualified Data.Attoparsec.ByteString      as AS
@@ -35,6 +35,7 @@ import qualified Data.Attoparsec.ByteString.Lazy as A
 import           Data.Binary.Put                 (putWord32be, runPut)
 import           Data.Bits                       (Bits (..), shiftL, testBit, (.&.), (.|.))
 import qualified Data.ByteString.Lazy            as BL
+import           Data.Foldable                   (asum)
 import           Data.Functor                    (($>))
 import           Data.Maybe                      (fromMaybe, isJust)
 import           Data.Word                       (Word16, Word32, Word8)
