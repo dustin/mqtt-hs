@@ -77,7 +77,7 @@ run Options{..} = do
   where
     go ch uref = do
       uri <- R.readIORef uref
-      when optVerbose $ putStrLn ("Connecting to " <> show uri)
+      verbose ("Connecting to " <> show uri)
       mc <- connectURI mqttConfig{_msgCB=SimpleCallback (showme ch), _protocol=Protocol50,
                                   _cleanSession=optSessionTime == 0,
                                   _connProps=[PropReceiveMaximum 65535,
@@ -89,13 +89,14 @@ run Options{..} = do
 
       (ConnACKFlags sp _ props) <- connACK mc
       when (optSessionTime > 0) $ updateURI uref props
-      when optVerbose $ putStrLn (if sp == ExistingSession then "<resuming session>" else "<new session>")
-      when optVerbose $ putStrLn ("Properties: " <> show props)
-      when (sp == NewSession || optSubResume) $ do
-        subres <- subscribe mc [(t, subOptions{_subQoS=optQoS}) | t <- optTopics] mempty
-        when optVerbose $ print subres
+      verbose (if sp == ExistingSession then "<resuming session>" else "<new session>")
+      verbose ("Properties: " <> show props)
+      when (sp == NewSession || optSubResume) $ subscribe mc [(t, subOptions{_subQoS=optQoS}) | t <- optTopics] mempty >>= verboseShow
 
       print =<< waitForClient mc
+
+    verbose = when optVerbose . putStrLn
+    verboseShow = verbose . show
 
     showme ch _ t m props = atomically $ writeTChan ch $ Msg t m props
 
