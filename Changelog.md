@@ -1,5 +1,9 @@
 # Changelog for net-mqtt
 
+## 0.8.5.0
+
+Switch to crypton-connection
+
 ## 0.8.3.0
 
 Ping time is configurable.

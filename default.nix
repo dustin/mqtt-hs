@@ -1,43 +1,30 @@
-{ compiler ? "ghc884" }:
-
 let
-  nixpkgs = builtins.fetchTarball {
-    # nixpkgs release 21.11
-    # url: <https://github.com/NixOS/nixpkgs/releases/tag/21.11>
-    url = "https://github.com/NixOS/nixpkgs/archive/refs/tags/21.11.tar.gz";
-    sha256 = "162dywda2dvfj1248afxc45kcrg83appjd0nmdb541hl7rnncf02";
+  # Read in the Niv sources
+  sources = import ./nix/sources.nix {};
+  # If ./nix/sources.nix file is not found run:
+  #   niv init
+  #   niv add input-output-hk/haskell.nix -n haskellNix
+
+  # Fetch the haskell.nix commit we have pinned with Niv
+  haskellNix = import sources.haskellNix {};
+  # If haskellNix is not found run:
+  #   niv add input-output-hk/haskell.nix -n haskellNix
+
+  # Import nixpkgs and pass the haskell.nix provided nixpkgsArgs
+  pkgs = import
+    # haskell.nix provides access to the nixpkgs pins which are used by our CI,
+    # hence you will be more likely to get cache hits when using these.
+    # But you can also just use your own, e.g. '<nixpkgs>'.
+    haskellNix.sources.nixpkgs-unstable
+    # These arguments passed to nixpkgs, include some patches and also
+    # the haskell.nix functionality itself as an overlay.
+    haskellNix.nixpkgsArgs;
+in pkgs.haskell-nix.project {
+  # 'cleanGit' cleans a source directory based on the files known by git
+  src = pkgs.haskell-nix.haskellLib.cleanGit {
+    name = "haskell-nix-project";
+    src = ./.;
   };
-
-  config = { };
-
-  overlay = pkgsNew: pkgsOld: {
-    haskell = pkgsOld.haskell // {
-      packages = pkgsOld.haskell.packages // {
-        "${compiler}" = pkgsOld.haskell.packages."${compiler}".override (old: {
-          overrides = let
-            packageSources =
-              pkgsNew.haskell.lib.packageSourceOverrides { "mqtt-net" = ./.; };
-
-            manualOverrides = haskellPackagesNew: haskellPackagesOld: { };
-
-            default = old.overrides or (_: _: { });
-
-          in pkgsNew.lib.fold pkgsNew.lib.composeExtensions default [
-            packageSources
-            manualOverrides
-          ];
-        });
-      };
-    };
-  };
-
-  pkgs = import nixpkgs {
-    inherit config;
-    overlays = [ overlay ];
-  };
-
-in {
-  inherit (pkgs.haskell.packages."${compiler}") mqtt-net;
-
-  shell = (pkgs.haskell.packages."${compiler}".mqtt-net).env;
+  # Specify the GHC version to use.
+  compiler-nix-name = "ghc902"; # Not required for `stack.yaml` based projects.
 }
