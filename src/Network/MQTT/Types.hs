@@ -240,45 +240,50 @@ instance ByteMe Property where
 
   toByteString _ (PropSharedSubscriptionAvailable x)     = peW8 0x2a x
 
+oneOf :: [(Word8, p)] -> A.Parser p
+oneOf = asum . fmap (\(w, p) -> A.word8 w $> p)
+
+oneOfp :: [(Word8, A.Parser p)] -> A.Parser p
+oneOfp = asum . fmap (\(b,p) -> A.word8 b *> p)
+
 parseProperty :: A.Parser Property
-parseProperty = (A.word8 0x01 >> PropPayloadFormatIndicator <$> A.anyWord8)
-                <|> (A.word8 0x02 >> PropMessageExpiryInterval <$> aWord32)
-                <|> (A.word8 0x03 >> PropContentType <$> aString)
-                <|> (A.word8 0x08 >> PropResponseTopic <$> aString)
-                <|> (A.word8 0x09 >> PropCorrelationData <$> aString)
-                <|> (A.word8 0x0b >> PropSubscriptionIdentifier <$> decodeVarInt)
-                <|> (A.word8 0x11 >> PropSessionExpiryInterval <$> aWord32)
-                <|> (A.word8 0x12 >> PropAssignedClientIdentifier <$> aString)
-                <|> (A.word8 0x13 >> PropServerKeepAlive <$> aWord16)
-                <|> (A.word8 0x15 >> PropAuthenticationMethod <$> aString)
-                <|> (A.word8 0x16 >> PropAuthenticationData <$> aString)
-                <|> (A.word8 0x17 >> PropRequestProblemInformation <$> A.anyWord8)
-                <|> (A.word8 0x18 >> PropWillDelayInterval <$> aWord32)
-                <|> (A.word8 0x19 >> PropRequestResponseInformation <$> A.anyWord8)
-                <|> (A.word8 0x1a >> PropResponseInformation <$> aString)
-                <|> (A.word8 0x1c >> PropServerReference <$> aString)
-                <|> (A.word8 0x1f >> PropReasonString <$> aString)
-                <|> (A.word8 0x21 >> PropReceiveMaximum <$> aWord16)
-                <|> (A.word8 0x22 >> PropTopicAliasMaximum <$> aWord16)
-                <|> (A.word8 0x23 >> PropTopicAlias <$> aWord16)
-                <|> (A.word8 0x24 >> PropMaximumQoS <$> A.anyWord8)
-                <|> (A.word8 0x25 >> PropRetainAvailable <$> A.anyWord8)
-                <|> (A.word8 0x26 >> PropUserProperty <$> aString <*> aString)
-                <|> (A.word8 0x27 >> PropMaximumPacketSize <$> aWord32)
-                <|> (A.word8 0x28 >> PropWildcardSubscriptionAvailable <$> A.anyWord8)
-                <|> (A.word8 0x29 >> PropSubscriptionIdentifierAvailable <$> A.anyWord8)
-                <|> (A.word8 0x2a >> PropSharedSubscriptionAvailable <$> A.anyWord8)
+parseProperty = oneOfp [ (0x01, PropPayloadFormatIndicator <$> A.anyWord8),
+                         (0x02, PropMessageExpiryInterval <$> aWord32),
+                         (0x03, PropContentType <$> aString),
+                         (0x08, PropResponseTopic <$> aString),
+                         (0x09, PropCorrelationData <$> aString),
+                         (0x0b, PropSubscriptionIdentifier <$> decodeVarInt),
+                         (0x11, PropSessionExpiryInterval <$> aWord32),
+                         (0x12, PropAssignedClientIdentifier <$> aString),
+                         (0x13, PropServerKeepAlive <$> aWord16),
+                         (0x15, PropAuthenticationMethod <$> aString),
+                         (0x16, PropAuthenticationData <$> aString),
+                         (0x17, PropRequestProblemInformation <$> A.anyWord8),
+                         (0x18, PropWillDelayInterval <$> aWord32),
+                         (0x19, PropRequestResponseInformation <$> A.anyWord8),
+                         (0x1a, PropResponseInformation <$> aString),
+                         (0x1c, PropServerReference <$> aString),
+                         (0x1f, PropReasonString <$> aString),
+                         (0x21, PropReceiveMaximum <$> aWord16),
+                         (0x22, PropTopicAliasMaximum <$> aWord16),
+                         (0x23, PropTopicAlias <$> aWord16),
+                         (0x24, PropMaximumQoS <$> A.anyWord8),
+                         (0x25, PropRetainAvailable <$> A.anyWord8),
+                         (0x26, PropUserProperty <$> aString <*> aString),
+                         (0x27, PropMaximumPacketSize <$> aWord32),
+                         (0x28, PropWildcardSubscriptionAvailable <$> A.anyWord8),
+                         (0x29, PropSubscriptionIdentifierAvailable <$> A.anyWord8),
+                         (0x2a, PropSharedSubscriptionAvailable <$> A.anyWord8)
+                 ]
 
 bsProps :: ProtocolLevel -> [Property] -> BL.ByteString
-bsProps Protocol311 _ = mempty
-bsProps p l = let b = foldMap (toByteString p) l in
-                (BL.pack . encodeLength . fromIntegral . BL.length) b <> b
+bsProps Protocol311 = const mempty
+bsProps p = withLength . foldMap (toByteString p)
+
 
 parseProperties :: ProtocolLevel -> A.Parser [Property]
 parseProperties Protocol311 = pure mempty
-parseProperties Protocol50 = do
-  len <- decodeVarInt
-  either fail pure . AS.parseOnly (A.many' parseProperty) =<< A.take len
+parseProperties Protocol50 = either fail pure . AS.parseOnly (A.many' parseProperty) =<< A.take =<< decodeVarInt
 
 -- | MQTT Protocol Levels
 data ProtocolLevel = Protocol311 -- ^ MQTT 3.1.1
@@ -403,9 +408,7 @@ aWord32 :: A.Parser Word32
 aWord32 = anyWord32be
 
 aString :: A.Parser BL.ByteString
-aString = do
-  n <- aWord16
-  BL.fromStrict <$> A.take (fromIntegral n)
+aString = fmap BL.fromStrict . A.take . fromIntegral =<< aWord16
 
 -- | Parse a CONNect packet.  This is useful when examining the
 -- beginning of the stream as it allows you to determine the protocol
@@ -525,7 +528,7 @@ instance ByteMe ConnACKFlags where
     let pbytes = BL.unpack $ bsProps prot props in
       [0x20]
       <> encodeVarInt (2 + length pbytes)
-      <>[ boolBit (sp /= NewSession), toByte rc] <> pbytes
+      <> [boolBit (sp /= NewSession), toByte rc] <> pbytes
 
 parseConnectACK :: A.Parser MQTTPkt
 parseConnectACK = do
@@ -822,13 +825,14 @@ parseUnsubACK Protocol50 = do
 
   where
     unsubACK :: A.Parser UnsubStatus
-    unsubACK = (UnsubSuccess <$ A.word8 0x00)
-               <|> (UnsubNoSubscriptionExisted <$ A.word8 0x11)
-               <|> (UnsubUnspecifiedError <$ A.word8 0x80)
-               <|> (UnsubImplementationSpecificError <$ A.word8 0x83)
-               <|> (UnsubNotAuthorized <$ A.word8 0x87)
-               <|> (UnsubTopicFilterInvalid <$ A.word8 0x8F)
-               <|> (UnsubPacketIdentifierInUse <$ A.word8 0x91)
+    unsubACK = oneOf [(0x00, UnsubSuccess),
+                      (0x11, UnsubNoSubscriptionExisted),
+                      (0x80, UnsubUnspecifiedError),
+                      (0x83, UnsubImplementationSpecificError),
+                      (0x87, UnsubNotAuthorized),
+                      (0x8F, UnsubTopicFilterInvalid),
+                      (0x91, UnsubPacketIdentifierInUse)
+                     ]
 
 data AuthRequest = AuthRequest Word8 [Property] deriving (Eq, Show)
 
