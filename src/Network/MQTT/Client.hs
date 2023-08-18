@@ -59,6 +59,7 @@ import           Data.Conduit.Network.TLS   (runTLSClient, tlsClientConfig, tlsC
 import           Data.Foldable              (traverse_)
 import           Data.Map.Strict            (Map)
 import qualified Data.Map.Strict            as Map
+import qualified Data.Map.Strict.Decaying   as Decaying
 import           Data.Maybe                 (fromJust, fromMaybe)
 import           Data.Text                  (Text)
 import qualified Data.Text.Encoding         as TE
@@ -106,6 +107,7 @@ data MessageCallback = NoCallback
   -- | A low level callback that is ordered.
   | OrderedLowLevelCallback (MQTTClient -> PublishRequest -> IO ())
 
+
 -- | The MQTT client.
 --
 -- See 'connectURI' for the most straightforward example.
@@ -114,13 +116,13 @@ data MQTTClient = MQTTClient {
   , _pktID        :: TVar Word16
   , _cb           :: MessageCallback
   , _acks         :: TVar (Map (DispatchType,Word16) (TChan MQTTPkt))
-  , _inflight     :: TVar (Map Word16 PublishRequest)
+  , _inflight     :: Decaying.Map Word16 PublishRequest
   , _st           :: TVar ConnState
   , _ct           :: TVar (Maybe (Async ()))
   , _outA         :: TVar (Map Topic Word16)
   , _inA          :: TVar (Map Word16 Topic)
   , _connACKFlags :: TVar ConnACKFlags
-  , _corr         :: TVar (Map BL.ByteString MessageCallback)
+  , _corr         :: Decaying.Map BL.ByteString MessageCallback
   , _cbM          :: MVar (IO ())
   , _cbHandle     :: TVar (Maybe (Async ()))
   }
@@ -291,13 +293,13 @@ runMQTTConduit mkconn MQTTConfig{..} = do
   _ch <- newTChanIO
   _pktID <- newTVarIO 1
   _acks <- newTVarIO mempty
-  _inflight <- newTVarIO mempty
+  _inflight <- Decaying.new 60
   _st <- newTVarIO Starting
   _ct <- newTVarIO Nothing
   _outA <- newTVarIO mempty
   _inA <- newTVarIO mempty
   _connACKFlags <- newTVarIO (ConnACKFlags NewSession ConnUnspecifiedError mempty)
-  _corr <- newTVarIO mempty
+  _corr <- Decaying.new 600
   _cbM <- newEmptyMVar
   _cbHandle <- newTVarIO Nothing
   let _cb = _msgCB
@@ -437,22 +439,19 @@ dispatch c@MQTTClient{..} pch pkt =
           notify (Just (PubACKPkt (PubACK _pubPktID 0 mempty))) =<< atomically (resolve p)
         pub p@PublishRequest{_pubQoS=QoS2} = atomically $ do
           p'@PublishRequest{..} <- resolve p
-          modifyTVar' _inflight (Map.insert _pubPktID p')
+          Decaying.insert _pubPktID p' _inflight
           sendPacket c (PubRECPkt (PubREC _pubPktID 0 mempty))
 
         pubd i = do
-          mp <- atomically $ do
-            r <- Map.lookup i <$> readTVar _inflight
-            modifyTVar' _inflight (Map.delete i)
-            pure r
+          mp <- atomically $ Decaying.updateLookupWithKey (\_ _ -> Nothing) i _inflight
           case mp of
             Nothing -> sendPacketIO c (PubCOMPPkt (PubCOMP i 0x92 mempty))
             Just p  -> notify (Just (PubCOMPPkt (PubCOMP i 0 mempty))) p
 
         notify rpkt p@PublishRequest{..} = do
-          atomically $ modifyTVar' _inflight (Map.delete _pubPktID)
-          corrs <- readTVarIO _corr
-          E.evaluate . force =<< case maybe _cb (\cd -> Map.findWithDefault _cb cd corrs) cdata of
+          atomically $ Decaying.delete _pubPktID _inflight
+          cb <- maybe (pure _cb) (\cd -> atomically (Decaying.findWithDefault _cb cd _corr)) cdata
+          E.evaluate . force =<< case cb of
                                    NoCallback                -> pure ()
                                    SimpleCallback f          -> call (f c (blToTopic _pubTopic) _pubBody _pubProps)
                                    OrderedCallback f         -> callOrd (f c (blToTopic _pubTopic) _pubBody _pubProps)
@@ -750,8 +749,8 @@ pubAliased c@MQTTClient{..} t m r q props = do
 --
 -- This registration will remain in place until unregisterCorrelated is called to remove it.
 registerCorrelated :: MQTTClient -> BL.ByteString -> MessageCallback -> STM ()
-registerCorrelated MQTTClient{_corr} bs = modifyTVar' _corr . Map.insert bs
+registerCorrelated MQTTClient{_corr} bs cb = Decaying.insert bs cb _corr
 
 -- | Unregister a callback handler for the given correlated data identifier.
 unregisterCorrelated :: MQTTClient -> BL.ByteString -> STM ()
-unregisterCorrelated MQTTClient{_corr} = modifyTVar' _corr . Map.delete
+unregisterCorrelated MQTTClient{_corr} bs = Decaying.delete bs _corr
