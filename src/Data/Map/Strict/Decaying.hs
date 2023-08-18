@@ -16,7 +16,7 @@ import Control.Concurrent.STM.TVar
     modifyTVar',
     newTVarIO,
     readTVar,
-    writeTVar
+    writeTVar,
   )
 import Control.Exception (mask)
 import Control.Monad (forever, void)
@@ -24,6 +24,7 @@ import qualified Data.Map.Strict as Map
 import Data.Time (NominalDiffTime)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import GHC.Conc (threadDelay, unsafeIOToSTM)
+import System.Mem.Weak (deRefWeak)
 
 data Item a = Item {_itemTime :: {-# UNPACK #-} !POSIXTime, itemValue :: !a}
 
@@ -51,10 +52,17 @@ updateLookupWithKey f k (Map m) = do
 new :: NominalDiffTime -> IO (Map k a)
 new maxAge = mask $ \restore -> do
   var <- newTVarIO Map.empty
-  reaper <- restore $ async $ forever $ do
-    now <- getPOSIXTime
-    atomically $ modifyTVar' var $ Map.filter $ \(Item t _) -> now - t < maxAge
-    threadDelay $ truncate $ maxAge / 4
+  wVar <- mkWeakTVar var $ pure ()
+  reaper <- restore $ async $ reaperLoop wVar
   link reaper
-  void $ mkWeakTVar var $ cancel reaper
   pure $ Map var
+  where
+    reaperLoop wVar = do
+      mVar <- deRefWeak wVar
+      case mVar of
+        Just var -> do
+          now <- getPOSIXTime
+          atomically $ modifyTVar' var $ Map.filter $ \(Item t _) -> now - t < maxAge
+          threadDelay $ truncate $ maxAge / 4
+          reaperLoop wVar
+        Nothing -> pure ()
