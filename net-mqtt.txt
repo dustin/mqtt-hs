@@ -9,6 +9,14 @@
 @package net-mqtt
 @version 0.8.5.0
 
+module Data.Map.Strict.Decaying
+data Map k a
+new :: NominalDiffTime -> IO (Map k a)
+insert :: Ord k => k -> v -> Map k v -> STM ()
+delete :: Ord k => k -> Map k v -> STM ()
+findWithDefault :: Ord k => v -> k -> Map k v -> STM v
+updateLookupWithKey :: Ord k => (k -> a -> Maybe a) -> k -> Map k a -> STM (Maybe a)
+
 
 -- | Topic and topic related utiilities.
 module Network.MQTT.Topic
