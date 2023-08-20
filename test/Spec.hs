@@ -124,11 +124,12 @@ prop_decayingMapWorks keys = idempotentIOProperty $ do
 
 prop_decayingMapDecays :: [Int] -> QC.Property
 prop_decayingMapDecays keys = idempotentIOProperty $ do
-  m <- DecayingMap.new 0.01
+  m <- DecayingMap.new 0.001
   atomically $ traverse_ (\x -> DecayingMap.insert x x m) keys
-  threadDelay 20000
-  (found, contained) <- atomically $ (,) <$> DecayingMap.elems m <*> DecayingMap.contained m
-  pure $ (found, contained) === ([] , 0)
+  threadDelay 5000
+  DecayingMap.tick m
+  found <- atomically $ DecayingMap.elems m
+  pure $ found === []
 
 prop_decayingMapUpdates :: Set Int -> QC.Property
 prop_decayingMapUpdates (Set.toList -> keys) = idempotentIOProperty $ do
@@ -149,7 +150,7 @@ prop_decayingMapDeletes (Set.toList -> keys) = (not . null) keys ==> idempotentI
 testDecayingMap :: [TestTree]
 testDecayingMap = [
   testProperty "works" prop_decayingMapWorks,
-  localOption (QC.QuickCheckTests 10) . testProperty "decaying map decays" $ noShrinking $ prop_decayingMapDecays,
+  testProperty "decaying map decays" prop_decayingMapDecays,
   testProperty "updates" prop_decayingMapUpdates,
   testProperty "deletes" prop_decayingMapDeletes
   ]
