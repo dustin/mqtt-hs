@@ -1,8 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications  #-}
+{-# LANGUAGE ViewPatterns      #-}
 
-import           Control.Monad                   (mapM_)
+import           Control.Monad                   (foldM, mapM_)
 import qualified Data.Attoparsec.ByteString.Lazy as A
 import qualified Data.ByteString.Lazy            as L
+import           Data.Set                        (Set)
+import qualified Data.Set                        as Set
 import           Data.String                     (fromString)
 import qualified Data.Text                       as T
 import           Data.Word                       (Word8)
@@ -10,6 +14,11 @@ import           Network.MQTT.Arbitrary
 import           Network.MQTT.Topic
 import           Network.MQTT.Types              as MT
 
+import           Control.Concurrent              (threadDelay)
+import           Control.Concurrent.STM          (STM, atomically)
+import           Data.ByteString.Lazy.Char8      (foldl')
+import           Data.Foldable                   (traverse_)
+import qualified Data.Map.Strict.Decaying        as DecayingMap
 import           Test.QuickCheck                 as QC
 import           Test.QuickCheck.Checkers
 import           Test.QuickCheck.Classes
@@ -106,6 +115,45 @@ testQoSFromInt = do
 instance EqProp Filter where (=-=) = eq
 instance EqProp Topic where (=-=) = eq
 
+prop_decayingMapWorks :: [Int] -> QC.Property
+prop_decayingMapWorks keys = idempotentIOProperty $ do
+  m <- DecayingMap.new 60
+  atomically $ traverse_ (\x -> DecayingMap.insert x x m) keys
+  found <- atomically $ traverse (\x -> DecayingMap.findWithDefault maxBound x m) keys
+  pure $ found === keys
+
+prop_decayingMapDecays :: [Int] -> QC.Property
+prop_decayingMapDecays keys = idempotentIOProperty $ do
+  m <- DecayingMap.new 0.01
+  atomically $ traverse_ (\x -> DecayingMap.insert x x m) keys
+  threadDelay 20000
+  (found, contained) <- atomically $ (,) <$> DecayingMap.elems m <*> DecayingMap.contained m
+  pure $ (found, contained) === ([] , 0)
+
+prop_decayingMapUpdates :: Set Int -> QC.Property
+prop_decayingMapUpdates (Set.toList -> keys) = idempotentIOProperty $ do
+  m <- DecayingMap.new 60
+  atomically $ traverse_ (\x -> DecayingMap.insert x x m) keys
+  updated <- atomically $ traverse (\x -> DecayingMap.updateLookupWithKey (\_ v -> Just (v + 1)) x m) keys
+  found <- atomically $ traverse (\x -> DecayingMap.findWithDefault maxBound x m) keys
+  pure $ (found === fmap (+ 1) keys .&&. Just found === sequenceA updated)
+
+prop_decayingMapDeletes :: Set Int -> QC.Property
+prop_decayingMapDeletes (Set.toList -> keys) = (not . null) keys ==> idempotentIOProperty $ do
+  m <- DecayingMap.new 60
+  atomically $ traverse_ (\x -> DecayingMap.insert x x m) keys
+  atomically $ traverse (\x -> DecayingMap.delete x m) (tail keys)
+  found <- atomically $ DecayingMap.elems m
+  pure $ found === take 1 keys
+
+testDecayingMap :: [TestTree]
+testDecayingMap = [
+  testProperty "works" prop_decayingMapWorks,
+  localOption (QC.QuickCheckTests 10) . testProperty "decaying map decays" $ noShrinking $ prop_decayingMapDecays,
+  testProperty "updates" prop_decayingMapUpdates,
+  testProperty "deletes" prop_decayingMapDeletes
+  ]
+
 tests :: [TestTree]
 tests = [
   localOption (QC.QuickCheckTests 10000) $ testProperty "header length rt (parser)" prop_rtLengthParser,
@@ -117,6 +165,8 @@ tests = [
   testProperty "rt properties" prop_PropertiesRT,
   testProperty "sub options" prop_SubOptionsRT,
   testCase "qosFromInt" testQoSFromInt,
+
+  testGroup "decaying map" testDecayingMap,
 
   testProperty "conn reasons" (byteRT :: ConnACKRC -> Bool),
   testProperty "disco reasons" (byteRT :: DiscoReason -> Bool),

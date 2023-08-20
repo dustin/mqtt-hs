@@ -3,28 +3,23 @@ module Data.Map.Strict.Decaying
     new,
     insert,
     delete,
+    elems,
+    contained,
     findWithDefault,
     updateLookupWithKey,
   )
 where
 
-import Control.Concurrent.Async (async, cancel, link)
-import Control.Concurrent.STM (STM, atomically)
-import Control.Concurrent.STM.TVar
-  ( TVar,
-    mkWeakTVar,
-    modifyTVar',
-    newTVarIO,
-    readTVar,
-    writeTVar,
-  )
-import Control.Exception (mask)
-import Control.Monad (forever, void)
-import qualified Data.Map.Strict as Map
-import Data.Time (NominalDiffTime)
-import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
-import GHC.Conc (threadDelay, unsafeIOToSTM)
-import System.Mem.Weak (deRefWeak)
+import           Control.Concurrent.Async    (async, cancel, link)
+import           Control.Concurrent.STM      (STM, atomically)
+import           Control.Concurrent.STM.TVar (TVar, mkWeakTVar, modifyTVar', newTVarIO, readTVar, writeTVar)
+import           Control.Exception           (mask)
+import           Control.Monad               (forever, void)
+import qualified Data.Map.Strict             as Map
+import           Data.Time                   (NominalDiffTime)
+import           Data.Time.Clock.POSIX       (POSIXTime, getPOSIXTime)
+import           GHC.Conc                    (threadDelay, unsafeIOToSTM)
+import           System.Mem.Weak             (deRefWeak)
 
 data Item a = Item {_itemTime :: {-# UNPACK #-} !POSIXTime, itemValue :: !a}
 
@@ -40,6 +35,14 @@ delete k (Map m) = modifyTVar' m (Map.delete k)
 
 findWithDefault :: Ord k => v -> k -> Map k v -> STM v
 findWithDefault d k (Map m) = itemValue . Map.findWithDefault (Item 0 d) k <$> readTVar m
+
+-- | All visible records.
+elems :: Map k a -> STM [a]
+elems (Map m) = fmap itemValue . Map.elems <$> readTVar m
+
+-- | Overall number of records currently stored (including expired records)
+contained :: Map k a -> STM Int
+contained (Map m) = Map.size <$> readTVar m
 
 updateLookupWithKey ::
   Ord k => (k -> a -> Maybe a) -> k -> Map k a -> STM (Maybe a)
