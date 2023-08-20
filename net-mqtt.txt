@@ -14,8 +14,15 @@ data Map k a
 new :: NominalDiffTime -> IO (Map k a)
 insert :: Ord k => k -> v -> Map k v -> STM ()
 delete :: Ord k => k -> Map k v -> STM ()
+
+-- | All visible records.
+elems :: Map k a -> STM [a]
+
+-- | Overall number of records currently stored (including expired records)
+contained :: Map k a -> STM Int
 findWithDefault :: Ord k => v -> k -> Map k v -> STM v
 updateLookupWithKey :: Ord k => (k -> a -> Maybe a) -> k -> Map k a -> STM (Maybe a)
+tick :: Map k v -> IO ()
 
 
 -- | Topic and topic related utiilities.
