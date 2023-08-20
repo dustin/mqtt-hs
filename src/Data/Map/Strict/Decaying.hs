@@ -14,7 +14,8 @@ import           Control.Concurrent.Async    (async, cancel, link)
 import           Control.Concurrent.STM      (STM, atomically)
 import           Control.Concurrent.STM.TVar (TVar, mkWeakTVar, modifyTVar', newTVarIO, readTVar, writeTVar)
 import           Control.Exception           (mask)
-import           Control.Monad               (forever, void)
+import           Control.Monad               (forever, void, (<=<))
+import           Control.Monad.Loops         (whileJust_)
 import qualified Data.Map.Strict             as Map
 import           Data.Time                   (NominalDiffTime)
 import           Data.Time.Clock.POSIX       (POSIXTime, getPOSIXTime)
@@ -56,16 +57,10 @@ new :: NominalDiffTime -> IO (Map k a)
 new maxAge = mask $ \restore -> do
   var <- newTVarIO Map.empty
   wVar <- mkWeakTVar var $ pure ()
-  reaper <- restore $ async $ reaperLoop wVar
-  link reaper
+  link <=< restore $ async $ whileJust_ (deRefWeak wVar) reap
   pure $ Map var
   where
-    reaperLoop wVar = do
-      mVar <- deRefWeak wVar
-      case mVar of
-        Just var -> do
-          now <- getPOSIXTime
-          atomically $ modifyTVar' var $ Map.filter $ \(Item t _) -> now - t < maxAge
-          threadDelay $ truncate $ maxAge / 4
-          reaperLoop wVar
-        Nothing -> pure ()
+    reap var = do
+      now <- getPOSIXTime
+      atomically $ modifyTVar' var $ Map.filter $ \(Item t _) -> now - t < maxAge
+      threadDelay $ truncate $ maxAge / 4
