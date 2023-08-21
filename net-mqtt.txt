@@ -32,6 +32,9 @@ delete :: (Ord k, Ord g) => k -> Map g k a -> Map g k a
 lookup :: (Ord k, Ord g) => k -> Map g k a -> Maybe a
 updateLookupWithKey :: (Ord g, Ord k) => g -> (k -> a -> Maybe a) -> k -> Map g k a -> (Maybe a, Map g k a)
 
+-- | Return all current key/value associations.
+assocs :: Ord g => Map g k a -> [(k, a)]
+
 -- | Inspect stored size for testing.
 inspect :: Ord k => Map g k a -> (Int, g, Int)
 instance (GHC.Show.Show a, GHC.Show.Show g) => GHC.Show.Show (Data.Map.Strict.Expiring.Entry g a)
