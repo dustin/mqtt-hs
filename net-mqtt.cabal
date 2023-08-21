@@ -146,6 +146,7 @@ test-suite mqtt-test
     , crypton-connection >=0.3.0
     , deepseq >=1.4.3.0 && <1.5
     , monad-loops >=0.4.3
+    , mtl
     , net-mqtt
     , network-conduit-tls ==1.4.*
     , network-uri >=2.6.1 && <2.7

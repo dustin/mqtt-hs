@@ -1,11 +1,21 @@
+{-# LANGUAGE BlockArguments    #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
 {-# LANGUAGE ViewPatterns      #-}
 
+import           Control.Concurrent              (threadDelay)
+import           Control.Concurrent.STM          (STM, atomically)
 import           Control.Monad                   (foldM, mapM_)
+import           Control.Monad.RWS.Strict
 import qualified Data.Attoparsec.ByteString.Lazy as A
 import qualified Data.ByteString.Lazy            as L
-import           Data.Foldable                   (toList)
+import           Data.ByteString.Lazy.Char8      (foldl')
+import           Data.Foldable                   (toList, traverse_)
+import           Data.Functor.Identity           (Identity)
+import qualified Data.Map.Strict                 as Map
+import qualified Data.Map.Strict.Decaying        as DecayingMap
+import qualified Data.Map.Strict.Expiring        as ExpiringMap
 import           Data.Set                        (Set)
 import qualified Data.Set                        as Set
 import           Data.String                     (fromString)
@@ -14,13 +24,6 @@ import           Data.Word                       (Word8)
 import           Network.MQTT.Arbitrary
 import           Network.MQTT.Topic
 import           Network.MQTT.Types              as MT
-
-import           Control.Concurrent              (threadDelay)
-import           Control.Concurrent.STM          (STM, atomically)
-import           Data.ByteString.Lazy.Char8      (foldl')
-import           Data.Foldable                   (toList, traverse_)
-import qualified Data.Map.Strict.Decaying        as DecayingMap
-import qualified Data.Map.Strict.Expiring        as ExpiringMap
 
 import           Test.QuickCheck                 as QC
 import           Test.QuickCheck.Checkers
@@ -158,6 +161,67 @@ testDecayingMap = [
   testProperty "deletes" prop_decayingMapDeletes
   ]
 
+data MapOp = MapInsert Int Int
+           | MapDelete Int
+           | MapLookup Int
+           | MapUpdate Int Int
+           | MapUpdateNothing Int
+  deriving Show
+
+-- Small number of keys so we be likely to actually encounter things.
+arbitraryKey :: Gen Int
+arbitraryKey = choose (0, 5)
+
+instance Arbitrary MapOp where
+  arbitrary = oneof [MapInsert <$> arbitraryKey <*> arbitrary,
+                     MapDelete <$> arbitraryKey,
+                     MapLookup <$> arbitraryKey,
+                     MapUpdate <$> arbitraryKey <*> arbitrary,
+                     MapUpdateNothing <$> arbitraryKey
+                     ]
+
+prop_expMapDoesMapStuff :: [MapOp] -> QC.Property
+prop_expMapDoesMapStuff ops = massocs === eassocs
+  where
+    massocs = snd $ evalRWS (applyOpsM ops) () (mempty :: Map.Map Int Int)
+    eassocs = snd $ evalRWS (applyOpsE ops) () (ExpiringMap.new 0)
+
+    applyOpsM = traverse_ \case
+      MapInsert k v -> do
+        modify $ Map.insert k v
+        tell =<< gets Map.assocs
+      MapDelete k -> do
+        modify $ Map.delete k
+        tell =<< gets Map.assocs
+      MapLookup k -> do
+        gets (Map.lookup k) >>= \case
+          Nothing -> pure ()
+          Just v  -> tell [(k, v)]
+      MapUpdate k v -> do
+        modify $ fmap snd $ Map.updateLookupWithKey (\_ _ -> Just v) k
+        tell =<< gets Map.assocs
+      MapUpdateNothing k -> do
+        modify $ fmap snd $ Map.updateLookupWithKey (\_ _ -> Nothing) k
+        tell =<< gets Map.assocs
+
+    applyOpsE = traverse_ \case
+      MapInsert k v -> do
+        modify $ ExpiringMap.insert 1 k v
+        tell =<< gets ExpiringMap.assocs
+      MapDelete k -> do
+        modify $ ExpiringMap.delete k
+        tell =<< gets ExpiringMap.assocs
+      MapLookup k -> do
+        gets (ExpiringMap.lookup k) >>= \case
+          Nothing -> pure ()
+          Just v  -> tell [(k, v)]
+      MapUpdate k v -> do
+        modify $ fmap snd $ ExpiringMap.updateLookupWithKey 1 (\_ _ -> Just v) k
+        tell =<< gets ExpiringMap.assocs
+      MapUpdateNothing k -> do
+        modify $ fmap snd $ ExpiringMap.updateLookupWithKey 1 (\_ _ -> Nothing) k
+        tell =<< gets ExpiringMap.assocs
+
 prop_expiringMapWorks :: Int -> [Int] -> QC.Property
 prop_expiringMapWorks baseGen keys = Just keys === traverse (flip ExpiringMap.lookup m) keys
   where
@@ -223,7 +287,8 @@ testExpiringMap = [
   testProperty "can't update missing items" prop_expiringMapUpdateMissing,
   testProperty "delete cleans up" prop_expiringMapDelete,
   testProperty "toList" prop_expiringMapElems,
-  testProperty "generation never decreases" prop_expiringMapGen
+  testProperty "generation never decreases" prop_expiringMapGen,
+  localOption (QC.QuickCheckTests 10000) $ testProperty "compares to regular map" prop_expMapDoesMapStuff
   ]
 
 tests :: [TestTree]

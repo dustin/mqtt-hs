@@ -82,3 +82,4 @@ tests:
     - tasty-hunit
     - tasty-quickcheck
     - checkers
+    - mtl

@@ -10,6 +10,7 @@ module Data.Map.Strict.Expiring (
     delete,
     lookup,
     updateLookupWithKey,
+    assocs,
 
     -- * for testing
     inspect
