@@ -10,6 +10,8 @@
 @version 0.8.5.0
 
 module Data.Map.Strict.Expiring
+
+-- | A map of values that expire after a given generation.
 data Map g k a
 
 -- | Make a new empty Map at the starting generation.
@@ -31,6 +33,10 @@ delete :: (Ord k, Ord g) => k -> Map g k a -> Map g k a
 -- | 𝑂(log𝑛). Lookup a value in the map. This will not return any items
 --   that have expired.
 lookup :: (Ord k, Ord g) => k -> Map g k a -> Maybe a
+
+-- | 𝑂(log𝑛). Lookup and update. The function returns changed value, if it
+--   is updated. Returns the original key value if the map entry is
+--   deleted.
 updateLookupWithKey :: (Ord g, Ord k) => g -> (k -> a -> Maybe a) -> k -> Map g k a -> (Maybe a, Map g k a)
 
 -- | 𝑂(𝑛). Return all current key/value associations.
