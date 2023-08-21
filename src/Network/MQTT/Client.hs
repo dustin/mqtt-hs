@@ -442,9 +442,7 @@ dispatch c@MQTTClient{..} pch pkt =
           Decaying.insert _pubPktID p' _inflight
           sendPacket c (PubRECPkt (PubREC _pubPktID 0 mempty))
 
-        pubd i = do
-          mp <- atomically $ Decaying.updateLookupWithKey (\_ _ -> Nothing) i _inflight
-          case mp of
+        pubd i = atomically (Decaying.updateLookupWithKey (\_ _ -> Nothing) i _inflight) >>= \case
             Nothing -> sendPacketIO c (PubCOMPPkt (PubCOMP i 0x92 mempty))
             Just p  -> notify (Just (PubCOMPPkt (PubCOMP i 0 mempty))) p
 

@@ -73,10 +73,8 @@ updateLookupWithKey g f k m@Map{..} = case Map.updateLookupWithKey f' k map of
       Nothing -> Nothing
 
 removeAging :: (Ord g, Ord k) => g -> k -> Map.Map g (Set k) -> Map.Map g (Set k)
-removeAging g k = Map.update d g
-    where
-        d s = let s' = Set.delete k s in
-              if Set.null s' then Nothing else Just s'
+removeAging g k = Map.update (nonNull . Set.delete k) g
+    where nonNull s = if Set.null s then Nothing else Just s
 
 -- | Lookup a value in the map.
 -- This will not return any items that have expired.
