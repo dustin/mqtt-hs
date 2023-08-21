@@ -168,7 +168,7 @@ data MapOp = MapInsert Int Int
            | MapUpdateNothing Int
   deriving Show
 
--- Small number of keys so we be likely to actually encounter things.
+-- Small number of keys so we will likely actually encounter key reuse, but still have a handful of different ones.
 arbitraryKey :: Gen Int
 arbitraryKey = choose (0, 5)
 

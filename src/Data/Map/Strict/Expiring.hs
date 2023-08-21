@@ -28,6 +28,7 @@ data Entry g a = Entry {
   gen   :: !g
 } deriving (Functor, Show)
 
+-- | A map of values that expire after a given generation.
 data Map g k a = Map {
   map        :: !(Map.Map k (Entry g a)),
   generation :: !g,
