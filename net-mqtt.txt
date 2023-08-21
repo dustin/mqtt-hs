@@ -9,20 +9,49 @@
 @package net-mqtt
 @version 0.8.5.0
 
+module Data.Map.Strict.Expiring
+data Map g k a
+
+-- | Make a new empty Map at the starting generation and with an arbitrary
+--   "low" key for expiration.
+new :: g -> Map g k a
+generation :: Map g k a -> g
+
+-- | Assign the next generation for inserted keys. The generation may never
+--   decrease. Attempts to decrease it are ignored.
+newGen :: (Ord k, Ord g) => g -> Map g k a -> Map g k a
+
+-- | Insert a new value into the map to expire after the given generation.
+insert :: (Ord k, Ord g) => g -> k -> a -> Map g k a -> Map g k a
+
+-- | Delete an item.
+delete :: (Ord k, Ord g) => k -> Map g k a -> Map g k a
+
+-- | Lookup a value in the map. This will not return any items that have
+--   expired.
+lookup :: (Ord k, Ord g) => k -> Map g k a -> Maybe a
+updateLookupWithKey :: (Ord g, Ord k) => g -> (k -> a -> Maybe a) -> k -> Map g k a -> (Maybe a, Map g k a)
+
+-- | Inspect stored size for testing.
+inspect :: Ord k => Map g k a -> (Int, g, Int)
+instance (GHC.Show.Show a, GHC.Show.Show g) => GHC.Show.Show (Data.Map.Strict.Expiring.Entry g a)
+instance GHC.Base.Functor (Data.Map.Strict.Expiring.Entry g)
+instance (GHC.Show.Show k, GHC.Show.Show a, GHC.Show.Show g) => GHC.Show.Show (Data.Map.Strict.Expiring.Map g k a)
+instance GHC.Base.Functor (Data.Map.Strict.Expiring.Map g k)
+instance GHC.Classes.Ord g => Data.Foldable.Foldable (Data.Map.Strict.Expiring.Map g k)
+instance (GHC.Classes.Ord a, GHC.Classes.Ord g, GHC.Classes.Ord k) => GHC.Base.Semigroup (Data.Map.Strict.Expiring.Map g k a)
+
 module Data.Map.Strict.Decaying
 data Map k a
-new :: NominalDiffTime -> IO (Map k a)
+new :: Ord k => NominalDiffTime -> IO (Map k a)
 insert :: Ord k => k -> v -> Map k v -> STM ()
 delete :: Ord k => k -> Map k v -> STM ()
 
 -- | All visible records.
 elems :: Map k a -> STM [a]
-
--- | Overall number of records currently stored (including expired records)
-contained :: Map k a -> STM Int
 findWithDefault :: Ord k => v -> k -> Map k v -> STM v
 updateLookupWithKey :: Ord k => (k -> a -> Maybe a) -> k -> Map k a -> STM (Maybe a)
-tick :: Map k v -> IO ()
+tick :: Ord k => Map k v -> IO ()
 
 
 -- | Topic and topic related utiilities.
