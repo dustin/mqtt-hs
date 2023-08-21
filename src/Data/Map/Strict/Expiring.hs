@@ -44,7 +44,7 @@ instance (Ord a, Ord g, Ord k) => Semigroup (Map g k a) where
 new :: g -> Map g k a
 new g = Map Map.empty g Map.empty
 
--- | Assign the next generation for inserted keys.
+-- | 𝑂(log𝑛). Assign the next generation and expire any data this new generation invalidates.
 -- The generation may never decrease.  Attempts to decrease it are ignored.
 newGen :: (Ord k, Ord g) => g -> Map g k a -> Map g k a
 newGen g m
