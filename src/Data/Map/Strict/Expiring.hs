@@ -31,7 +31,7 @@ data Entry g a = Entry {
 data Map g k a = Map {
   map        :: !(Map.Map k (Entry g a)),
   generation :: !g,
-  aging      ::  !(Map.Map g (Set k))
+  aging      :: !(Map.Map g (Set k))
 } deriving (Functor, Show)
 
 instance Ord g => Foldable (Map g k) where
@@ -87,10 +87,7 @@ lookup k Map{..} = value <$> Map.lookup k map
 delete :: (Ord k, Ord g) => k -> Map g k a -> Map g k a
 delete k m@Map{..} = case Map.lookup k map of
   Nothing -> m
-  Just Entry{..} -> m {
-    map = Map.delete k map,
-    aging = removeAging gen k aging
-  }
+  Just Entry{..} -> m { map = Map.delete k map, aging = removeAging gen k aging }
 
 -- | 𝑂(𝑛). Return all current key/value associations.
 assocs :: Ord g => Map g k a -> [(k,a)]
@@ -100,13 +97,11 @@ assocs Map{..} = fmap value <$> Map.assocs map
 expire :: (Ord g, Ord k) => Map g k a -> Map g k a
 expire m@Map{..} = m{ map = map', aging = aging'}
     where
-        (kill, mm, agingG) = Map.splitLookup generation aging
-        aging' = agingG <> maybe mempty (Map.singleton generation) mm
-        todo = fold kill
-        map' = foldr mightDelete map todo
-        mightDelete k m = case whenValid generation =<< Map.lookup k m of
-                            Nothing -> Map.delete k m
-                            Just _  -> m
+        (todo, exact, later) = Map.splitLookup generation aging
+        aging' = later <> maybe mempty (Map.singleton generation) exact
+        map' = foldr mightDelete map (fold todo)
+        -- We shouldn't get here for valid generations, but we check anyway and don't delete if it's valid.
+        mightDelete k m = maybe (Map.delete k m) (const m) (whenValid generation =<< Map.lookup k m)
 
         whenValid g e@(Entry a t)
             | g < t = Just e
