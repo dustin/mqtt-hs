@@ -51,7 +51,6 @@ instance GHC.Base.Functor (Data.Map.Strict.Expiring.Entry g)
 instance (GHC.Show.Show k, GHC.Show.Show a, GHC.Show.Show g) => GHC.Show.Show (Data.Map.Strict.Expiring.Map g k a)
 instance GHC.Base.Functor (Data.Map.Strict.Expiring.Map g k)
 instance GHC.Classes.Ord g => Data.Foldable.Foldable (Data.Map.Strict.Expiring.Map g k)
-instance (GHC.Classes.Ord a, GHC.Classes.Ord g, GHC.Classes.Ord k) => GHC.Base.Semigroup (Data.Map.Strict.Expiring.Map g k a)
 
 module Data.Map.Strict.Decaying
 data Map k a
