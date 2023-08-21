@@ -28,6 +28,7 @@ source-repository head
 library
   exposed-modules:
       Data.Map.Strict.Decaying
+      Data.Map.Strict.Expiring
       Network.MQTT.Arbitrary
       Network.MQTT.Client
       Network.MQTT.Topic

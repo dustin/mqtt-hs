@@ -5,6 +5,7 @@
 import           Control.Monad                   (foldM, mapM_)
 import qualified Data.Attoparsec.ByteString.Lazy as A
 import qualified Data.ByteString.Lazy            as L
+import           Data.Foldable                   (toList)
 import           Data.Set                        (Set)
 import qualified Data.Set                        as Set
 import           Data.String                     (fromString)
@@ -17,8 +18,10 @@ import           Network.MQTT.Types              as MT
 import           Control.Concurrent              (threadDelay)
 import           Control.Concurrent.STM          (STM, atomically)
 import           Data.ByteString.Lazy.Char8      (foldl')
-import           Data.Foldable                   (traverse_)
+import           Data.Foldable                   (toList, traverse_)
 import qualified Data.Map.Strict.Decaying        as DecayingMap
+import qualified Data.Map.Strict.Expiring        as ExpiringMap
+
 import           Test.QuickCheck                 as QC
 import           Test.QuickCheck.Checkers
 import           Test.QuickCheck.Classes
@@ -155,6 +158,74 @@ testDecayingMap = [
   testProperty "deletes" prop_decayingMapDeletes
   ]
 
+prop_expiringMapWorks :: Int -> [Int] -> QC.Property
+prop_expiringMapWorks baseGen keys = Just keys === traverse (flip ExpiringMap.lookup m) keys
+  where
+    m = foldr (\x -> ExpiringMap.insert futureGen x x) (ExpiringMap.new baseGen) keys
+    futureGen = succ baseGen
+
+ulength :: (Ord a, Foldable t) => t a -> Int
+ulength = Set.size . Set.fromList . toList
+
+prop_expiringMapExpires :: Int -> [Int] -> QC.Property
+prop_expiringMapExpires baseGen keys = (ulength keys, futureGen, ulength keys) === ExpiringMap.inspect m1 .&&. (0, lastGen, 0) === ExpiringMap.inspect m2
+  where
+    m1 = ExpiringMap.newGen futureGen $ foldr (\x -> ExpiringMap.insert futureGen x x) (ExpiringMap.new baseGen) keys
+    m2 = ExpiringMap.newGen lastGen m1
+    futureGen = succ baseGen
+    lastGen = succ futureGen
+
+prop_expiringMapCannotAcceptExpired :: Positive Int -> Positive Int -> Int -> QC.Property
+prop_expiringMapCannotAcceptExpired (Positive lowGen) (Positive offset) k = ExpiringMap.inspect m === ExpiringMap.inspect m'
+  where
+    highGen = lowGen + offset
+    m = ExpiringMap.new highGen :: ExpiringMap.Map Int Int Int
+    m' = ExpiringMap.insert lowGen k k m
+
+prop_expiringMapUpdateMissing :: Int -> Int -> QC.Property
+prop_expiringMapUpdateMissing gen k = mv === Nothing .&&. ExpiringMap.inspect m === ExpiringMap.inspect m'
+  where
+    m = ExpiringMap.new gen :: ExpiringMap.Map Int Int Bool
+    (mv, m') = ExpiringMap.updateLookupWithKey gen (\_ _ -> Just True) k m
+
+prop_expiringMapCannotUpdateExpired :: Positive Int -> Positive Int -> Int -> QC.Property
+prop_expiringMapCannotUpdateExpired (Positive lowGen) (Positive offset) k = mv === Nothing .&&. ExpiringMap.lookup k m' === Just True
+  where
+    highGen = lowGen + offset
+    m = ExpiringMap.insert highGen k True $ ExpiringMap.new highGen
+    (mv, m') = ExpiringMap.updateLookupWithKey lowGen (\_ _ -> Just False) k m
+
+prop_expiringMapDelete :: Int -> [Int] -> QC.Property
+prop_expiringMapDelete baseGen keys = (ulength keys, baseGen, ulength keys) === ExpiringMap.inspect m .&&. (0, baseGen, 0) === ExpiringMap.inspect m'
+  where
+    m = foldr (\x -> ExpiringMap.insert futureGen x x) (ExpiringMap.new baseGen) keys
+    m' = foldr (\x -> ExpiringMap.delete x) m keys
+    futureGen = succ baseGen
+
+prop_expiringMapElems :: Int -> Set Int -> QC.Property
+prop_expiringMapElems baseGen keys = keys === Set.fromList (toList m)
+  where
+    m = foldr (\x -> ExpiringMap.insert futureGen x x) (ExpiringMap.new baseGen) keys
+    futureGen = succ baseGen
+
+prop_expiringMapGen :: Int -> Int -> QC.Property
+prop_expiringMapGen g1 g2 = ExpiringMap.inspect m === (0, max g1 g2, 0)
+  where
+    m :: ExpiringMap.Map Int Int Int
+    m = ExpiringMap.newGen g2 $ ExpiringMap.new g1
+
+testExpiringMap :: [TestTree]
+testExpiringMap = [
+  testProperty "works" prop_expiringMapWorks,
+  testProperty "expires" prop_expiringMapExpires,
+  testProperty "cannot insert expired items" prop_expiringMapCannotAcceptExpired,
+  testProperty "cannot update expired items" prop_expiringMapCannotUpdateExpired,
+  testProperty "can't update missing items" prop_expiringMapUpdateMissing,
+  testProperty "delete cleans up" prop_expiringMapDelete,
+  testProperty "toList" prop_expiringMapElems,
+  testProperty "generation never decreases" prop_expiringMapGen
+  ]
+
 tests :: [TestTree]
 tests = [
   localOption (QC.QuickCheckTests 10000) $ testProperty "header length rt (parser)" prop_rtLengthParser,
@@ -167,6 +238,7 @@ tests = [
   testProperty "sub options" prop_SubOptionsRT,
   testCase "qosFromInt" testQoSFromInt,
 
+  testGroup "expiring map" testExpiringMap,
   testGroup "decaying map" testDecayingMap,
 
   testProperty "conn reasons" (byteRT :: ConnACKRC -> Bool),
