@@ -101,13 +101,7 @@ expire m@Map{..} = m{ map = map', aging = aging'}
     where
         (todo, exact, later) = Map.splitLookup generation aging
         aging' = later <> maybe mempty (Map.singleton generation) exact
-        map' = foldr mightDelete map (fold todo)
-        -- We shouldn't get here for valid generations, but we check anyway and don't delete if it's valid.
-        mightDelete k m = maybe (Map.delete k m) (const m) (whenValid generation =<< Map.lookup k m)
-
-        whenValid g e@(Entry a t)
-            | g < t = Just e
-            | otherwise = Nothing
+        map' = foldr Map.delete map (fold todo)
 
 -- | Inspect stored size for testing.
 inspect :: Ord k => Map g k a -> (Int, g, Int)
