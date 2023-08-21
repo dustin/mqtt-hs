@@ -70,9 +70,7 @@ updateLookupWithKey g f k m@Map{..} = case Map.updateLookupWithKey f' k map of
     aging = Map.insert g (Set.singleton k) (removeAging (gen e) k aging)
   })
   where
-    f' _ e = case f k (value e) of
-      Just a  -> Just (Entry a g)
-      Nothing -> Nothing
+    f' _ e = (`Entry` g) <$> f k (value e)
 
 removeAging :: (Ord g, Ord k) => g -> k -> Map.Map g (Set k) -> Map.Map g (Set k)
 removeAging g k = Map.update (nonNull . Set.delete k) g
