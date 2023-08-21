@@ -41,9 +41,6 @@ data Map g k a = Map {
 instance Ord g => Foldable (Map g k) where
     foldMap f = foldMap (f . value) . Map.elems . map
 
-instance (Ord a, Ord g, Ord k) => Semigroup (Map g k a) where
-    Map m1 g1 a1 <> Map m2 g2 a2 = Map (m1 <> m2) (max g1 g2) (a1 <> a2)
-
 -- | Make a new empty Map at the starting generation.
 new :: g -> Map g k a
 new g = Map Map.empty g Map.empty
