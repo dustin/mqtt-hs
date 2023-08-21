@@ -59,7 +59,7 @@ insert g k v m@Map{..} = m {
   aging = Map.insertWith (<>) g (Set.singleton k) aging
 }
 
--- 𝑂(log𝑛). Lookup and update.
+-- | 𝑂(log𝑛). Lookup and update.
 -- The function returns changed value, if it is updated. Returns the original key value if the map entry is deleted.
 updateLookupWithKey :: (Ord g, Ord k) => g -> (k -> a -> Maybe a) -> k -> Map g k a -> (Maybe a, Map g k a)
 updateLookupWithKey g _ _ m | g < generation m = (Nothing, m)
