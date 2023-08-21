@@ -16,6 +16,8 @@ data Map g k a
 
 -- | Make a new empty Map at the starting generation.
 new :: g -> Map g k a
+
+-- | The current generation
 generation :: Map g k a -> g
 
 -- | 𝑂(log𝑛). Assign the next generation and expire any data this new
