@@ -30,8 +30,11 @@ data Entry g a = Entry {
 
 -- | A map of values that expire after a given generation.
 data Map g k a = Map {
+  -- | Primary store of values.
   map        :: !(Map.Map k (Entry g a)),
+  -- | The current generation
   generation :: !g,
+  -- | A map of generations to keys that are expiring at that generation.
   aging      :: !(Map.Map g (Set k))
 } deriving (Functor, Show)
 
@@ -105,7 +108,6 @@ expire m@Map{..} = m{ map = map', aging = aging'}
         whenValid g e@(Entry a t)
             | g < t = Just e
             | otherwise = Nothing
-
 
 -- | Inspect stored size for testing.
 inspect :: Ord k => Map g k a -> (Int, g, Int)
