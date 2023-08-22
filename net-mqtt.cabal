@@ -122,10 +122,13 @@ executable mqtt-watch
 
 test-suite mqtt-test
   type: exitcode-stdio-1.0
-  main-is: Spec.hs
+  main-is: Main.hs
   other-modules:
+      DecayingSpec
       Example1
       Example2
+      ExpiringSpec
+      Spec
       Paths_net_mqtt
   hs-source-dirs:
       test
@@ -152,6 +155,7 @@ test-suite mqtt-test
     , network-uri >=2.6.1 && <2.7
     , stm >=2.4.0 && <2.6
     , tasty
+    , tasty-discover
     , tasty-hunit
     , tasty-quickcheck
     , text >=1.2.3 && <2.1.0

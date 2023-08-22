@@ -80,12 +80,12 @@ removeAging g k = Map.update (nonNull . Set.delete k) g
 -- | 𝑂(log𝑛). Lookup a value in the map.
 -- This will not return any items that have expired.
 lookup :: (Ord k, Ord g) => k -> Map g k a -> Maybe a
-lookup k Map{..} = value <$> Map.lookup k map
+lookup k = fmap value . Map.lookup k . map
 
 -- | 𝑂(log𝑛). Delete an item.
 delete :: (Ord k, Ord g) => k -> Map g k a -> Map g k a
 delete k m@Map{..} = case Map.lookup k map of
-  Nothing -> m
+  Nothing        -> m
   Just Entry{..} -> m { map = Map.delete k map, aging = removeAging gen k aging }
 
 -- | 𝑂(𝑛). Return all current key/value associations.
