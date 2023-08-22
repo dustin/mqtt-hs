@@ -76,7 +76,7 @@ prop_PacketRT50 p =
     A.Fail{}     -> False
     (A.Done _ r) -> r == p
 
-  where lab x = let (s,_) = break (== ' ') . show $ x in s
+  where lab = takeWhile (/= ' ') . show
 
 prop_PacketRT311 :: MQTTPkt -> QC.Property
 prop_PacketRT311 p = available p ==>
@@ -86,7 +86,7 @@ prop_PacketRT311 p = available p ==>
                     (A.Done _ r) -> r == p'
 
   where
-    lab x = let (s,_) = break (== ' ') . show $ x in s
+    lab = takeWhile (/= ' ') . show
     p' = v311mask p
 
     available (AuthPkt _) = False
@@ -97,7 +97,7 @@ prop_PropertyRT p = label (lab p) $ case A.parse parseProperty (toByteString Pro
                                     A.Fail{}     -> False
                                     (A.Done _ r) -> r == p
 
-  where lab x = let (s,_) = break (== ' ') . show $ x in s
+  where lab = takeWhile (/= ' ') . show
 
 prop_SubOptionsRT :: SubOptions -> Bool
 prop_SubOptionsRT o = case A.parse parseSubOptions (toByteString Protocol50 o) of

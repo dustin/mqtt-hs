@@ -41,11 +41,10 @@ allOpTypes = ["Insert", "Delete", "Lookup", "Update", "UpdateNothing"]
 prop_expMapDoesMapStuff :: [MapOp] -> Property
 prop_expMapDoesMapStuff ops =
   coverTable "pkt types" ((,5) <$> allOpTypes) $
-  tabulate "pkt types" (lab <$> ops) $
+  tabulate "pkt types" (takeWhile (/= ' ') . show <$> ops) $
   checkCoverage $
   massocs === eassocs
   where
-    lab x = let (s,_) = break (== ' ') . show $ x in s
     massocs = snd $ evalRWS (applyOpsM ops) () (mempty :: Map.Map SomeKey Int)
     eassocs = snd $ evalRWS (applyOpsE ops) () (ExpiringMap.new 0)
 
