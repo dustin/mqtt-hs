@@ -161,29 +161,31 @@ testDecayingMap = [
   testProperty "deletes" prop_decayingMapDeletes
   ]
 
-data MapOp = MapInsert Int Int
-           | MapDelete Int
-           | MapLookup Int
-           | MapUpdate Int Int
-           | MapUpdateNothing Int
+newtype SomeKey = SomeKey Char
+  deriving (Eq, Ord, Show)
+
+instance Arbitrary SomeKey where
+  arbitrary = SomeKey <$> elements ['a'..'e']
+
+data MapOp = MapInsert SomeKey Int
+           | MapDelete SomeKey
+           | MapLookup SomeKey
+           | MapUpdate SomeKey Int
+           | MapUpdateNothing SomeKey
   deriving Show
 
--- Small number of keys so we will likely actually encounter key reuse, but still have a handful of different ones.
-arbitraryKey :: Gen Int
-arbitraryKey = choose (0, 5)
-
 instance Arbitrary MapOp where
-  arbitrary = oneof [MapInsert <$> arbitraryKey <*> arbitrary,
-                     MapDelete <$> arbitraryKey,
-                     MapLookup <$> arbitraryKey,
-                     MapUpdate <$> arbitraryKey <*> arbitrary,
-                     MapUpdateNothing <$> arbitraryKey
+  arbitrary = oneof [MapInsert <$> arbitrary <*> arbitrary,
+                     MapDelete <$> arbitrary,
+                     MapLookup <$> arbitrary,
+                     MapUpdate <$> arbitrary <*> arbitrary,
+                     MapUpdateNothing <$> arbitrary
                      ]
 
 prop_expMapDoesMapStuff :: [MapOp] -> QC.Property
 prop_expMapDoesMapStuff ops = massocs === eassocs
   where
-    massocs = snd $ evalRWS (applyOpsM ops) () (mempty :: Map.Map Int Int)
+    massocs = snd $ evalRWS (applyOpsM ops) () (mempty :: Map.Map SomeKey Int)
     eassocs = snd $ evalRWS (applyOpsE ops) () (ExpiringMap.new 0)
 
     applyOpsM = traverse_ \case
