@@ -148,6 +148,7 @@ test-suite mqtt-test
     , containers >=0.5.0 && <0.7
     , crypton-connection >=0.3.0
     , deepseq >=1.4.3.0 && <1.5
+    , lens
     , monad-loops >=0.4.3
     , mtl
     , net-mqtt

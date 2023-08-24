@@ -1,10 +1,15 @@
-{-# LANGUAGE BlockArguments    #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE BlockArguments             #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE TupleSections              #-}
+
 
 module ExpiringSpec where
 
+import           Control.Lens
 import           Data.Bool                (bool)
 import           Data.Foldable            (foldl', toList, traverse_)
 import           Data.Function            ((&))
@@ -21,18 +26,28 @@ data SomeKey = Key1 | Key2 | Key3 | Key4 | Key5
 instance Arbitrary SomeKey where
   arbitrary = arbitraryBoundedEnum
 
-data Mutation = Insert SomeKey Int
+newtype GenOffset = GenOffset { getOffset :: Int }
+  deriving (Eq, Ord)
+  deriving newtype (Show, Num, Bounded)
+
+instance Arbitrary GenOffset where
+  arbitrary = GenOffset <$> choose (0, 5)
+  shrink = fmap GenOffset . shrink . getOffset
+
+data Mutation = Insert GenOffset SomeKey Int
               | Delete SomeKey
-              | Update SomeKey Int
-              | UpdateNothing SomeKey
-              | NewGeneration (Positive Int)
+              | Update GenOffset SomeKey Int
+              | UpdateNothing GenOffset SomeKey
+              | NewGeneration GenOffset
   deriving Show
 
+makePrisms ''Mutation
+
 instance Arbitrary Mutation where
-  arbitrary = oneof [Insert <$> arbitrary <*> arbitrary,
+  arbitrary = oneof [Insert <$> arbitrary <*> arbitrary <*> arbitrary,
                      Delete <$> arbitrary,
-                     Update <$> arbitrary <*> arbitrary,
-                     UpdateNothing <$> arbitrary,
+                     Update <$> arbitrary <*> arbitrary <*> arbitrary,
+                     UpdateNothing <$> arbitrary <*> arbitrary,
                      NewGeneration <$> arbitrary
                      ]
 
@@ -47,22 +62,26 @@ prop_doesMapStuff ops lookups =
   checkCoverage $
   ((`Map.lookup` massocs) <$> lookups) === ((`ExpiringMap.lookup` eassocs) <$> lookups)
   where
-    massocs = foldl' (flip applyOpM) (mempty :: Map.Map SomeKey Int) ops
+    massocs = degenerate $ foldl' applyOpM (0, mempty) ops
     eassocs = foldl' applyOpE (ExpiringMap.new 0) ops
 
-    applyOpM = \case
-      Insert k v      -> Map.insert k v
-      Delete k        -> Map.delete k
-      Update k v      -> snd . Map.updateLookupWithKey (\_ _ -> Just v) k
-      UpdateNothing k -> snd . Map.updateLookupWithKey (\_ _ -> Nothing) k
-      NewGeneration _ -> const mempty
+    -- The emulation stores the generation along with the value, so when we're done, we filter out anything old and fmap away the generation.
+    degenerate :: (GenOffset, Map.Map SomeKey (GenOffset, Int)) -> Map.Map SomeKey Int
+    degenerate (gen, m) = snd <$> Map.filter ((>= gen) . fst) m
+
+    applyOpM (gen, m) = \case
+      Insert g k v      -> (gen, Map.insert k (gen+g, v) m)
+      Delete k          -> (gen, Map.delete k m)
+      Update g k v      -> (gen, snd $ Map.updateLookupWithKey (\_ _ -> Just (gen+g, v)) k m)
+      UpdateNothing _ k -> (gen, snd $ Map.updateLookupWithKey (\_ _ -> Nothing) k m)
+      NewGeneration n   -> (gen + n, Map.filter ((>= gen + n) . fst) m)
 
     applyOpE m = \case
-      Insert k v      -> ExpiringMap.insert gen k v m
-      Delete k        -> ExpiringMap.delete k m
-      Update k v      -> snd $ ExpiringMap.updateLookupWithKey gen (\k' _ -> bool Nothing (Just v) (k == k')) k m
-      UpdateNothing k -> snd $ ExpiringMap.updateLookupWithKey gen (\_ _ -> Nothing) k m
-      NewGeneration n -> ExpiringMap.newGen (gen + getPositive n) m
+      Insert g k v      -> ExpiringMap.insert (gen + g) k v m
+      Delete k          -> ExpiringMap.delete k m
+      Update g k v      -> snd $ ExpiringMap.updateLookupWithKey (gen + g) (\k' _ -> bool Nothing (Just v) (k == k')) k m
+      UpdateNothing g k -> snd $ ExpiringMap.updateLookupWithKey (gen + g) (\_ _ -> Nothing) k m
+      NewGeneration g   -> ExpiringMap.newGen (gen + g) m
       where gen = ExpiringMap.generation m
 
 prop_updateReturn :: Int -> Property

@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveFunctor   #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections   #-}
 module Data.Map.Strict.Expiring (
     Map,
     new,
@@ -53,25 +54,26 @@ newGen g m
     | otherwise = m
 
 -- | 𝑂(log𝑛). Insert a new value into the map to expire after the given generation.
+-- alterF :: (Functor f, Ord k) => (Maybe a -> f (Maybe a)) -> k -> Map k a -> f (Map k a)
 insert :: (Ord k, Ord g) => g -> k -> a -> Map g k a -> Map g k a
 insert g _ _ m | g < generation m = m
-insert g k v m@Map{..} = m {
-  map = Map.insert k (Entry v g) map,
-  aging = Map.insertWith (<>) g (Set.singleton k) aging
-}
+insert g k v m@Map{..} = case Map.alterF (, Just (Entry v g)) k map of
+    (Just old, m') -> m{map=m', aging = Map.insertWith (<>) g (Set.singleton k) (removeAging (gen old) k aging)}
+    (Nothing, m')  -> m{map=m', aging = Map.insertWith (<>) g (Set.singleton k) aging}
 
 -- | 𝑂(log𝑛). Lookup and update.
 -- The function returns changed value, if it is updated. Returns the original key value if the map entry is deleted.
 updateLookupWithKey :: (Ord g, Ord k) => g -> (k -> a -> Maybe a) -> k -> Map g k a -> (Maybe a, Map g k a)
 updateLookupWithKey g _ _ m | g < generation m = (Nothing, m)
-updateLookupWithKey g f k m@Map{..} = case Map.updateLookupWithKey f' k map of
-  (Nothing, _) -> (Nothing, m)
-  (Just e, m') -> (Just (value e), m {
-    map = m',
-    aging = Map.insertWith (<>) g (Set.singleton k) (removeAging (gen e) k aging)
-  })
-  where
-    f' _ e = (`Entry` g) <$> f k (value e)
+updateLookupWithKey g f k m@Map{..} = case Map.alterF f' k map of
+    ((Nothing, _), m')   -> (Nothing, m)
+    ((Just old, Nothing), m')  -> (Just (value old), m{map=m', aging = removeAging (gen old) k aging})
+    ((Just old, Just new), m') -> (Just (value new), m{map=m', aging = Map.insertWith (<>) g (Set.singleton k) (removeAging (gen old) k aging)})
+    where
+        f' Nothing = ((Nothing, Nothing), Nothing)
+        f' (Just e) = case f k (value e) of
+            Nothing -> ((Just e, Nothing), Nothing)
+            Just v  -> ((Just e, Just (Entry v g)), Just (Entry v g))
 
 removeAging :: (Ord g, Ord k) => g -> k -> Map.Map g (Set k) -> Map.Map g (Set k)
 removeAging g k = Map.update (nonNull . Set.delete k) g
