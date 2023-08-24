@@ -1,11 +1,11 @@
 {-# LANGUAGE BlockArguments             #-}
+{-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TupleSections              #-}
-
 
 module ExpiringSpec where
 
@@ -17,6 +17,7 @@ import qualified Data.Map.Strict          as Map
 import qualified Data.Map.Strict.Expiring as ExpiringMap
 import           Data.Set                 (Set)
 import qualified Data.Set                 as Set
+import           GHC.Generics             (Generic)
 
 import           Test.QuickCheck
 
@@ -25,6 +26,7 @@ data SomeKey = Key1 | Key2 | Key3 | Key4 | Key5
 
 instance Arbitrary SomeKey where
   arbitrary = arbitraryBoundedEnum
+  shrink = shrinkBoundedEnum
 
 newtype GenOffset = GenOffset { getOffset :: Int }
   deriving (Eq, Ord)
@@ -39,7 +41,7 @@ data Mutation = Insert GenOffset SomeKey Int
               | Update GenOffset SomeKey Int
               | UpdateNothing GenOffset SomeKey
               | NewGeneration GenOffset
-  deriving Show
+  deriving (Show, Generic)
 
 makePrisms ''Mutation
 
@@ -50,6 +52,7 @@ instance Arbitrary Mutation where
                      UpdateNothing <$> arbitrary <*> arbitrary,
                      NewGeneration <$> arbitrary
                      ]
+  shrink = genericShrink
 
 allOpTypes :: [String]
 allOpTypes = ["Insert", "Delete", "Update", "UpdateNothing", "NewGeneration"]
