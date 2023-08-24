@@ -68,9 +68,9 @@ prop_doesMapStuff ops lookups =
     massocs = degenerate $ foldl' applyOpM (0, mempty) ops
     eassocs = foldl' applyOpE (ExpiringMap.new 0) ops
 
-    -- The emulation stores the generation along with the value, so when we're done, we filter out anything old and fmap away the generation.
+    -- The emulation stores the generation along with the value, so when we're done, we fmap away the generation.
     degenerate :: (GenOffset, Map.Map SomeKey (GenOffset, Int)) -> Map.Map SomeKey Int
-    degenerate (gen, m) = snd <$> Map.filter ((>= gen) . fst) m
+    degenerate = fmap snd . snd
 
     applyOpM (gen, m) = \case
       Insert g k v      -> (gen, Map.insert k (gen+g, v) m)
