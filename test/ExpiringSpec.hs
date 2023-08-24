@@ -5,12 +5,13 @@
 
 module ExpiringSpec where
 
-import           Data.Foldable            (toList, traverse_)
+import           Data.Bool                (bool)
+import           Data.Foldable            (foldl', toList, traverse_)
+import           Data.Function            ((&))
 import qualified Data.Map.Strict          as Map
 import qualified Data.Map.Strict.Expiring as ExpiringMap
 import           Data.Set                 (Set)
 import qualified Data.Set                 as Set
-import Data.Bool (bool)
 
 import           Test.QuickCheck
 
@@ -24,13 +25,15 @@ data Mutation = Insert SomeKey Int
               | Delete SomeKey
               | Update SomeKey Int
               | UpdateNothing SomeKey
+              | NewGeneration
   deriving Show
 
 instance Arbitrary Mutation where
   arbitrary = oneof [Insert <$> arbitrary <*> arbitrary,
                      Delete <$> arbitrary,
                      Update <$> arbitrary <*> arbitrary,
-                     UpdateNothing <$> arbitrary
+                     UpdateNothing <$> arbitrary,
+                     pure NewGeneration
                      ]
 
 allOpTypes :: [String]
@@ -44,20 +47,23 @@ prop_expMapDoesMapStuff ops lookups =
   checkCoverage $
   ((`Map.lookup` massocs) <$> lookups) === ((`ExpiringMap.lookup` eassocs) <$> lookups)
   where
-    massocs = foldr applyOpM (mempty :: Map.Map SomeKey Int) ops
-    eassocs = foldr applyOpE (ExpiringMap.new 0) ops
+    massocs = foldl' (flip applyOpM) (mempty :: Map.Map SomeKey Int) ops
+    eassocs = foldl' applyOpE (ExpiringMap.new 0) ops
 
     applyOpM = \case
-      Insert k v -> Map.insert k v
-      Delete k -> Map.delete k
-      Update k v -> snd . Map.updateLookupWithKey (\_ _ -> Just v) k
+      Insert k v      -> Map.insert k v
+      Delete k        -> Map.delete k
+      Update k v      -> snd . Map.updateLookupWithKey (\_ _ -> Just v) k
       UpdateNothing k -> snd . Map.updateLookupWithKey (\_ _ -> Nothing) k
+      NewGeneration   -> const mempty
 
-    applyOpE = \case
-      Insert k v -> ExpiringMap.insert 1 k v
-      Delete k -> ExpiringMap.delete k
-      Update k v -> snd . ExpiringMap.updateLookupWithKey 1 (\k' _ -> bool Nothing (Just v) (k == k')) k
-      UpdateNothing k -> snd . ExpiringMap.updateLookupWithKey 1 (\_ _ -> Nothing) k
+    applyOpE m = \case
+      Insert k v      -> ExpiringMap.insert gen k v m
+      Delete k        -> ExpiringMap.delete k m
+      Update k v      -> snd $ ExpiringMap.updateLookupWithKey gen (\k' _ -> bool Nothing (Just v) (k == k')) k m
+      UpdateNothing k -> snd $ ExpiringMap.updateLookupWithKey gen (\_ _ -> Nothing) k m
+      NewGeneration   -> ExpiringMap.newGen (gen + 1) m
+      where gen = ExpiringMap.generation m
 
 prop_expiringMapWorks :: Int -> [Int] -> Property
 prop_expiringMapWorks baseGen keys = Just keys === traverse (`ExpiringMap.lookup` m) keys

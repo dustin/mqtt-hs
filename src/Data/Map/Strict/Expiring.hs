@@ -68,7 +68,7 @@ updateLookupWithKey g f k m@Map{..} = case Map.updateLookupWithKey f' k map of
   (Nothing, _) -> (Nothing, m)
   (Just e, m') -> (Just (value e), m {
     map = m',
-    aging = Map.insert g (Set.singleton k) (removeAging (gen e) k aging)
+    aging = Map.insertWith (<>) g (Set.singleton k) (removeAging (gen e) k aging)
   })
   where
     f' _ e = (`Entry` g) <$> f k (value e)
