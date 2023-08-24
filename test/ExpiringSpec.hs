@@ -42,8 +42,8 @@ allOpTypes = ["Insert", "Delete", "Update", "UpdateNothing", "NewGeneration"]
 -- Verify that after a series of operations, the map and expiring map return the same values for the given keys.
 prop_expMapDoesMapStuff :: [Mutation] -> [SomeKey] -> Property
 prop_expMapDoesMapStuff ops lookups =
-  coverTable "pkt types" ((,5) <$> allOpTypes) $
-  tabulate "pkt types" (takeWhile (/= ' ') . show <$> ops) $
+  coverTable "mutation types" ((,5) <$> allOpTypes) $ -- The test paths should hit every mutation type (5% min)
+  tabulate "mutation types" (takeWhile (/= ' ') . show <$> ops) $ -- We can identify one by the first word in its constructor
   checkCoverage $
   ((`Map.lookup` massocs) <$> lookups) === ((`ExpiringMap.lookup` eassocs) <$> lookups)
   where
