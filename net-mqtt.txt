@@ -26,7 +26,8 @@ generation :: Map g k a -> g
 newGen :: (Ord k, Ord g) => g -> Map g k a -> Map g k a
 
 -- | 𝑂(log𝑛). Insert a new value into the map to expire after the given
---   generation.
+--   generation. alterF :: (Functor f, Ord k) =&gt; (Maybe a -&gt; f (Maybe
+--   a)) -&gt; k -&gt; Map k a -&gt; f (Map k a)
 insert :: (Ord k, Ord g) => g -> k -> a -> Map g k a -> Map g k a
 
 -- | 𝑂(log𝑛). Delete an item.
