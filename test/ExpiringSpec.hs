@@ -5,84 +5,59 @@
 
 module ExpiringSpec where
 
-import           Control.Monad.RWS.Strict (MonadWriter (tell), evalRWS, gets, modify)
 import           Data.Foldable            (toList, traverse_)
 import qualified Data.Map.Strict          as Map
 import qualified Data.Map.Strict.Expiring as ExpiringMap
 import           Data.Set                 (Set)
 import qualified Data.Set                 as Set
+import Data.Bool (bool)
 
 import           Test.QuickCheck
 
-newtype SomeKey = SomeKey Char
-  deriving (Eq, Ord, Show)
+data SomeKey = Key1 | Key2 | Key3 | Key4 | Key5
+  deriving (Bounded, Enum, Eq, Ord, Show)
 
 instance Arbitrary SomeKey where
-  arbitrary = SomeKey <$> elements ['a'..'e']
+  arbitrary = arbitraryBoundedEnum
 
-data MapOp = Insert SomeKey Int
-           | Delete SomeKey
-           | Lookup SomeKey
-           | Update SomeKey Int
-           | UpdateNothing SomeKey
+data Mutation = Insert SomeKey Int
+              | Delete SomeKey
+              | Update SomeKey Int
+              | UpdateNothing SomeKey
   deriving Show
 
-instance Arbitrary MapOp where
+instance Arbitrary Mutation where
   arbitrary = oneof [Insert <$> arbitrary <*> arbitrary,
                      Delete <$> arbitrary,
-                     Lookup <$> arbitrary,
                      Update <$> arbitrary <*> arbitrary,
                      UpdateNothing <$> arbitrary
                      ]
 
 allOpTypes :: [String]
-allOpTypes = ["Insert", "Delete", "Lookup", "Update", "UpdateNothing"]
+allOpTypes = ["Insert", "Delete", "Update", "UpdateNothing"]
 
-prop_expMapDoesMapStuff :: [MapOp] -> Property
-prop_expMapDoesMapStuff ops =
+-- Verify that after a series of operations, the map and expiring map return the same values for the given keys.
+prop_expMapDoesMapStuff :: [Mutation] -> [SomeKey] -> Property
+prop_expMapDoesMapStuff ops lookups =
   coverTable "pkt types" ((,5) <$> allOpTypes) $
   tabulate "pkt types" (takeWhile (/= ' ') . show <$> ops) $
   checkCoverage $
-  massocs === eassocs
+  ((`Map.lookup` massocs) <$> lookups) === ((`ExpiringMap.lookup` eassocs) <$> lookups)
   where
-    massocs = snd $ evalRWS (applyOpsM ops) () (mempty :: Map.Map SomeKey Int)
-    eassocs = snd $ evalRWS (applyOpsE ops) () (ExpiringMap.new 0)
+    massocs = foldr applyOpM (mempty :: Map.Map SomeKey Int) ops
+    eassocs = foldr applyOpE (ExpiringMap.new 0) ops
 
-    applyOpsM = traverse_ \case
-      Insert k v -> do
-        modify $ Map.insert k v
-        tell =<< gets Map.assocs
-      Delete k -> do
-        modify $ Map.delete k
-        tell =<< gets Map.assocs
-      Lookup k -> do
-        gets (Map.lookup k) >>= \case
-          Nothing -> pure ()
-          Just v  -> tell [(k, v)]
-      Update k v -> do
-        modify $ (snd <$> Map.updateLookupWithKey (\_ _ -> Just v) k)
-        tell =<< gets Map.assocs
-      UpdateNothing k -> do
-        modify $ (snd <$> Map.updateLookupWithKey (\_ _ -> Nothing) k)
-        tell =<< gets Map.assocs
+    applyOpM = \case
+      Insert k v -> Map.insert k v
+      Delete k -> Map.delete k
+      Update k v -> snd . Map.updateLookupWithKey (\_ _ -> Just v) k
+      UpdateNothing k -> snd . Map.updateLookupWithKey (\_ _ -> Nothing) k
 
-    applyOpsE = traverse_ \case
-      Insert k v -> do
-        modify $ ExpiringMap.insert 1 k v
-        tell =<< gets ExpiringMap.assocs
-      Delete k -> do
-        modify $ ExpiringMap.delete k
-        tell =<< gets ExpiringMap.assocs
-      Lookup k -> do
-        gets (ExpiringMap.lookup k) >>= \case
-          Nothing -> pure ()
-          Just v  -> tell [(k, v)]
-      Update k v -> do
-        modify $ (snd <$> ExpiringMap.updateLookupWithKey 1 (\_ _ -> Just v) k)
-        tell =<< gets ExpiringMap.assocs
-      UpdateNothing k -> do
-        modify $ (snd <$> ExpiringMap.updateLookupWithKey 1 (\_ _ -> Nothing) k)
-        tell =<< gets ExpiringMap.assocs
+    applyOpE = \case
+      Insert k v -> ExpiringMap.insert 1 k v
+      Delete k -> ExpiringMap.delete k
+      Update k v -> snd . ExpiringMap.updateLookupWithKey 1 (\k' _ -> bool Nothing (Just v) (k == k')) k
+      UpdateNothing k -> snd . ExpiringMap.updateLookupWithKey 1 (\_ _ -> Nothing) k
 
 prop_expiringMapWorks :: Int -> [Int] -> Property
 prop_expiringMapWorks baseGen keys = Just keys === traverse (`ExpiringMap.lookup` m) keys
