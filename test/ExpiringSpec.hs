@@ -37,7 +37,7 @@ instance Arbitrary Mutation where
                      ]
 
 allOpTypes :: [String]
-allOpTypes = ["Insert", "Delete", "Update", "UpdateNothing"]
+allOpTypes = ["Insert", "Delete", "Update", "UpdateNothing", "NewGeneration"]
 
 -- Verify that after a series of operations, the map and expiring map return the same values for the given keys.
 prop_expMapDoesMapStuff :: [Mutation] -> [SomeKey] -> Property
