@@ -1,5 +1,11 @@
 # Changelog for net-mqtt
 
+## 0.8.6.0
+
+Can forget in-flight and correlation data over time.
+
+Thanks to Alberto Valverde
+
 ## 0.8.5.0
 
 Switch to crypton-connection
