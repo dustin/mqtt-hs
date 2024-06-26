@@ -56,6 +56,7 @@ import           Data.Conduit.Attoparsec    (conduitParser)
 import qualified Data.Conduit.Combinators   as C
 import           Data.Conduit.Network       (AppData, appSink, appSource, clientSettings, runTCPClient)
 import           Data.Conduit.Network.TLS   (runTLSClient, tlsClientConfig, tlsClientTLSSettings)
+import           Data.Default.Class         (def)
 import           Data.Foldable              (traverse_)
 import           Data.Map.Strict            (Map)
 import qualified Data.Map.Strict            as Map
@@ -157,7 +158,10 @@ mqttConfig = MQTTConfig{_hostname="", _port=1883, _connID="",
                         _msgCB=NoCallback,
                         _protocol=Protocol311, _connProps=mempty,
                         _connectTimeout=180000000,
-                        _tlsSettings=TLSSettingsSimple False False False,
+                        _tlsSettings=def
+                          {settingDisableCertificateValidation=False,
+                           settingDisableSession=False,
+                           settingUseServerName=False},
                         _pingPeriod=30000000,
                         _pingPatience=90000000}
 
