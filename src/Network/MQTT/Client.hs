@@ -158,10 +158,7 @@ mqttConfig = MQTTConfig{_hostname="", _port=1883, _connID="",
                         _msgCB=NoCallback,
                         _protocol=Protocol311, _connProps=mempty,
                         _connectTimeout=180000000,
-                        _tlsSettings=def
-                          {settingDisableCertificateValidation=False,
-                           settingDisableSession=False,
-                           settingUseServerName=False},
+                        _tlsSettings=def,
                         _pingPeriod=30000000,
                         _pingPatience=90000000}
 

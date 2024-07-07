@@ -39,6 +39,7 @@ dependencies:
 - crypton-connection   >= 0.3.0
 - monad-loops          >= 0.4.3
 - time                 >= 1.9
+- data-default-class   >= 0.1.2
 
 library:
   source-dirs: src

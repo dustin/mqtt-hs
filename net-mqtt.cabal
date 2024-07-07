@@ -49,7 +49,7 @@ library
     , conduit-extra >=1.3.0 && <1.5
     , containers >=0.5.0 && <0.7
     , crypton-connection >=0.3.0
-    , data-default-class
+    , data-default-class >=0.1.2
     , deepseq >=1.4.3.0 && <1.5
     , monad-loops >=0.4.3
     , network-conduit-tls ==1.4.*
@@ -79,6 +79,7 @@ executable mqtt-example
     , conduit-extra >=1.3.0 && <1.5
     , containers >=0.5.0 && <0.7
     , crypton-connection >=0.3.0
+    , data-default-class >=0.1.2
     , deepseq >=1.4.3.0 && <1.5
     , monad-loops >=0.4.3
     , net-mqtt
@@ -109,6 +110,7 @@ executable mqtt-watch
     , conduit-extra >=1.3.0 && <1.5
     , containers >=0.5.0 && <0.7
     , crypton-connection >=0.3.0
+    , data-default-class >=0.1.2
     , deepseq >=1.4.3.0 && <1.5
     , monad-loops >=0.4.3
     , net-mqtt
@@ -148,6 +150,7 @@ test-suite mqtt-test
     , conduit-extra >=1.3.0 && <1.5
     , containers >=0.5.0 && <0.7
     , crypton-connection >=0.3.0
+    , data-default-class >=0.1.2
     , deepseq >=1.4.3.0 && <1.5
     , lens
     , monad-loops >=0.4.3
