@@ -1,5 +1,9 @@
 # Changelog for net-mqtt
 
+## 0.8.6.1
+
+Use `def` for TLS settings.
+
 ## 0.8.6.0
 
 Can forget in-flight and correlation data over time.
