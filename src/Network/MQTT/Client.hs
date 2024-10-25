@@ -63,7 +63,9 @@ import qualified Data.Map.Strict            as Map
 import qualified Data.Map.Strict.Decaying   as Decaying
 import           Data.Maybe                 (fromJust, fromMaybe)
 import           Data.Text                  (Text)
+import qualified Data.Text.Lazy             as TL
 import qualified Data.Text.Encoding         as TE
+import qualified Data.Text.Lazy.Encoding    as TEL
 import           Data.Word                  (Word16)
 import           GHC.Conc                   (labelThread)
 import           Network.Connection         (ConnectionParams (..), TLSSettings (..), connectTo, connectionClose,
@@ -203,7 +205,7 @@ connectURI cfg@MQTTConfig{..} uri = do
     cid _ ('#':xs) = xs
     cid _ _        = ""
 
-    up "" = (Nothing, Nothing)
+    up "" = (_username, _password)
     up x = let (u,r) = break (== ':') (init x) in
              (Just (unEscapeString u), if r == "" then Nothing else Just (unEscapeString $ tail r))
 
@@ -328,7 +330,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
       void . runConduit $ do
         let req = connectRequest{T._connID=BC.pack _connID,
                                  T._lastWill=_lwt,
-                                 T._username=BC.pack <$> _username,
+                                 T._username=TEL.encodeUtf8 . TL.pack <$> _username,
                                  T._password=BC.pack <$> _password,
                                  T._cleanSession=_cleanSession,
                                  T._connProperties=_connProps}
