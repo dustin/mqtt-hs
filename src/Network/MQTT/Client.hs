@@ -37,7 +37,7 @@ module Network.MQTT.Client (
   ) where
 
 import           Control.Concurrent         (myThreadId, threadDelay)
-import           Control.Concurrent.Async   (Async, async, asyncThreadId, cancel, cancelWith, link, race_, wait,
+import           Control.Concurrent.Async   (Async, async, asyncThreadId, cancel, cancelWith, race_, wait,
                                              waitAnyCancel)
 import           Control.Concurrent.MVar    (MVar, newEmptyMVar, putMVar, takeMVar)
 import           Control.Concurrent.STM     (STM, TChan, TVar, atomically, check, modifyTVar', newTChan, newTChanIO,
@@ -460,7 +460,7 @@ dispatch c@MQTTClient{..} pch pkt =
                                    OrderedLowLevelCallback f -> callOrd (f c p)
 
             where
-              call a = link =<< namedAsync "notifier" (a >> respond)
+              call a = void $ namedAsync "notifier" (a >> respond)
               callOrd a = putMVar _cbM $ a >> respond
               respond = traverse_ (sendPacketIO c) rpkt
               cdata = foldr f Nothing _pubProps
