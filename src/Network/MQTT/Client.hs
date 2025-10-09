@@ -97,6 +97,9 @@ data MessageCallback = NoCallback
   -- In high throughput scenarios, slow callbacks may result in a high number of Haskell threads,
   -- potentially bringing down the entire application when running out of memory.
   -- Typically faster than `OrderedCallback`.
+  -- Use 'System.Mem.setAllocationCounter' and 'System.Mem.enableAllocationLimit'
+  -- to restrain the unbounded threads memory use.
+  -- Use a simple 'System.Timeout.timeout' to restrain unbounded thread runtime.
   | SimpleCallback (MQTTClient -> Topic -> BL.ByteString -> [Property] -> IO ())
   -- | Callbacks are guaranteed to be invoked in the same order messages are received.
   -- In high throughput scenarios, slow callbacks may cause the underlying TCP connection to block,
