@@ -41,7 +41,11 @@ import           Data.Maybe                      (fromMaybe, isJust)
 import           Data.Word                       (Word16, Word32, Word8)
 
 -- | QoS values for publishing and subscribing.
-data QoS = QoS0 | QoS1 | QoS2 deriving (Bounded, Enum, Eq, Show, Ord)
+--   cf https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901103
+data QoS = QoS0 -- ^ At most once delivered (eg you may get nothing!)
+         | QoS1 -- ^ At least once delivered (you may get dups)
+         | QoS2 -- ^ Delivered exactly once (NB aws iot core doesn't support this)
+         deriving (Bounded, Enum, Eq, Show, Ord)
 
 qosW :: QoS -> Word8
 qosW = toEnum . fromEnum
