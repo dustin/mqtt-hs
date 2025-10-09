@@ -132,14 +132,19 @@ data MQTTClient = MQTTClient {
 
 -- | Configuration for setting up an MQTT client.
 data MQTTConfig = MQTTConfig{
-  _cleanSession     :: Bool -- ^ False if a session should be reused.
+  -- | False if a session should be reused.
+  --   This makes MQTT queue messages if the device goes offline.
+  --   Note you've to set '_connID' for this to work.
+  _cleanSession     :: Bool
   , _lwt            :: Maybe LastWill -- ^ LastWill message to be sent on client disconnect.
   , _msgCB          :: MessageCallback -- ^ Callback for incoming messages.
   , _protocol       :: ProtocolLevel -- ^ Protocol to use for the connection.
   , _connProps      :: [Property] -- ^ Properties to send to the broker in the CONNECT packet.
   , _hostname       :: String -- ^ Host to connect to (parsed from the URI)
   , _port           :: Int -- ^ Port number (parsed from the URI)
-  , _connID         :: String -- ^ Unique connection ID (parsed from the URI)
+  -- | Unique connection ID (parsed from the URI).
+  --   Set it by using x.y#connID
+  , _connID         :: String
   , _username       :: Maybe String -- ^ Optional username (parsed from the URI)
   , _password       :: Maybe String -- ^ Optional password (parsed from the URI)
   , _connectTimeout :: Int -- ^ Connection timeout (microseconds)
