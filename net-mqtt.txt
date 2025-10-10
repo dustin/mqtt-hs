@@ -137,10 +137,17 @@ PongPkt :: MQTTPkt
 DisconnectPkt :: DisconnectRequest -> MQTTPkt
 AuthPkt :: AuthRequest -> MQTTPkt
 
--- | QoS values for publishing and subscribing.
+-- | QoS values for publishing and subscribing. cf
+--   <a>https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901103</a>
 data QoS
+
+-- | At most once delivered, default. (eg you may get nothing!)
 QoS0 :: QoS
+
+-- | At least once delivered (you may get dups)
 QoS1 :: QoS
+
+-- | Delivered exactly once (NB aws iot core doesn't support this)
 QoS2 :: QoS
 
 -- | Parse a valid QoS value from an Int.
@@ -507,10 +514,17 @@ MQTTConfig :: Bool -> Maybe LastWill -> MessageCallback -> ProtocolLevel -> [Pro
 --   See <a>connectURI</a> for the most straightforward example.
 data MQTTClient
 
--- | QoS values for publishing and subscribing.
+-- | QoS values for publishing and subscribing. cf
+--   <a>https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901103</a>
 data QoS
+
+-- | At most once delivered, default. (eg you may get nothing!)
 QoS0 :: QoS
+
+-- | At least once delivered (you may get dups)
 QoS1 :: QoS
+
+-- | Delivered exactly once (NB aws iot core doesn't support this)
 QoS2 :: QoS
 
 -- | An MQTT topic.
