@@ -618,7 +618,10 @@ NoCallback :: MessageCallback
 --   preserved, but not guaranteed. In high throughput scenarios, slow
 --   callbacks may result in a high number of Haskell threads, potentially
 --   bringing down the entire application when running out of memory.
---   Typically faster than <a>OrderedCallback</a>.
+--   Typically faster than <a>OrderedCallback</a>. Use
+--   <a>setAllocationCounter</a> and <a>enableAllocationLimit</a> to
+--   restrain the unbounded threads memory use. Use a simple <a>timeout</a>
+--   to restrain unbounded thread runtime.
 SimpleCallback :: (MQTTClient -> Topic -> ByteString -> [Property] -> IO ()) -> MessageCallback
 
 -- | Callbacks are guaranteed to be invoked in the same order messages are
