@@ -137,7 +137,9 @@ data MQTTClient = MQTTClient {
 data MQTTConfig = MQTTConfig{
   -- | False if a session should be reused.
   --   This makes MQTT queue messages if the device goes offline.
-  --   Note you've to set '_connID' for this to work.
+  --   Note you've to set '_connID' for this to be meaningful.
+  --   Brokers may assign one for you giving the wrong behavior.
+  --   AWS iot core will crash if this is not set.
   _cleanSession     :: Bool
   , _lwt            :: Maybe LastWill -- ^ LastWill message to be sent on client disconnect.
   , _msgCB          :: MessageCallback -- ^ Callback for incoming messages.
