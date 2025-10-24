@@ -1,5 +1,5 @@
 name:                net-mqtt
-version:             0.8.6.2
+version:             0.8.6.3
 github:              "dustin/mqtt-hs"
 license:             BSD3
 author:              "Dustin Sallings"
@@ -34,7 +34,7 @@ dependencies:
 - network-uri          >= 2.6.1 && < 2.7
 - attoparsec-binary    >= 0.2   && < 1.0
 - deepseq              >= 1.4.3.0 && < 1.6
-- QuickCheck           >= 2.12.6.1 && < 2.16
+- QuickCheck           >= 2.12.6.1 && < 2.17
 - websockets           >= 0.12.5.3 && < 0.14
 - crypton-connection   >= 0.3.0
 - monad-loops          >= 0.4.3
