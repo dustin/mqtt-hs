@@ -42,7 +42,7 @@ jobs:
         mkdir -p dist/  && mv $(stack path --local-install-root)/doc/$PKG_NAME-*/* dist/
 
     - name: Store Artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: mqtt-watch-${{ matrix.os }}
         path: mqtt-watch
