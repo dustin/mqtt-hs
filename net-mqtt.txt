@@ -465,7 +465,10 @@ module Network.MQTT.Client
 data MQTTConfig
 MQTTConfig :: Bool -> Maybe LastWill -> MessageCallback -> ProtocolLevel -> [Property] -> String -> Int -> String -> Maybe String -> Maybe String -> Int -> TLSSettings -> Int -> Int -> MQTTConfig
 
--- | False if a session should be reused.
+-- | False if a session should be reused. This makes MQTT queue messages if
+--   the device goes offline. Note you've to set <a>_connID</a> for this to
+--   be meaningful. Brokers may assign one for you giving the wrong
+--   behavior. AWS iot core will crash if this is not set.
 [_cleanSession] :: MQTTConfig -> Bool
 
 -- | LastWill message to be sent on client disconnect.
@@ -483,10 +486,9 @@ MQTTConfig :: Bool -> Maybe LastWill -> MessageCallback -> ProtocolLevel -> [Pro
 -- | Host to connect to (parsed from the URI)
 [_hostname] :: MQTTConfig -> String
 
--- | Port number (parsed from the URI)
+-- | Port number (parsed from the URI) | Unique connection ID (parsed from
+--   the URI). Set it by using x.y#connID
 [_port] :: MQTTConfig -> Int
-
--- | Unique connection ID (parsed from the URI)
 [_connID] :: MQTTConfig -> String
 
 -- | Optional username (parsed from the URI)
