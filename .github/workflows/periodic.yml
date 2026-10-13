@@ -7,39 +7,28 @@ on:
 
 jobs:
   build:
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        plan:
-        - { resolver: "--resolver=nightly" }
-        - { resolver: "--resolver=lts" }
-
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
-    - name: Cache Key
-      id: cache_key
-      run: echo ::set-output name=key::$(stack $RESOLVER ls dependencies | md5sum | awk '{print $1}')
-      env:
-        RESOLVER: ${{ matrix.plan.resolver }}
-
-    - name: Cache Dependencies
-      id: cache
-      uses: actions/cache@v5
+    - name: Install Nix
+      uses: cachix/install-nix-action@v31
       with:
-        path: ~/.stack
-        key: ${{ matrix.os }}-${{ matrix.plan.resolver }}-${{ steps.cache_key.outputs.key }}
+        nix_path: nixpkgs=channel:nixos-unstable
+        extra_nix_config: |
+          experimental-features = nix-command flakes
 
-    - name: Build Snapshot
-      if: steps.cache.outputs.cache-hit != 'true'
-      run: |
-        stack $RESOLVER --no-terminal test --bench --only-snapshot
-      env:
-        RESOLVER: ${{ matrix.plan.resolver }}
+    - name: Cache Nix store
+      uses: actions/cache@v6
+      with:
+        path: /nix
+        key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+        restore-keys: nix-${{ runner.os }}-
 
-    - name: Build & Test
+    - name: Update flake inputs (nixpkgs, GHC, Haskell packages)
       run: |
-        stack $RESOLVER --no-terminal test --bench --no-run-benchmarks
-      env:
-        RESOLVER: ${{ matrix.plan.resolver }}
+        nix flake update
+        git diff --stat flake.lock
+
+    - name: Build & Test against updated inputs
+      run: nix develop --command cabal test --test-show-details=streaming
