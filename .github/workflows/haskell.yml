@@ -7,90 +7,50 @@ on:
     branches: [ master ]
 
 jobs:
-  stack:
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-
-    runs-on: ${{ matrix.os }}
+  build:
+    runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
-    - name: Cache Key
-      id: cache_key
-      run: echo ::set-output name=key::$(md5sum stack.yaml | awk '{print $1}')
-
-    - name: Cache Dependencies
-      id: cache
-      uses: actions/cache@v5
+    - name: Install Nix
+      uses: cachix/install-nix-action@v31
       with:
-        path: ~/.stack
-        key: ${{ matrix.os }}-${{ steps.cache_key.outputs.key }}
+        nix_path: nixpkgs=channel:nixos-unstable
+        extra_nix_config: |
+          experimental-features = nix-command flakes
 
-    - name: Build Snapshot
-      if: steps.cache.outputs.cache-hit != 'true'
-      run: |
-        stack --no-terminal test --bench --only-snapshot
+    - name: Cache Nix store
+      uses: actions/cache@v6
+      with:
+        path: /nix
+        key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+        restore-keys: nix-${{ runner.os }}-
 
     - name: Build & Test
+      run: nix develop --command cabal test --test-show-details=streaming
+
+    - name: Build mqtt-watch
       run: |
-        stack --no-terminal test --bench --no-run-benchmarks --haddock --no-haddock-deps
-        stack install
-        cp $HOME/.local/bin/mqtt-watch .
-        PKG_NAME=$(cat *.cabal | grep "name:" | sed "s/name:\s*\(.*\)/\1/")
-        mkdir -p dist/  && mv $(stack path --local-install-root)/doc/$PKG_NAME-*/* dist/
+        mkdir -p bin/
+        nix develop --command cabal install exe:mqtt-watch --installdir=bin --install-method=copy --overwrite-policy=always
+        cp bin/mqtt-watch .
 
     - name: Store Artifact
       uses: actions/upload-artifact@v7
       with:
-        name: mqtt-watch-${{ matrix.os }}
+        name: mqtt-watch-ubuntu-latest
         path: mqtt-watch
 
+    - name: Build Docs
+      run: |
+        nix develop --command cabal haddock
+        mkdir -p dist/ && cp -r $(dirname $(find dist-newstyle -path '*/doc/html/*/index.html' | head -1))/* dist/
+
     - name: Publish Docs
-      if: matrix.os == 'ubuntu-latest' && github.event_name == 'push'
+      if: github.event_name == 'push'
       uses: peaceiris/actions-gh-pages@v4
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: dist
         enable_jekyll: false
-  cabal:
-    runs-on: 'ubuntu-latest'
-    steps:
-    - uses: actions/checkout@v6
-
-    - name: Set up Haskell
-      uses: haskell-actions/setup@v2
-      id: setup
-      with:
-        ghc-version: '9.10.3'
-        cabal-version: '3.16.0.0'
-
-    - name: Generate Cache Keys
-      id: cache_key
-      run: |
-        echo "ghc_ver=${{ steps.setup.outputs.ghc-version }}" >> $GITHUB_ENV
-        cabal freeze
-        echo "dep_hash=$(md5sum cabal.project.freeze | awk '{print $1}')" >> $GITHUB_ENV
-
-    - name: Cache Dependencies
-      id: cache
-      uses: actions/cache@v5
-      with:
-        path: |
-          ~/.cabal
-          dist-newstyle
-        key: ubuntu-latest-ghc-${{ env.ghc_ver }}-cabal-${{ env.dep_hash }}
-        restore-keys: |
-          ubuntu-latest-ghc-${{ env.ghc_ver }}-cabal-
-          ubuntu-latest-ghc-${{ env.ghc_ver }}-
-          ubuntu-latest-
-
-    - name: Install tasty-discover
-      if: steps.cache.outputs.cache-hit != 'true'
-      run: cabal install --overwrite-policy=always tasty-discover
-
-    - name: Build & Test
-      run: |
-        cabal build
-        cabal test --test-show-details=streaming
