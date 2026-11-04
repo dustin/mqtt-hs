@@ -1,11 +1,11 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.38.1.
+-- This file has been generated from package.yaml by hpack version 0.38.3.
 --
 -- see: https://github.com/sol/hpack
 
 name:           net-mqtt
-version:        0.8.6.4
+version:        0.8.6.5
 synopsis:       An MQTT Protocol Implementation.
 description:    Please see the README on GitHub at <https://github.com/dustin/mqtt-hs#readme>
 category:       Network

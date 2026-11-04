@@ -151,3 +151,27 @@ test_Spec = [
   testGroup "topic matching" testTopicMatching,
   testProperty "arbitrary topic matching" prop_TopicMatching
   ]
+
+-- | Parse exactly the given bytes as a single MQTT 5 packet.
+parses50 :: [Word8] -> MQTTPkt -> Assertion
+parses50 bs want = case A.parse (parsePacket Protocol50) (L.pack bs) of
+  A.Done "" got -> assertEqual (show bs) want got
+  x             -> assertFailure (show bs <> ": " <> show x)
+
+-- A DISCONNECT with a Remaining Length of 0 has an implied reason code
+-- of 0x00 (Normal disconnection) and no properties [MQTT 5 §3.14.2.1].
+unit_disconnectShort50 :: Assertion
+unit_disconnectShort50 = parses50 [0xe0, 0x00] (DisconnectPkt (DisconnectRequest DiscoNormalDisconnection []))
+
+-- A Remaining Length of 1 is a reason code with no properties [MQTT 5 §3.14.2.2.1].
+unit_disconnectReasonOnly50 :: Assertion
+unit_disconnectReasonOnly50 = parses50 [0xe0, 0x01, 0x04] (DisconnectPkt (DisconnectRequest DiscoDisconnectWithWill []))
+
+-- An AUTH with a Remaining Length of 0 has an implied reason code of
+-- 0x00 (Success) and no properties [MQTT 5 §3.15.2.1].
+unit_authShort50 :: Assertion
+unit_authShort50 = parses50 [0xf0, 0x00] (AuthPkt (AuthRequest 0x00 []))
+
+-- A Remaining Length of 1 is a reason code with no properties [MQTT 5 §3.15.2.2.1].
+unit_authReasonOnly50 :: Assertion
+unit_authReasonOnly50 = parses50 [0xf0, 0x01, 0x18] (AuthPkt (AuthRequest 0x18 []))

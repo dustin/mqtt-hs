@@ -847,9 +847,11 @@ instance ByteMe AuthRequest where
 parseAuth :: A.Parser MQTTPkt
 parseAuth = do
   _ <- A.word8 0xf0
-  _ <- parseHdrLen
-  r <- AuthRequest <$> A.anyWord8 <*> parseProperties Protocol50
-  pure $ AuthPkt r
+  rl <- parseHdrLen
+  -- With a Remaining Length of 0, the reason code is 0x00 (Success).
+  r <- if rl > 0 then A.anyWord8 else pure 0
+  props <- if rl > 1 then parseProperties Protocol50 else pure mempty
+  pure $ AuthPkt (AuthRequest r props)
 
 data DiscoReason = DiscoNormalDisconnection
   | DiscoDisconnectWithWill
@@ -935,7 +937,8 @@ parseDisconnect Protocol311 = do
 parseDisconnect Protocol50 = do
   _ <- A.word8 0xe0
   rl <- parseHdrLen
-  r <- A.anyWord8
+  -- With a Remaining Length of 0, the reason code is 0x00 (Normal disconnection).
+  r <- if rl > 0 then A.anyWord8 else pure 0
   props <- if rl > 1 then parseProperties Protocol50 else pure mempty
 
   pure $ DisconnectPkt (DisconnectRequest (fromByte r) props)
