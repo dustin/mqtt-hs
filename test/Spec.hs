@@ -127,6 +127,21 @@ testTopicMatching = let allTopics = ["a", "a/b", "a/b/c/d", "b/a/c/d",
                                 ("#/b", [])] in
     map (\(p,want) -> testCase (show p) $ assertEqual "" want (filter (match p) allTopics)) tsts
 
+-- Wildcards must occupy a whole level, # only the last
+-- [MQTT-4.7.1-1], [MQTT-4.7.1-2], [MQTT-4.7.1-3], and a topic name has
+-- none [MQTT-4.7.0-1].
+testFilterValidation :: Assertion
+testFilterValidation = do
+  mapM_ (\f -> assertEqual (show f) (Just f) (unFilter <$> mkFilter f))
+    ["a", "#", "+", "a/#", "a/+/b", "+/+", "/", "a//b", "$SYS/#", "+/#"]
+  mapM_ (\f -> assertEqual (show f) Nothing (unFilter <$> mkFilter f))
+    ["", "a+", "a/b+/c", "a#", "a/#b", "#/a", "a/#/b", "+a"]
+
+testTopicValidation :: Assertion
+testTopicValidation = do
+  mapM_ (\t -> assertEqual (show t) (Just t) (unTopic <$> mkTopic t)) ["a", "a/b", "/", "a//b", "$SYS/x"]
+  mapM_ (\t -> assertEqual (show t) Nothing (unTopic <$> mkTopic t)) ["", "#", "+", "a/+", "a/#", "a+b", "a#", "a/b+"]
+
 prop_TopicMatching :: MatchingTopic -> QC.Property
 prop_TopicMatching (MatchingTopic (t,ms)) = counterexample (show ms <> " doesn't match " <> show t) $
   all (`match` t) ms
@@ -154,6 +169,8 @@ test_Spec = [
   testProperties "filter semigroup" (unbatch $ semigroup (undefined :: Filter, undefined :: Int)),
 
   testGroup "topic matching" testTopicMatching,
+  testCase "filter validation" testFilterValidation,
+  testCase "topic validation" testTopicValidation,
   testProperty "arbitrary topic matching" prop_TopicMatching
   ]
 

@@ -19,6 +19,7 @@ module Network.MQTT.Topic (
 
 import           Data.String (IsString (..))
 import           Data.Text   (Text, isPrefixOf, splitOn)
+import qualified Data.Text   as T
 
 class Splittable a where
   -- | split separates a `Filter` or `Topic` into its `/`-separated components.
@@ -36,12 +37,10 @@ instance Semigroup Topic where
 -- | mkTopic creates a topic from a text representation of a valid filter.
 mkTopic :: Text -> Maybe Topic
 mkTopic "" = Nothing
-mkTopic t = Topic <$> validate (splitOn "/" t)
-  where
-    validate ("#":_) = Nothing
-    validate ("+":_) = Nothing
-    validate []      = Just t
-    validate (_:xs)  = validate xs
+mkTopic t
+  -- A topic name has no wildcards [MQTT-4.7.0-1].
+  | T.any (`elem` ['#', '+']) t = Nothing
+  | otherwise = Just (Topic t)
 
 -- | An MQTT topic filter.
 newtype Filter = Filter { unFilter :: Text } deriving (Show, Ord, Eq, IsString)
@@ -57,10 +56,14 @@ mkFilter :: Text -> Maybe Filter
 mkFilter "" = Nothing
 mkFilter t = Filter <$> validate (splitOn "/" t)
   where
+    -- A wildcard is a whole level, and # is only the last one
+    -- [MQTT-4.7.1-1], [MQTT-4.7.1-2], [MQTT-4.7.1-3].
     validate ["#"]   = Just t
     validate ("#":_) = Nothing
     validate []      = Just t
-    validate (_:xs)  = validate xs
+    validate (x:xs)
+      | x /= "+" && T.any (`elem` ['#', '+']) x = Nothing
+      | otherwise = validate xs
 
 -- | match returns true iff the given pattern can be matched by the
 -- specified Topic as defined in the
