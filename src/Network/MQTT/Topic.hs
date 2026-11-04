@@ -65,18 +65,22 @@ mkFilter t = Filter <$> validate (splitOn "/" t)
 -- | match returns true iff the given pattern can be matched by the
 -- specified Topic as defined in the
 -- <http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718107 MQTT 3.1.1 specification>.
+--
+-- A wildcard at the start of a filter doesn't match a topic beginning
+-- with @$@, but wildcards further in match @$@ levels like any other
+-- [MQTT-4.7.2-1].
 match :: Filter -> Topic -> Bool
-match (Filter pat) (Topic top) = cmp (splitOn "/" pat) (splitOn "/" top)
+match (Filter pat) (Topic top) = case (splitOn "/" pat, splitOn "/" top) of
+  (p:_, t:_) | p `elem` ["#", "+"] && "$" `isPrefixOf` t -> False
+  (ps, ts) -> cmp ps ts
 
   where
     cmp [] []       = True
     cmp [] _        = False
-    cmp ["#"] []    = True
+    cmp ["#"] _     = True
     cmp _ []        = False
-    cmp ["#"] (t:_) = not $ "$" `isPrefixOf` t
     cmp (p:ps) (t:ts)
-      | p == t = cmp ps ts
-      | p == "+" && not ("$" `isPrefixOf` t) = cmp ps ts
+      | p == t || p == "+" = cmp ps ts
       | otherwise = False
 
 -- | Convert a 'Topic' to a 'Filter' as all 'Topic's are valid 'Filter's

@@ -112,10 +112,15 @@ prop_PropertiesRT p = case A.parse (parseProperties Protocol50) (bsProps Protoco
 testTopicMatching :: [TestTree]
 testTopicMatching = let allTopics = ["a", "a/b", "a/b/c/d", "b/a/c/d",
                                      "$SYS/a/b", "a/$SYS/b"]
-                        tsts = [("a", ["a"]), ("a/#", ["a", "a/b", "a/b/c/d"]),
+                        -- Wildcards don't match a $ level only at the start of
+                        -- the topic [MQTT-4.7.2-1].
+                        tsts = [("a", ["a"]), ("a/#", ["a", "a/b", "a/b/c/d", "a/$SYS/b"]),
                                 ("+/b", ["a/b"]),
                                 ("+/+/c/+", ["a/b/c/d", "b/a/c/d"]),
-                                ("+/+/b", []),
+                                ("+/+/b", ["a/$SYS/b"]),
+                                ("#", ["a", "a/b", "a/b/c/d", "b/a/c/d", "a/$SYS/b"]),
+                                ("+/#", ["a", "a/b", "a/b/c/d", "b/a/c/d", "a/$SYS/b"]),
+                                ("+/a/b", []),
                                 ("+/$SYS/b", ["a/$SYS/b"]),
                                 ("$SYS/#", ["$SYS/a/b"]),
                                 ("+/$SYS/+", ["a/$SYS/b"]),
