@@ -53,6 +53,11 @@ qosW = toEnum . fromEnum
 wQos :: Word8 -> QoS
 wQos = toEnum . fromIntegral
 
+-- | Parse a QoS from its two bits; 3 isn't one.
+pQos :: Word8 -> A.Parser QoS
+pQos 3 = fail "invalid QoS"
+pQos x = pure (wQos x)
+
 -- | Parse a valid QoS value from an Int.
 qosFromInt :: Int -> Maybe QoS
 qosFromInt 0 = Just QoS0
@@ -425,6 +430,10 @@ parseConnect = do
   pl <- parseLevel
 
   connFlagBits <- A.anyWord8
+  -- The reserved flag is 0 [MQTT-3.1.2-3], and without a will, so are
+  -- the will QoS and retain [MQTT-3.1.2-11], [MQTT-3.1.2-13], [MQTT-3.1.2-15].
+  when (testBit connFlagBits 0) $ fail "reserved CONNECT flag set"
+  when (not (testBit connFlagBits 2) && connFlagBits .&. 0x38 /= 0) $ fail "will flags set without a will"
   keepAlive <- aWord16
   props <- parseProperties pl
   cid <- aString
@@ -450,9 +459,10 @@ parseConnect = do
           props <- parseProperties pl
           top <- aString
           msg <- aString
+          q <- pQos $ (bits ≫ 3) .&. 0x3
           pure $ Just LastWill{_willTopic=top, _willMsg=msg,
                                _willRetain=testBit bits 5,
-                               _willQoS=wQos $ (bits ≫ 3) .&. 0x3,
+                               _willQoS=q,
                                _willProps = props}
       | otherwise = pure Nothing
 
@@ -576,8 +586,8 @@ parsePublish :: ProtocolLevel -> A.Parser MQTTPkt
 parsePublish prot = do
   w <- A.satisfy (\x -> x .&. 0xf0 == 0x30)
   plen <- parseHdrLen
+  _pubQoS <- pQos $ (w ≫ 1) .&. 3 -- [MQTT-3.3.1-4]
   let _pubDup = w .&. 0x8 == 0x8
-      _pubQoS = wQos $ (w ≫ 1) .&. 3
       _pubRetain = w .&. 1 == 1
   _pubTopic <- aString
   _pubPktID <- if _pubQoS == QoS0 then pure 0 else aWord16
@@ -629,16 +639,21 @@ instance ByteMe SubOptions where
 parseSubOptions :: A.Parser SubOptions
 parseSubOptions = do
   w <- A.anyWord8
-  let rh = case w ≫ 4 of
-             1 -> SendOnSubscribeNew
-             2 -> DoNotSendOnSubscribe
-             _ -> SendOnSubscribe
+  -- The reserved bits are 0, and Retain Handling 3 is a protocol error
+  -- [MQTT-3.8.3-5].
+  when (w .&. 0xc0 /= 0) $ fail "reserved subscription option bits set"
+  rh <- case w ≫ 4 of
+          0 -> pure SendOnSubscribe
+          1 -> pure SendOnSubscribeNew
+          2 -> pure DoNotSendOnSubscribe
+          _ -> fail "invalid retain handling"
+  q <- pQos (w .&. 0x3)
 
   pure $ SubOptions{
     _retainHandling=rh,
     _retainAsPublished=testBit w 3,
     _noLocal=testBit w 2,
-    _subQoS=wQos (w .&. 0x3)}
+    _subQoS=q}
 
 subOptionsBytes :: ProtocolLevel -> [(BL.ByteString, SubOptions)] -> BL.ByteString
 subOptionsBytes prot = foldMap (\(bs,so) -> toByteString prot bs <> toByteString prot so)
@@ -717,8 +732,14 @@ parseSubHdr b prot p = do
 
 parseSubscribe :: ProtocolLevel -> A.Parser MQTTPkt
 parseSubscribe prot = do
-  (pid, props, subs) <- parseSubHdr 0x82 prot $ A.many1 (liftA2 (,) aString parseSubOptions)
+  (pid, props, subs) <- parseSubHdr 0x82 prot $ A.many1 (liftA2 (,) aString (v311 *> parseSubOptions))
   pure $ SubscribePkt (SubscribeRequest pid subs props)
+
+  where
+    -- In 3.1.1, everything but the QoS is reserved [MQTT-3-8.3-4].
+    v311
+      | prot == Protocol311 = A.peekWord8' >>= \w -> when (w .&. 0xfc /= 0) (fail "reserved subscription option bits set")
+      | otherwise = pure ()
 
 data SubscribeResponse = SubscribeResponse PktID [Either SubErr QoS] [Property] deriving (Eq, Show)
 

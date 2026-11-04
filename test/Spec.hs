@@ -197,3 +197,57 @@ unit_authShort50 = parses50 [0xf0, 0x00] (AuthPkt (AuthRequest 0x00 []))
 -- A Remaining Length of 1 is a reason code with no properties [MQTT 5 §3.15.2.2.1].
 unit_authReasonOnly50 :: Assertion
 unit_authReasonOnly50 = parses50 [0xf0, 0x01, 0x18] (AuthPkt (AuthRequest 0x18 []))
+
+-- | The given bytes aren't a valid packet at the given level.
+rejects :: A.Parser MQTTPkt -> [Word8] -> Assertion
+rejects p bs = case A.parse p (L.pack bs) of
+  A.Fail{}    -> pure ()
+  A.Done _ pk -> assertFailure (show bs <> " parsed as " <> show pk)
+
+subscribeWith :: ProtocolLevel -> Word8 -> [Word8]
+subscribeWith Protocol50 o  = [0x82, 0x07, 0x00, 0x01, 0x00, 0x00, 0x01, 0x61, o]
+subscribeWith Protocol311 o = [0x82, 0x06, 0x00, 0x01, 0x00, 0x01, 0x61, o]
+
+-- Retain Handling 3 is a protocol error, and the reserved bits must be 0
+-- [MQTT-3.8.3-5].  So must a QoS of 3 [MQTT-3-8.3-4].
+unit_subOptionsRetainHandling3 :: Assertion
+unit_subOptionsRetainHandling3 = rejects (parsePacket Protocol50) (subscribeWith Protocol50 0x30)
+
+unit_subOptionsReserved :: Assertion
+unit_subOptionsReserved = mapM_ (rejects (parsePacket Protocol50) . subscribeWith Protocol50) [0x40, 0x80]
+
+unit_subOptionsQoS3 :: Assertion
+unit_subOptionsQoS3 = rejects (parsePacket Protocol50) (subscribeWith Protocol50 0x03)
+
+unit_subOptionsValid :: Assertion
+unit_subOptionsValid = parses50 (subscribeWith Protocol50 0x2e)
+  (SubscribePkt (SubscribeRequest 1 [("a", SubOptions{_retainHandling=DoNotSendOnSubscribe, _retainAsPublished=True,
+                                                     _noLocal=True, _subQoS=QoS2})] []))
+
+-- In 3.1.1, everything but the QoS is reserved [MQTT-3-8.3-4].
+unit_subOptionsReserved311 :: Assertion
+unit_subOptionsReserved311 = mapM_ (rejects (parsePacket Protocol311) . subscribeWith Protocol311) [0x04, 0x08, 0x10]
+
+-- A PUBLISH can't have QoS 3 [MQTT-3.3.1-4].
+unit_publishQoS3 :: Assertion
+unit_publishQoS3 = rejects (parsePacket Protocol311) [0x36, 0x05, 0x00, 0x01, 0x61, 0x00, 0x01]
+
+connectWithFlags :: Word8 -> [Word8] -> [Word8]
+connectWithFlags flags rest = [0x10, fromIntegral (13 + length rest), 0x00, 0x04, 0x4d, 0x51, 0x54, 0x54, 0x04, flags,
+                               0x00, 0x3c, 0x00, 0x01, 0x78] <> rest
+
+-- The CONNECT flags' reserved bit must be 0 [MQTT-3.1.2-3].
+unit_connectReservedFlag :: Assertion
+unit_connectReservedFlag = rejects parseConnect (connectWithFlags 0x03 [])
+
+-- Without a will, the will QoS and retain must be 0 [MQTT-3.1.2-11],
+-- [MQTT-3.1.2-13], [MQTT-3.1.2-15]; with one, its QoS isn't 3 [MQTT-3.1.2-14].
+unit_connectWillFlags :: Assertion
+unit_connectWillFlags = do
+  mapM_ (rejects parseConnect . (`connectWithFlags` [])) [0x0a, 0x12, 0x22]
+  rejects parseConnect (connectWithFlags 0x1e [0x00, 0x01, 0x74, 0x00, 0x01, 0x6d])
+
+unit_connectValid :: Assertion
+unit_connectValid = case A.parse parseConnect (L.pack (connectWithFlags 0x2e [0x00, 0x01, 0x74, 0x00, 0x01, 0x6d])) of
+  A.Done "" (ConnPkt ConnectRequest{_lastWill=Just LastWill{_willQoS=QoS1, _willRetain=True}} Protocol311) -> pure ()
+  x -> assertFailure (show x)
