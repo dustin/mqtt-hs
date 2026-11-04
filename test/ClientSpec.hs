@@ -7,7 +7,7 @@ import           Control.Concurrent              (threadDelay)
 import           Control.Concurrent.Async        (mapConcurrently_)
 import           Control.Concurrent.Async        (async, poll, wait)
 import           Control.Concurrent.STM          (TVar, atomically, check, modifyTVar', newTChanIO, newTVarIO,
-                                                  readTChan, readTVar, writeTChan)
+                                                  readTChan, readTVar, retry, writeTChan)
 import           Control.Monad                   (forM_, forever, replicateM_)
 import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Attoparsec.ByteString.Lazy as A
@@ -114,4 +114,18 @@ unit_honorsReceiveMaximum = do
   PublishPkt PublishRequest{_pubPktID=pid2} <- nthWritten 2 written
   inject (PubACKPkt (PubACK pid2 0 []))
   mapM_ (\p -> timeout 2000000 (wait p) >>= maybe (assertFailure "publish didn't finish") pure) ps
+  stopClient c
+
+-- An ordered callback gets messages even without a subscribe on this
+-- connection (e.g. from a resumed session's subscriptions).
+unit_orderedCallbackWithoutSubscribe :: Assertion
+unit_orderedCallbackWithoutSubscribe = do
+  (_, inject, conn) <- scriptedBroker []
+  got <- newTVarIO Nothing
+  c <- runMQTTConduit conn mqttConfig{_protocol=Protocol50,
+                                      _msgCB=OrderedCallback (\_ t _ _ -> atomically $ modifyTVar' got (const (Just t)))}
+  inject (PublishPkt PublishRequest{_pubDup=False, _pubQoS=QoS0, _pubRetain=False, _pubTopic="a/b",
+                                    _pubPktID=0, _pubBody="x", _pubProps=[]})
+  timeout 1000000 (atomically (readTVar got >>= maybe retry pure)) >>=
+    assertEqual "callback called" (Just "a/b")
   stopClient c

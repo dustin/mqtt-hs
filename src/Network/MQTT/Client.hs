@@ -327,6 +327,10 @@ runMQTTConduit mkconn MQTTConfig{..} = do
 
   atomically $ checkConnected cli
 
+  -- Ordered callbacks get messages from the start, not only after a
+  -- subscribe (a resumed session can deliver without one).
+  runCallbackThread cli
+
   pure cli
 
   where
