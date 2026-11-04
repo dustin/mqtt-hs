@@ -640,23 +640,30 @@ publishq :: MQTTClient
          -> QoS           -- ^ QoS
          -> [Property]    -- ^ Properties
          -> IO ()
-publishq c t m r q props = do
-  (ch,pid) <- atomically $ reservePktID c types
-  E.finally (publishAndWait ch pid) (atomically $ releasePktIDs c [(t',pid) | t' <- types])
+publishq c t m r q props = publishWith c (pure (t, props)) m r q
+
+-- | Publish with the topic and properties from an STM action.  The action
+-- runs in the same transaction that queues the PUBLISH, so whatever it
+-- decides (e.g. a topic alias) goes out in the order it was decided.
+publishWith :: MQTTClient -> STM (Topic, [Property]) -> BL.ByteString -> Bool -> QoS -> IO ()
+publishWith c mk m r q = do
+  (ch,pid) <- atomically $ do
+    (ch,pid) <- reservePktID c types
+    (t, props) <- mk
+    sendPacket c (pkt t props pid)
+    pure (ch,pid)
+  E.finally (when (q > QoS0) $ satisfyQoS ch pid) (atomically $ releasePktIDs c [(t',pid) | t' <- types])
 
     where
       types = [DPubACK, DPubREC, DPubCOMP]
-      publishAndWait ch pid = do
-        sendPacketIO c (pkt pid)
-        when (q > QoS0) $ satisfyQoS ch pid
 
-      pkt pid = PublishPkt $ PublishRequest {_pubDup = False,
-                                             _pubQoS = q,
-                                             _pubPktID = pid,
-                                             _pubRetain = r,
-                                             _pubTopic = topicToBL t,
-                                             _pubBody = m,
-                                             _pubProps = props}
+      pkt t props pid = PublishPkt $ PublishRequest {_pubDup = False,
+                                                     _pubQoS = q,
+                                                     _pubPktID = pid,
+                                                     _pubRetain = r,
+                                                     _pubTopic = topicToBL t,
+                                                     _pubBody = m,
+                                                     _pubProps = props}
 
       satisfyQoS ch pid
         | q == QoS0 = pure ()
@@ -741,20 +748,18 @@ pubAliased :: MQTTClient
          -> IO ()
 pubAliased c@MQTTClient{..} t m r q props = do
   x <- maxAliases c
-  (t', n) <- alias x
-  let np = props <> case n of
-                      0 -> mempty
-                      _ -> [PropTopicAlias n]
-  publishq c t' m r q np
+  -- The alias is chosen in the transaction that queues the PUBLISH, so
+  -- the one that introduces it can't be overtaken by one that uses it.
+  publishWith c (alias x) m r q
 
   where
-    alias mv = atomically $ do
+    alias mv = do
       as <- readTVar _outA
       let n = toEnum (length as + 1)
           cur = Map.lookup t as
           v = fromMaybe (if n > mv then 0 else n) cur
       when (v > 0) $ writeTVar _outA (Map.insert t v as)
-      pure (maybe t (const "") cur, v)
+      pure (maybe t (const "") cur, props <> [PropTopicAlias v | v > 0])
 
 -- | Register a callback handler for a message with the given correlated data identifier.
 --

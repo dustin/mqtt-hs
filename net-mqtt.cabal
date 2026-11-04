@@ -127,6 +127,7 @@ test-suite mqtt-test
   type: exitcode-stdio-1.0
   main-is: Main.hs
   other-modules:
+      ClientSpec
       DecayingSpec
       Example1
       Example2
