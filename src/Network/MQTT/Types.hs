@@ -627,6 +627,8 @@ subOptions = SubOptions{_retainHandling=SendOnSubscribe,
                          _subQoS=QoS0}
 
 instance ByteMe SubOptions where
+  -- 3.1.1 has only the QoS; the other bits are reserved [MQTT-3.8.3-4].
+  toByteString Protocol311 SubOptions{..} = BL.singleton (qosW _subQoS)
   toByteString _ SubOptions{..} = BL.singleton (rh .|. rap .|. nl .|. q)
 
     where

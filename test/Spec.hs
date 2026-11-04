@@ -260,3 +260,12 @@ unit_connectWillFieldsMissing = rejects parseConnect (connectWithFlags 0x06 [] <
 -- ...and bytes left over after its fields make it malformed.
 unit_connectTrailingBytes :: Assertion
 unit_connectTrailingBytes = rejects parseConnect (connectWithFlags 0x02 [0x00])
+
+-- In 3.1.1, a SUBSCRIBE's options byte is just the QoS; the rest is
+-- reserved [MQTT-3.8.3-4], so 5.0-only options aren't encoded.
+prop_subscribe311OnlyQoS :: SubOptions -> QC.Property
+prop_subscribe311OnlyQoS o =
+  let pkt = SubscribePkt (SubscribeRequest 1 [("a", o)] [])
+  in case A.parse (parsePacket Protocol311) (toByteString Protocol311 pkt) of
+       A.Done "" got -> got === SubscribePkt (SubscribeRequest 1 [("a", subOptions{_subQoS=_subQoS o})] [])
+       x             -> counterexample (show x) False
