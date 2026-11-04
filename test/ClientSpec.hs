@@ -161,3 +161,16 @@ unit_failingOrderedCallbackEndsConnection = do
   inject (PublishPkt PublishRequest{_pubDup=False, _pubQoS=QoS1, _pubRetain=False, _pubTopic="a/b",
                                     _pubPktID=1, _pubBody="x", _pubProps=[]})
   connectionEnds c
+
+-- An ordered client that never subscribed (e.g. a bridge's destination,
+-- getting a resumed session's messages) handles, and acks, more than one
+-- message: the second used to block the reader for good.
+unit_orderedWithoutSubscribeAcksAll :: Assertion
+unit_orderedWithoutSubscribeAcksAll = do
+  (written, inject, conn) <- scriptedBroker []
+  c <- runMQTTConduit conn mqttConfig{_protocol=Protocol50, _msgCB=OrderedCallback (\_ _ _ _ -> pure ())}
+  mapM_ (\i -> inject (PublishPkt PublishRequest{_pubDup=False, _pubQoS=QoS1, _pubRetain=False, _pubTopic="a/b",
+                                                 _pubPktID=i, _pubBody="x", _pubProps=[]})) [1, 2, 3]
+  acks <- mapM (`nthWritten` written) [1, 2, 3]
+  assertEqual "PUBACKs" [PubACKPkt (PubACK i 0 []) | i <- [1, 2, 3]] acks
+  stopClient c
