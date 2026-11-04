@@ -369,7 +369,12 @@ runMQTTConduit mkconn MQTTConfig{..} = do
           .| C.map (BL.toStrict . toByteString _protocol)
           .| sink
 
-        doPing = forever $ threadDelay _pingPeriod >> sendPacketIO c PingPkt
+        -- Ping at least twice per Server Keep Alive, if the server set
+        -- one shorter than our period [MQTT-3.2.2-21].
+        doPing = do
+          ConnACKFlags _ _ props <- readTVarIO _connACKFlags
+          let period = minimum (_pingPeriod : [fromIntegral k * 500000 | PropServerKeepAlive k <- props, k > 0])
+          forever $ threadDelay period >> sendPacketIO c PingPkt
 
         watchdog ch = forever $ do
           toch <- registerDelay _pingPatience

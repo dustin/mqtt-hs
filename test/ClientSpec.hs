@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module ClientSpec where
@@ -85,4 +86,15 @@ unit_qos2HoldsIDUntilPubCOMP = do
   poll p >>= maybe (pure ()) (const $ assertFailure "publish finished before PUBCOMP")
   inject (PubCOMPPkt (PubCOMP pid 0 []))
   timeout 2000000 (wait p) >>= maybe (assertFailure "publish didn't finish after PUBCOMP") pure
+  stopClient c
+
+-- The client pings often enough for a Server Keep Alive shorter than its
+-- own ping period [MQTT-3.2.2-21].
+unit_honorsServerKeepAlive :: Assertion
+unit_honorsServerKeepAlive = do
+  (written, _, conn) <- scriptedBroker [PropServerKeepAlive 1]
+  c <- runMQTTConduit conn mqttConfig{_protocol=Protocol50}
+  timeout 1500000 (nthWritten 1 written) >>= \case
+    Just PingPkt -> pure ()
+    x            -> assertFailure ("expected a PINGREQ within 1.5s, got " <> show x)
   stopClient c
