@@ -1,5 +1,9 @@
 # Changelog for net-mqtt
 
+## 0.8.7.0
+
+Protocol strictness enhancements.
+
 ## 0.8.6.1
 
 Use `def` for TLS settings.
@@ -338,4 +342,3 @@ from being able to publish messages easily.
 ### Other
 
 Updated to stackage LTS 13.2
-
