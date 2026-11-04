@@ -15,10 +15,11 @@ and
 are supported over plain TCP, TLS, WebSockets and Secure WebSockets.
 -}
 
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE NamedFieldPuns    #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Network.MQTT.Client (
   -- * Configuring the client.
@@ -61,7 +62,7 @@ import           Data.Foldable              (traverse_)
 import           Data.Map.Strict            (Map)
 import qualified Data.Map.Strict            as Map
 import qualified Data.Map.Strict.Decaying   as Decaying
-import           Data.Maybe                 (fromJust, fromMaybe)
+import           Data.Maybe                 (fromJust, fromMaybe, isJust)
 import           Data.Text                  (Text)
 import qualified Data.Text.Lazy             as TL
 import qualified Data.Text.Encoding         as TE
@@ -430,7 +431,7 @@ dispatch :: MQTTClient -> TChan Bool -> MQTTPkt -> IO ()
 dispatch c@MQTTClient{..} pch pkt =
   case pkt of
     (ConnACKPkt p)                            -> connACKd p
-    (PublishPkt p)                            -> pub p
+    (PublishPkt p)                            -> validTopic p >> pub p
     (SubACKPkt (SubscribeResponse i _ _))     -> delegate DSubACK i
     (UnsubACKPkt (UnsubscribeResponse i _ _)) -> delegate DUnsubACK i
     (PubACKPkt (PubACK i _ _))                -> delegate DPubACK i
@@ -457,6 +458,16 @@ dispatch c@MQTTClient{..} pch pkt =
                                                     t <- readTVarIO _ct
                                                     atomically $ writeTVar _st (ConnErr connr)
                                                     maybeCancelWith (MQTTException $ show connr) t
+
+        -- A topic name can't have wildcards [MQTT-3.3.2-2].  One that does
+        -- is a protocol error ending the connection, rather than an
+        -- exception in whatever callback looks at the topic.  (An empty one
+        -- is a topic alias.)
+        validTopic PublishRequest{_pubTopic}
+          | BL.null _pubTopic || isJust (mkTopic (blToText _pubTopic)) = pure ()
+          | otherwise = do
+              sendPacketIO c (DisconnectPkt (DisconnectRequest DiscoProtocolError mempty))
+              E.throwIO (MQTTException ("invalid topic in PUBLISH: " <> show _pubTopic))
 
         pub p@PublishRequest{_pubQoS=QoS0} = atomically (resolve p) >>= notify Nothing
         pub p@PublishRequest{_pubQoS=QoS1, _pubPktID} =
@@ -516,7 +527,7 @@ dispatch c@MQTTClient{..} pch pkt =
 -- Run OrderedCallbacks in a background thread. Does nothing for other callback types.
 -- We keep the async handle in a TVar and make sure only one of these threads is running.
 runCallbackThread :: MQTTClient -> IO ()
-runCallbackThread MQTTClient{_cb, _cbM, _cbHandle}
+runCallbackThread c@MQTTClient{_cb, _cbM, _cbHandle}
   | isOrdered _cb = do
       -- We always spawn a thread, but may kill it if we already have
       -- one.  The new thread won't start until we atomically confirm
@@ -537,8 +548,13 @@ runCallbackThread MQTTClient{_cb, _cbM, _cbHandle}
           isOrdered (OrderedLowLevelCallback _) = True
           isOrdered _                           = False
           waitFor latch = atomically (check =<< readTVar latch)
-          -- Keep running callbacks from the MVar
-          runOrderedCallbacks = forever . join . takeMVar $ _cbM
+          -- Keep running callbacks from the MVar.  One that fails ends the
+          -- connection, as with unordered callbacks, rather than leaving it
+          -- up with nothing to run the rest.
+          runOrderedCallbacks = forever (join (takeMVar _cbM)) `E.catch` \(e :: E.SomeException) ->
+            case E.fromException e of
+              Just (_ :: E.SomeAsyncException) -> E.throwIO e
+              Nothing                          -> killConn c e >> E.throwIO e
 
 -- Stop the background thread for OrderedCallbacks. Does nothing for other callback types.
 stopCallbackThread :: MQTTClient -> IO ()

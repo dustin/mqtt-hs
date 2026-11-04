@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module ClientSpec where
 
@@ -9,6 +10,7 @@ import           Control.Concurrent.Async        (async, poll, wait)
 import           Control.Concurrent.STM          (TVar, atomically, check, modifyTVar', newTChanIO, newTVarIO,
                                                   readTChan, readTVar, retry, writeTChan)
 import           Control.Monad                   (forM_, forever, replicateM_)
+import qualified Control.Exception               as E
 import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Attoparsec.ByteString.Lazy as A
 import qualified Data.ByteString                 as BS
@@ -129,3 +131,33 @@ unit_orderedCallbackWithoutSubscribe = do
   timeout 1000000 (atomically (readTVar got >>= maybe retry pure)) >>=
     assertEqual "callback called" (Just "a/b")
   stopClient c
+
+-- | The client's connection ends (rather than wedging) within a couple of
+-- seconds.
+connectionEnds :: MQTTClient -> Assertion
+connectionEnds c = E.try (timeout 2000000 (waitForClient c)) >>= \case
+  Right Nothing                -> assertFailure "the connection is still up"
+  Left (_ :: E.SomeException)  -> pure ()
+  Right (Just ())              -> pure ()
+
+-- A PUBLISH whose topic has wildcards is a protocol error [MQTT-3.3.2-2]
+-- that ends the connection, rather than wedging it.
+unit_wildcardPublishEndsConnection :: Assertion
+unit_wildcardPublishEndsConnection = do
+  (_, inject, conn) <- scriptedBroker []
+  c <- runMQTTConduit conn mqttConfig{_protocol=Protocol50,
+                                      _msgCB=OrderedLowLevelCallback (\_ p -> _pubTopic p `seq` pure ())}
+  inject (PublishPkt PublishRequest{_pubDup=False, _pubQoS=QoS1, _pubRetain=False, _pubTopic="a/+",
+                                    _pubPktID=1, _pubBody="x", _pubProps=[]})
+  connectionEnds c
+
+-- An ordered callback that fails ends the connection, as an unordered one
+-- does, instead of leaving it up with nothing to handle messages.
+unit_failingOrderedCallbackEndsConnection :: Assertion
+unit_failingOrderedCallbackEndsConnection = do
+  (_, inject, conn) <- scriptedBroker []
+  c <- runMQTTConduit conn mqttConfig{_protocol=Protocol50,
+                                      _msgCB=OrderedCallback (\_ _ _ _ -> E.throwIO (userError "callback failed"))}
+  inject (PublishPkt PublishRequest{_pubDup=False, _pubQoS=QoS1, _pubRetain=False, _pubTopic="a/b",
+                                    _pubPktID=1, _pubBody="x", _pubProps=[]})
+  connectionEnds c
