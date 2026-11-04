@@ -678,10 +678,13 @@ publishWith c mk m r q = do
           isOK 16 = True -- It worked, but nobody cares (no matching subscribers)
           isOK _  = False
 
+          -- The packet ID is held until the PUBCOMP, since until then
+          -- the server still has the exchange open [MQTT-4.3.3].
           waitRec = atomically (checkConnected c >> readTChan ch) >>= \case
               PubRECPkt (PubREC _ st recprops) -> do
                 unless (isOK st) $ mqttFail ("qos 2 REC publish error: " <> show st <> " " <> show recprops)
                 sendPacketIO c (PubRELPkt $ PubREL pid 0 mempty)
+                waitRec
               PubCOMPPkt (PubCOMP _ st' compprops) ->
                 when (st' /= 0) $ mqttFail ("qos 2 COMP publish error: " <> show st' <> " " <> show compprops)
               wtf -> mqttFail ("unexpected packet received in QoS2 publish: " <> show wtf)

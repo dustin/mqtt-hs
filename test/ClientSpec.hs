@@ -4,7 +4,9 @@ module ClientSpec where
 
 import           Control.Concurrent              (threadDelay)
 import           Control.Concurrent.Async        (mapConcurrently_)
-import           Control.Concurrent.STM          (TVar, atomically, check, modifyTVar', newTVarIO, readTVar)
+import           Control.Concurrent.Async        (async, poll, wait)
+import           Control.Concurrent.STM          (TVar, atomically, check, modifyTVar', newTChanIO, newTVarIO,
+                                                  readTChan, readTVar, writeTChan)
 import           Control.Monad                   (forM_, forever, replicateM_)
 import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Attoparsec.ByteString.Lazy as A
@@ -22,12 +24,28 @@ import           Network.MQTT.Types              as MT
 -- writes after the CONNECT.  (The client writes each packet in one
 -- chunk.)
 fakeBroker :: [MT.Property] -> IO (TVar [BS.ByteString], (MQTTConduit -> IO ()) -> IO ())
-fakeBroker props = do
+fakeBroker props = (\(w, _, c) -> (w, c)) <$> scriptedBroker props
+
+-- | A fake broker that also sends the client whatever packets it's given.
+scriptedBroker :: [MT.Property] -> IO (TVar [BS.ByteString], MQTTPkt -> IO (), (MQTTConduit -> IO ()) -> IO ())
+scriptedBroker props = do
   written <- newTVarIO []
-  let connack = BL.toStrict . toByteString Protocol50 $ ConnACKPkt (ConnACKFlags NewSession ConnAccepted props)
-      src = yield connack >> forever (liftIO (threadDelay 1000000))
+  inject <- newTChanIO
+  let enc = BL.toStrict . toByteString Protocol50
+      src = yield (enc $ ConnACKPkt (ConnACKFlags NewSession ConnAccepted props))
+            >> forever (liftIO (atomically (readTChan inject)) >>= yield . enc)
       sink = awaitForever $ \bs -> liftIO . atomically $ modifyTVar' written (<> [bs])
-  pure (written, \f -> f (src, sink))
+  pure (written, atomically . writeTChan inject, \f -> f (src, sink))
+
+-- | Wait for the client to have written the nth packet after its CONNECT.
+nthWritten :: Int -> TVar [BS.ByteString] -> IO MQTTPkt
+nthWritten n written = do
+  got <- timeout 5000000 . atomically $ do
+    ws <- drop 1 <$> readTVar written
+    check (length ws >= n)
+    pure (ws !! (n - 1))
+  bs <- maybe (assertFailure ("packet " <> show n <> " never arrived")) pure got
+  either (assertFailure . ("unparseable packet: " <>)) pure . A.eitherResult . A.parse (parsePacket Protocol50) $ BL.fromStrict bs
 
 -- | The PUBLISHes a fake broker received, in order, once there are n.
 published :: Int -> TVar [BS.ByteString] -> IO [PublishRequest]
@@ -50,4 +68,21 @@ unit_concurrentAliasedPublishes = replicateM_ 200 $ do
   ps <- published 200 written
   forM_ (take 1 ps) $ \p ->
     assertEqual ("first publish names the topic: " <> show p) "a/b" (_pubTopic p)
+  stopClient c
+
+-- A QoS 2 publish holds its packet ID until the PUBCOMP, since until then
+-- the broker still has the exchange open, and a new PUBLISH reusing the
+-- ID would be taken as a duplicate and dropped [MQTT-4.3.3].
+unit_qos2HoldsIDUntilPubCOMP :: Assertion
+unit_qos2HoldsIDUntilPubCOMP = do
+  (written, inject, conn) <- scriptedBroker []
+  c <- runMQTTConduit conn mqttConfig{_protocol=Protocol50}
+  p <- async $ publishq c "a/b" "x" False QoS2 []
+  PublishPkt PublishRequest{_pubPktID=pid} <- nthWritten 1 written
+  inject (PubRECPkt (PubREC pid 0 []))
+  nthWritten 2 written >>= assertEqual "PUBREL" (PubRELPkt (PubREL pid 0 []))
+  threadDelay 100000
+  poll p >>= maybe (pure ()) (const $ assertFailure "publish finished before PUBCOMP")
+  inject (PubCOMPPkt (PubCOMP pid 0 []))
+  timeout 2000000 (wait p) >>= maybe (assertFailure "publish didn't finish after PUBCOMP") pure
   stopClient c
