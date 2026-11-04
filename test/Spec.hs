@@ -251,3 +251,12 @@ unit_connectValid :: Assertion
 unit_connectValid = case A.parse parseConnect (L.pack (connectWithFlags 0x2e [0x00, 0x01, 0x74, 0x00, 0x01, 0x6d])) of
   A.Done "" (ConnPkt ConnectRequest{_lastWill=Just LastWill{_willQoS=QoS1, _willRetain=True}} Protocol311) -> pure ()
   x -> assertFailure (show x)
+
+-- A CONNECT is parsed within its Remaining Length.  The will fields
+-- aren't read from whatever follows it [MQTT-3.1.2-9]...
+unit_connectWillFieldsMissing :: Assertion
+unit_connectWillFieldsMissing = rejects parseConnect (connectWithFlags 0x06 [] <> [0x00, 0x01, 0x74, 0x00, 0x01, 0x6d])
+
+-- ...and bytes left over after its fields make it malformed.
+unit_connectTrailingBytes :: Assertion
+unit_connectTrailingBytes = rejects parseConnect (connectWithFlags 0x02 [0x00])

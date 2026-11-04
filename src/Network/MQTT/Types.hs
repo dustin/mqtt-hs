@@ -425,28 +425,34 @@ aString = fmap BL.fromStrict . A.take . fromIntegral =<< aWord16
 parseConnect :: A.Parser MQTTPkt
 parseConnect = do
   _ <- A.word8 0x10
-  _ <- parseHdrLen
-  _ <- A.string "\NUL\EOTMQTT" -- "MQTT"
-  pl <- parseLevel
-
-  connFlagBits <- A.anyWord8
-  -- The reserved flag is 0 [MQTT-3.1.2-3], and without a will, so are
-  -- the will QoS and retain [MQTT-3.1.2-11], [MQTT-3.1.2-13], [MQTT-3.1.2-15].
-  when (testBit connFlagBits 0) $ fail "reserved CONNECT flag set"
-  when (not (testBit connFlagBits 2) && connFlagBits .&. 0x38 /= 0) $ fail "will flags set without a will"
-  keepAlive <- aWord16
-  props <- parseProperties pl
-  cid <- aString
-  lwt <- parseLwt pl connFlagBits
-  u <- mstr (testBit connFlagBits 7)
-  p <- mstr (testBit connFlagBits 6)
-
-  pure $ ConnPkt ConnectRequest{_connID=cid, _username=u, _password=p,
-                                _lastWill=lwt, _keepAlive=keepAlive,
-                                _cleanSession=testBit connFlagBits 1,
-                                _connProperties=props} pl
+  hl <- parseHdrLen
+  -- The fields are parsed within the Remaining Length, and must use all
+  -- of it.
+  body <- A.take hl
+  either fail pure $ AS.parseOnly (connectBody <* AS.endOfInput) body
 
   where
+    connectBody = do
+      _ <- A.string "\NUL\EOTMQTT" -- "MQTT"
+      pl <- parseLevel
+
+      connFlagBits <- A.anyWord8
+      -- The reserved flag is 0 [MQTT-3.1.2-3], and without a will, so are
+      -- the will QoS and retain [MQTT-3.1.2-11], [MQTT-3.1.2-13], [MQTT-3.1.2-15].
+      when (testBit connFlagBits 0) $ fail "reserved CONNECT flag set"
+      when (not (testBit connFlagBits 2) && connFlagBits .&. 0x38 /= 0) $ fail "will flags set without a will"
+      keepAlive <- aWord16
+      props <- parseProperties pl
+      cid <- aString
+      lwt <- parseLwt pl connFlagBits
+      u <- mstr (testBit connFlagBits 7)
+      p <- mstr (testBit connFlagBits 6)
+
+      pure $ ConnPkt ConnectRequest{_connID=cid, _username=u, _password=p,
+                                    _lastWill=lwt, _keepAlive=keepAlive,
+                                    _cleanSession=testBit connFlagBits 1,
+                                    _connProperties=props} pl
+
     mstr :: Bool -> A.Parser (Maybe BL.ByteString)
     mstr False = pure Nothing
     mstr True  = Just <$> aString
