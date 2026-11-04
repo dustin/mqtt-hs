@@ -98,3 +98,20 @@ unit_honorsServerKeepAlive = do
     Just PingPkt -> pure ()
     x            -> assertFailure ("expected a PINGREQ within 1.5s, got " <> show x)
   stopClient c
+
+-- No more QoS 1 and 2 PUBLISHes are in flight than the server's Receive
+-- Maximum [MQTT-3.3.4-7].
+unit_honorsReceiveMaximum :: Assertion
+unit_honorsReceiveMaximum = do
+  (written, inject, conn) <- scriptedBroker [PropReceiveMaximum 1]
+  c <- runMQTTConduit conn mqttConfig{_protocol=Protocol50}
+  ps <- mapM (\b -> async $ publishq c "a/b" b False QoS1 []) ["one", "two"]
+  PublishPkt PublishRequest{_pubPktID=pid} <- nthWritten 1 written
+  threadDelay 200000
+  n <- length . drop 1 <$> atomically (readTVar written)
+  assertEqual "PUBLISHes in flight before the first ack" 1 n
+  inject (PubACKPkt (PubACK pid 0 []))
+  PublishPkt PublishRequest{_pubPktID=pid2} <- nthWritten 2 written
+  inject (PubACKPkt (PubACK pid2 0 []))
+  mapM_ (\p -> timeout 2000000 (wait p) >>= maybe (assertFailure "publish didn't finish") pure) ps
+  stopClient c

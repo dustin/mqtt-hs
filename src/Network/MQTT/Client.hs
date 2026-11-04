@@ -131,6 +131,7 @@ data MQTTClient = MQTTClient {
   , _corr         :: Decaying.Map BL.ByteString MessageCallback
   , _cbM          :: MVar (IO ())
   , _cbHandle     :: TVar (Maybe (Async ()))
+  , _outFlight    :: TVar Word16 -- ^ QoS 1 and 2 PUBLISHes in flight to the server
   }
 
 -- | Configuration for setting up an MQTT client.
@@ -315,6 +316,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
   _corr <- Decaying.new 600
   _cbM <- newEmptyMVar
   _cbHandle <- newTVarIO Nothing
+  _outFlight <- newTVarIO 0
   let _cb = _msgCB
       cli = MQTTClient{..}
 
@@ -651,16 +653,27 @@ publishq c t m r q props = publishWith c (pure (t, props)) m r q
 -- runs in the same transaction that queues the PUBLISH, so whatever it
 -- decides (e.g. a topic alias) goes out in the order it was decided.
 publishWith :: MQTTClient -> STM (Topic, [Property]) -> BL.ByteString -> Bool -> QoS -> IO ()
-publishWith c mk m r q = do
+publishWith c@MQTTClient{_outFlight, _connACKFlags} mk m r q = do
   (ch,pid) <- atomically $ do
     (ch,pid) <- reservePktID c types
+    when (q > QoS0) takeSlot
     (t, props) <- mk
     sendPacket c (pkt t props pid)
     pure (ch,pid)
-  E.finally (when (q > QoS0) $ satisfyQoS ch pid) (atomically $ releasePktIDs c [(t',pid) | t' <- types])
+  E.finally (when (q > QoS0) $ satisfyQoS ch pid) $ do
+    when (q > QoS0) . atomically $ modifyTVar' _outFlight (subtract 1)
+    atomically $ releasePktIDs c [(t',pid) | t' <- types]
 
     where
       types = [DPubACK, DPubREC, DPubCOMP]
+
+      -- No more QoS 1 and 2 PUBLISHes in flight than the server's Receive
+      -- Maximum [MQTT-3.3.4-7].
+      takeSlot = do
+        ConnACKFlags _ _ props <- readTVar _connACKFlags
+        n <- readTVar _outFlight
+        check (n < foldr (\p o -> case p of PropReceiveMaximum x -> x; _ -> o) maxBound props)
+        writeTVar _outFlight (n + 1)
 
       pkt t props pid = PublishPkt $ PublishRequest {_pubDup = False,
                                                      _pubQoS = q,
