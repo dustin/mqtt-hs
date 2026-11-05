@@ -338,10 +338,11 @@ runMQTTConduit mkconn MQTTConfig{..} = do
     clientThread cli = E.finally connectAndRun markDisco
       where
         connectAndRun = mkconn $ \ad -> start cli ad >>= run ad
-        markDisco = atomically $ do
-          st <- readTVar (_st cli)
-          guard $ st == Starting || st == Connected
-          writeTVar (_st cli) Disconnected
+        markDisco = atomically $
+          modifyTVar' (_st cli) $ \case
+            Starting -> Disconnected
+            Connected -> Disconnected
+            x -> x
 
     start c (_,sink) = do
       void . runConduit $ do
