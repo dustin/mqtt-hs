@@ -8,7 +8,7 @@ import           Control.Concurrent              (threadDelay)
 import           Control.Concurrent.Async        (mapConcurrently_)
 import           Control.Concurrent.Async        (async, poll, wait)
 import           Control.Concurrent.STM          (TVar, atomically, check, modifyTVar', newTChanIO, newTVarIO,
-                                                  readTChan, readTVar, retry, writeTChan)
+                                                  readTChan, readTVar, retry, writeTChan, writeTVar)
 import           Control.Monad                   (forM_, forever, replicateM_)
 import qualified Control.Exception               as E
 import           Control.Monad.IO.Class          (liftIO)
@@ -16,6 +16,7 @@ import qualified Data.Attoparsec.ByteString.Lazy as A
 import qualified Data.ByteString                 as BS
 import qualified Data.ByteString.Lazy            as BL
 import           Data.Conduit                    (awaitForever, yield)
+import           Data.Word                       (Word16)
 import           System.Timeout                  (timeout)
 import           Test.Tasty.HUnit
 
@@ -59,6 +60,10 @@ published n written = do
     pure ws
   ws <- maybe (assertFailure "publishes never arrived") pure got
   pure [p | Right (PublishPkt p) <- A.eitherResult . A.parse (parsePacket Protocol50) . BL.fromStrict <$> ws]
+
+incomingPublish :: QoS -> Word16 -> MQTTPkt
+incomingPublish q i = PublishPkt PublishRequest{_pubDup=False, _pubQoS=q, _pubRetain=False, _pubTopic="a/b",
+                                                _pubPktID=i, _pubBody="x", _pubProps=[]}
 
 -- Concurrent aliased publishes to one topic: the first PUBLISH using the
 -- alias has to carry the topic too, or the broker can't know what the
@@ -174,3 +179,66 @@ unit_orderedWithoutSubscribeAcksAll = do
   acks <- mapM (`nthWritten` written) [1, 2, 3]
   assertEqual "PUBACKs" [PubACKPkt (PubACK i 0 []) | i <- [1, 2, 3]] acks
   stopClient c
+
+-- A blocked ordered callback must not stop the reader from processing later
+-- packets.  Three PUBLISHes used to fill the one-slot MVar and block the third.
+unit_orderedCallbackDoesNotBlockReader :: Assertion
+unit_orderedCallbackDoesNotBlockReader = do
+  (_, inject, conn) <- scriptedBroker []
+  started <- newTVarIO False
+  release <- newTVarIO False
+  c <- runMQTTConduit conn mqttConfig{_protocol=Protocol50,
+                                      _msgCB=OrderedCallback (\_ _ _ _ -> do
+                                        atomically $ writeTVar started True
+                                        atomically $ check =<< readTVar release)}
+  flip E.finally (stopClient c) $ do
+    mapM_ (inject . incomingPublish QoS1) [1, 2, 3]
+    timeout 1000000 (atomically $ readTVar started >>= check) >>=
+      maybe (assertFailure "the first callback never started") pure
+    inject (DisconnectPkt (DisconnectRequest DiscoNormalDisconnection []))
+    connectionEnds c
+
+-- Ordered QoS 1 callbacks acknowledge in receive order, but only after their
+-- callbacks have completed.
+unit_orderedCallbacksAckAfterCompletionInOrder :: Assertion
+unit_orderedCallbacksAckAfterCompletionInOrder = do
+  (written, inject, conn) <- scriptedBroker []
+  started <- newTVarIO []
+  completed <- newTVarIO []
+  release <- newTVarIO False
+  c <- runMQTTConduit conn mqttConfig{_protocol=Protocol50,
+                                      _msgCB=OrderedLowLevelCallback (\_ p -> do
+                                        atomically $ modifyTVar' started (<> [_pubPktID p])
+                                        atomically $ check =<< readTVar release
+                                        atomically $ modifyTVar' completed (<> [_pubPktID p]))}
+  flip E.finally (stopClient c) $ do
+    mapM_ (inject . incomingPublish QoS1) [1, 2, 3]
+    timeout 1000000 (atomically $ readTVar started >>= check . (== [1])) >>=
+      maybe (assertFailure "the first callback never started") pure
+    beforeRelease <- atomically $ drop 1 <$> readTVar written
+    assertEqual "PUBACKs before the callback completes" [] beforeRelease
+    atomically $ writeTVar release True
+    acks <- mapM (`nthWritten` written) [1, 2, 3]
+    assertEqual "PUBACKs" [PubACKPkt (PubACK i 0 []) | i <- [1, 2, 3]] acks
+    atomically (readTVar completed) >>= assertEqual "callback completion order" [1, 2, 3]
+
+-- QoS 2 still sends PUBREC immediately, while PUBCOMP waits for the callback.
+unit_orderedQoS2CompletesAfterCallback :: Assertion
+unit_orderedQoS2CompletesAfterCallback = do
+  (written, inject, conn) <- scriptedBroker []
+  started <- newTVarIO False
+  release <- newTVarIO False
+  c <- runMQTTConduit conn mqttConfig{_protocol=Protocol50,
+                                      _msgCB=OrderedCallback (\_ _ _ _ -> do
+                                        atomically $ writeTVar started True
+                                        atomically $ check =<< readTVar release)}
+  flip E.finally (stopClient c) $ do
+    inject (incomingPublish QoS2 1)
+    nthWritten 1 written >>= assertEqual "PUBREC" (PubRECPkt (PubREC 1 0 []))
+    inject (PubRELPkt (PubREL 1 0 []))
+    timeout 1000000 (atomically $ readTVar started >>= check) >>=
+      maybe (assertFailure "the callback never started") pure
+    beforeRelease <- atomically $ drop 2 <$> readTVar written
+    assertEqual "PUBCOMP before the callback completes" [] beforeRelease
+    atomically $ writeTVar release True
+    nthWritten 2 written >>= assertEqual "PUBCOMP" (PubCOMPPkt (PubCOMP 1 0 []))

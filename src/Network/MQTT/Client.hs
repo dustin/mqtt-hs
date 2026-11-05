@@ -40,10 +40,9 @@ module Network.MQTT.Client (
 import           Control.Concurrent         (myThreadId, threadDelay)
 import           Control.Concurrent.Async   (Async, async, asyncThreadId, cancel, cancelWith, link, race_, wait,
                                              waitAnyCancel)
-import           Control.Concurrent.MVar    (MVar, newEmptyMVar, putMVar, takeMVar)
-import           Control.Concurrent.STM     (STM, TChan, TVar, atomically, check, modifyTVar', newTChan, newTChanIO,
-                                             newTVarIO, orElse, readTChan, readTVar, readTVarIO, registerDelay, retry,
-                                             writeTChan, writeTVar)
+import           Control.Concurrent.STM     (STM, TChan, TQueue, TVar, atomically, check, modifyTVar', newTChan,
+                                             newTChanIO, newTQueueIO, newTVarIO, orElse, readTChan, readTQueue, readTVar,
+                                             readTVarIO, registerDelay, retry, writeTChan, writeTQueue, writeTVar)
 import           Control.DeepSeq            (force)
 import qualified Control.Exception          as E
 import           Control.Monad              (forever, guard, join, unless, void, when)
@@ -103,8 +102,9 @@ data MessageCallback = NoCallback
   -- Use a simple 'System.Timeout.timeout' to restrain unbounded thread runtime.
   | SimpleCallback (MQTTClient -> Topic -> BL.ByteString -> [Property] -> IO ())
   -- | Callbacks are guaranteed to be invoked in the same order messages are received.
-  -- In high throughput scenarios, slow callbacks may cause the underlying TCP connection to block,
-  -- potentially being terminated by the broker.
+  -- Slow callbacks do not block the underlying TCP connection. Pending QoS 0 messages
+  -- can accumulate while a callback is running. With MQTT 5, pending QoS 1 and 2
+  -- messages are bounded by the Receive Maximum.
   -- Typically slower than `SimpleCallback`.
   | OrderedCallback (MQTTClient -> Topic -> BL.ByteString -> [Property] -> IO ())
   -- | A LowLevelCallback receives the client and the entire publish request, providing
@@ -130,7 +130,7 @@ data MQTTClient = MQTTClient {
   , _inA          :: TVar (Map Word16 Topic)
   , _connACKFlags :: TVar ConnACKFlags
   , _corr         :: Decaying.Map BL.ByteString MessageCallback
-  , _cbM          :: MVar (IO ())
+  , _cbQ          :: TQueue (IO ())
   , _cbHandle     :: TVar (Maybe (Async ()))
   , _outFlight    :: TVar Word16 -- ^ QoS 1 and 2 PUBLISHes in flight to the server
   }
@@ -315,7 +315,7 @@ runMQTTConduit mkconn MQTTConfig{..} = do
   _inA <- newTVarIO mempty
   _connACKFlags <- newTVarIO (ConnACKFlags NewSession ConnUnspecifiedError mempty)
   _corr <- Decaying.new 600
-  _cbM <- newEmptyMVar
+  _cbQ <- newTQueueIO
   _cbHandle <- newTVarIO Nothing
   _outFlight <- newTVarIO 0
   let _cb = _msgCB
@@ -494,7 +494,7 @@ dispatch c@MQTTClient{..} pch pkt =
 
             where
               call a = link =<< namedAsync "notifier" (a >> respond)
-              callOrd a = putMVar _cbM $ a >> respond
+              callOrd a = atomically $ writeTQueue _cbQ (a *> respond)
               respond = traverse_ (sendPacketIO c) rpkt
               cdata = foldr f Nothing _pubProps
                 where f (PropCorrelationData x) _ = Just x
@@ -528,7 +528,7 @@ dispatch c@MQTTClient{..} pch pkt =
 -- Run OrderedCallbacks in a background thread. Does nothing for other callback types.
 -- We keep the async handle in a TVar and make sure only one of these threads is running.
 runCallbackThread :: MQTTClient -> IO ()
-runCallbackThread c@MQTTClient{_cb, _cbM, _cbHandle}
+runCallbackThread c@MQTTClient{_cb, _cbQ, _cbHandle}
   | isOrdered _cb = do
       -- We always spawn a thread, but may kill it if we already have
       -- one.  The new thread won't start until we atomically confirm
@@ -549,10 +549,10 @@ runCallbackThread c@MQTTClient{_cb, _cbM, _cbHandle}
           isOrdered (OrderedLowLevelCallback _) = True
           isOrdered _                           = False
           waitFor latch = atomically (check =<< readTVar latch)
-          -- Keep running callbacks from the MVar.  One that fails ends the
+          -- Keep running callbacks from the queue.  One that fails ends the
           -- connection, as with unordered callbacks, rather than leaving it
           -- up with nothing to run the rest.
-          runOrderedCallbacks = forever (join (takeMVar _cbM)) `E.catch` \(e :: E.SomeException) ->
+          runOrderedCallbacks = forever (join (atomically (readTQueue _cbQ))) `E.catch` \(e :: E.SomeException) ->
             case E.fromException e of
               Just (_ :: E.SomeAsyncException) -> E.throwIO e
               Nothing                          -> killConn c e >> E.throwIO e
